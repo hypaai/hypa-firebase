@@ -62,7 +62,7 @@ PR workflows are prepared for GameCI EditMode tests, WebGL build and gitleaks. C
 
 The existing foundation includes story playback, subtitles and translations, the campfire and village environments, Quest interaction, Lens, gameplay tests, and flat-platform build tooling. These features were already present before this entry’s initialization.
 
-The [official rules](https://firebasehybridaihackathon.devpost.com/rules), section 6, permit existing projects if significantly updated during the submission period and require disclosure of pre-existing work plus a summary of new work. Submission period: November 11–30, 2026. Deadline: **November 30, 2026, 11:00 p.m. Africa/Lagos**. Firebase AI Logic and a supported local inference platform are required; App Check debug tokens are accepted.
+The [official rules](https://firebasehybridaihackathon.devpost.com/rules)
 
 ## License and credits
 
