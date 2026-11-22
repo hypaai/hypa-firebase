@@ -56,14 +56,13 @@ bash tools/scan-secrets.sh
 PR workflows are prepared for GameCI EditMode tests, WebGL build and gitleaks. Configure Unity activation secrets before relying on CI. Organization use of the gitleaks action may require `GITLEAKS_LICENSE`. CI has not run remotely.
 
 ## What we built during the submission period
-
-See [submission work](docs/submission-work.md). This records repository setup separately from implemented features; update it as work lands.
+--- 
 
 ## Pre-existing code disclosure
 
-Based on [`hypaai/hypa-meta-vr`](https://github.com/hypaai/hypa-meta-vr) at `7c306b29c2b0543d859fb7006f324d0898d2dead`, with selected flat-build tooling from the private Hypa Stories app. See [provenance](docs/pre-existing-work.md). Do not present imported work as newly built hackathon functionality.
+The existing foundation includes story playback, subtitles and translations, the campfire and village environments, Quest interaction, Lens, gameplay tests, and flat-platform build tooling. These features were already present before this entry’s initialization.
 
-The [official rules](https://firebasehybridaihackathon.devpost.com/rules), section 6, permit existing projects if significantly updated during the submission period and require disclosure of pre-existing work plus a summary of new work. Submission period: November 11–30, 2026. Deadline: **November 30, 2026, 11:00 p.m. Africa/Lagos**. Firebase AI Logic and a supported local inference platform are required; App Check debug tokens are accepted.
+The [official rules](https://firebasehybridaihackathon.devpost.com/rules)
 
 ## License and credits
 
