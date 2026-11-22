@@ -1,0 +1,276 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace HypaCore
+{
+    /// <summary>
+    /// Client for Hypa's MCP endpoint (POST {base}/v2/mcp, stateless Streamable HTTP, JSON-RPC tools/call).
+    /// Contract checked with live calls on 2026-11-10 (tools/list schemas, list_languages, check_language_pair):
+    /// responses arrive as SSE with result.structuredContent; tools take language labels such as "Yoruba".
+    /// All tools use the configured server proxy; the server owns Hypa credentials.
+    /// </summary>
+    public sealed class HypaMcpClient
+    {
+        public const string Path = "/v2/mcp";
+        /// <summary>
+        /// Model sent on every translation / speech call. "auto" = Hypa picks the best-scoring model for the language,
+        /// with fallback. Fixed on purpose: the app never pins a specific model. (The MCP tools have no provider
+        /// parameter; the REST mt call sends provider "auto".)
+        /// </summary>
+        public const string Model = "auto";
+
+        /// <summary>Speech and image reading are slow on Hypa's side (speech for a few lines can pass 30 s): give them longer.</summary>
+        public static TimeSpan TimeoutFor(string tool)
+            => tool == "text_to_speech" || tool == "translate_image" ? TimeSpan.FromSeconds(90) : HypaHttp.DefaultTimeout;
+
+        readonly HypaConfig _cfg;
+        int _id;
+
+        public HypaMcpClient(HypaConfig cfg = null) { _cfg = cfg ?? HypaConfig.Current; }
+
+        public async Task<JObject> CallToolAsync(string tool, JObject args, CancellationToken ct)
+        {
+            var trace = HypaTrace.Enabled ? HypaTrace.Begin("mcp " + tool, HypaTrace.Describe(args)) : null;
+            try
+            {
+                if (!_cfg.HasProxy)
+                    throw new HypaException(HypaErrorKind.MissingConfiguration, $"'{tool}' needs the authenticated Hypa proxy.");
+                var req = new JObject
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = Interlocked.Increment(ref _id),
+                    ["method"] = "tools/call",
+                    ["params"] = new JObject { ["name"] = tool, ["arguments"] = args ?? new JObject() },
+                };
+                var body = await HypaHttp.PostAsync(_cfg, Path, req.ToString(Formatting.None), ct, TimeoutFor(tool)).ConfigureAwait(false);
+                var result = ParseToolResult(body, tool);
+                HypaTrace.End(trace, "ok", trace != null ? HypaTrace.Describe(result) : null);
+                return result;
+            }
+            catch (OperationCanceledException) { HypaTrace.End(trace, "cancelled"); throw; }
+            catch (Exception e) { HypaTrace.End(trace, e is HypaException h ? h.Kind.ToString() : e.GetType().Name, e.Message); throw; }
+        }
+
+        /// <summary>Turns a tools/call response body into the tool's structured output, or throws HypaException. Pure.</summary>
+        public static JObject ParseToolResult(string body, string tool)
+        {
+            JObject env = null;
+            foreach (var p in HypaHttp.JsonPayloads(body))
+            {
+                try
+                {
+                    var o = JObject.Parse(p);
+                    if (o["result"] != null || o["error"] != null) env = o;
+                }
+                catch (JsonException) { }
+            }
+            if (env == null) throw new HypaException(HypaErrorKind.InvalidResponse, $"{tool}: no JSON-RPC result in response.");
+
+            if (env["error"] is JObject rpcErr)
+                throw new HypaException(HypaErrorKind.BadRequest, $"{tool}: {(string)rpcErr["message"] ?? rpcErr.ToString()}", 0, (string)rpcErr["code"]);
+
+            var result = env["result"] as JObject;
+            if (result == null) throw new HypaException(HypaErrorKind.InvalidResponse, $"{tool}: empty result.");
+
+            var structured = result["structuredContent"] as JObject;
+            if (structured == null)
+            {
+                var text = (string)result["content"]?.FirstOrDefault(c => (string)c["type"] == "text")?["text"];
+                if (text != null) { try { structured = JObject.Parse(text); } catch (JsonException) { structured = new JObject { ["error"] = text }; } }
+            }
+
+            if ((bool?)result["isError"] == true)
+            {
+                var code = (string)structured?["code"];
+                var msg = (string)structured?["error"] ?? "tool failed";
+                var kind = code == "INSUFFICIENT_BALANCE" ? HypaErrorKind.InsufficientBalance : HypaErrorKind.ToolError;
+                throw new HypaException(kind, $"{tool}: {msg}", 0, code);
+            }
+            if (structured == null) throw new HypaException(HypaErrorKind.InvalidResponse, $"{tool}: result had no content.");
+            return structured;
+        }
+
+        // ---------- Typed tools ----------
+
+        public async Task<IReadOnlyList<HypaLanguage>> ListLanguagesAsync(CancellationToken ct)
+        {
+            var o = await CallToolAsync("list_languages", null, ct).ConfigureAwait(false);
+            return ParseLanguages(o);
+        }
+
+        public static IReadOnlyList<HypaLanguage> ParseLanguages(JObject o)
+        {
+            var list = new List<HypaLanguage>();
+            foreach (var l in (o["languages"] as JArray) ?? new JArray())
+                list.Add(new HypaLanguage
+                {
+                    Name = (string)l["name"], Code = (string)l["code"],
+                    Voices = ((l["voices"] as JArray) ?? new JArray()).Select(v => (string)v).ToArray(),
+                });
+            return list;
+        }
+
+        /// <summary>Free. sourceLang null = auto-detect.</summary>
+        public async Task<HypaPairCheck> CheckLanguagePairAsync(string targetLang, string sourceLang, CancellationToken ct)
+        {
+            var args = new JObject { ["targetLang"] = targetLang };
+            if (!string.IsNullOrEmpty(sourceLang)) args["sourceLang"] = sourceLang;
+            var o = await CallToolAsync("check_language_pair", args, ct).ConfigureAwait(false);
+            return new HypaPairCheck
+            {
+                Supported = (bool?)o["supported"] ?? false,
+                Models = ((o["models"] as JArray) ?? new JArray()).Select(v => (string)v).ToArray(),
+                Unknown = ((o["unknown"] as JArray) ?? new JArray()).Select(v => (string)v).ToArray(),
+            };
+        }
+
+        /// <summary>sourceLang null = auto-detect; the detected label comes back in DetectedLanguage (may be null).</summary>
+        public async Task<HypaTranslation> TranslateAsync(string text, string targetLang, string sourceLang, CancellationToken ct)
+        {
+            var args = TranslateArgs(text, targetLang, sourceLang);
+            var o = await CallToolAsync("translate_message", args, ct).ConfigureAwait(false);
+            return new HypaTranslation { Text = (string)o["translation"], DetectedLanguage = (string)o["language"], Model = (string)o["model"] };
+        }
+
+        /// <summary>translate_message arguments. Pure, unit tested.</summary>
+        public static JObject TranslateArgs(string text, string targetLang, string sourceLang)
+        {
+            var args = new JObject { ["text"] = text, ["targetLang"] = targetLang, ["model"] = Model };
+            if (!string.IsNullOrEmpty(sourceLang)) args["sourceLang"] = sourceLang;
+            return args;
+        }
+
+        /// <summary>translate_image arguments. Pure, unit tested.</summary>
+        public static JObject TranslateImageArgs(byte[] image, string targetLang, string sourceLang)
+        {
+            var args = new JObject { ["image"] = System.Convert.ToBase64String(image), ["imageType"] = "base64", ["targetLang"] = targetLang, ["model"] = Model };
+            if (!string.IsNullOrEmpty(sourceLang)) args["sourceLang"] = sourceLang;
+            return args;
+        }
+
+        /// <summary>
+        /// translate_image: reads the text in a picture and translates it. The picture is sent to Hypa (base64),
+        /// so callers must have the user's consent; the output is text only, with no positions.
+        /// </summary>
+        public async Task<HypaImageTranslation> TranslateImageAsync(byte[] image, string targetLang, string sourceLang, CancellationToken ct)
+        {
+            if (image == null || image.Length == 0) throw new HypaException(HypaErrorKind.BadRequest, "translate_image: no image.");
+            var args = TranslateImageArgs(image, targetLang, sourceLang);
+            var o = await CallToolAsync("translate_image", args, ct).ConfigureAwait(false);
+            return ParseImageTranslation(o);
+        }
+
+        /// <summary>Pure, unit tested.</summary>
+        public static HypaImageTranslation ParseImageTranslation(JObject o) => new HypaImageTranslation
+        {
+            Text = (string)o["text"], Translation = (string)o["translation"], Language = (string)o["language"],
+            NoTextFound = (bool?)o["noTextFound"] ?? false,
+        };
+
+        /// <summary>
+        /// text_to_speech arguments. No voice = Hypa's auto router picks voice and model ("model": "auto"). A named voice only works
+        /// with the model that owns it (the tool rejects it otherwise), so it is sent with that model; with no known model the voice is
+        /// dropped and Auto speaks. Pure, unit tested.
+        /// </summary>
+        public static JObject TtsArgs(string text, string language, string voice, string voiceModel)
+        {
+            var args = new JObject { ["text"] = text, ["language"] = language };
+            var named = !string.IsNullOrEmpty(voice) && !voice.Equals("auto", System.StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(voiceModel);
+            args["model"] = named ? voiceModel : Model;
+            if (named) args["voice"] = voice;
+            return args;
+        }
+
+        /// <summary>list_voices: for a language, each model and the voices it owns ("hypaai/auto" has none).</summary>
+        public async Task<List<KeyValuePair<string, List<string>>>> ListVoicesAsync(string language, CancellationToken ct)
+        {
+            var o = await CallToolAsync("list_voices", new JObject { ["language"] = language }, ct).ConfigureAwait(false);
+            return ParseVoiceOptions(o);
+        }
+
+        /// <summary>Pure, unit tested.</summary>
+        public static List<KeyValuePair<string, List<string>>> ParseVoiceOptions(JObject o)
+        {
+            var list = new List<KeyValuePair<string, List<string>>>();
+            if (o?["options"] is JArray arr)
+                foreach (var opt in arr)
+                {
+                    var voices = (opt["voices"] as JArray)?.Select(v => (string)v).Where(v => !string.IsNullOrEmpty(v)).ToList() ?? new List<string>();
+                    if (voices.Count > 0 && (string)opt["model"] != null) list.Add(new KeyValuePair<string, List<string>>((string)opt["model"], voices));
+                }
+            return list;
+        }
+
+        /// <summary>The first model that owns <paramref name="voice"/> for the language, or null.</summary>
+        public static string ModelForVoice(List<KeyValuePair<string, List<string>>> options, string voice)
+            => options?.FirstOrDefault(x => x.Value.Contains(voice, System.StringComparer.OrdinalIgnoreCase)).Key;
+
+        readonly Dictionary<string, List<KeyValuePair<string, List<string>>>> _voiceOptions = new Dictionary<string, List<KeyValuePair<string, List<string>>>>();
+
+        /// <summary>Audio comes back as a signed URL (default) valid about an hour. No voice = Auto; a voice is sent with its own model.</summary>
+        public async Task<HypaSpeech> TextToSpeechAsync(string text, string language, CancellationToken ct, string voice = null, string model = null)
+        {
+            // a story's voice names its own model; otherwise find the model that owns the voice
+            if (string.IsNullOrEmpty(model) && !string.IsNullOrEmpty(voice))
+            {
+                if (!_voiceOptions.TryGetValue(language, out var opts)) { opts = await ListVoicesAsync(language, ct).ConfigureAwait(false); _voiceOptions[language] = opts; }
+                model = ModelForVoice(opts, voice);
+            }
+            var o = await CallToolAsync("text_to_speech", TtsArgs(text, language, voice, model), ct).ConfigureAwait(false);
+            return ParseSpeech(o);
+        }
+
+        /// <summary>Pure, unit tested.</summary>
+        public static HypaSpeech ParseSpeech(JObject o) => new HypaSpeech
+        {
+            AudioUrl = (string)o["audioUrl"], AudioBase64 = (string)o["audioBase64"], Mime = (string)o["mime"],
+            SampleRate = (int?)o["sampleRate"] ?? 0, Voice = (string)o["voice"],
+            Provider = (string)o["provider"], Model = (string)o["model"],
+        };
+
+        /// <summary>
+        /// Speech to text. <paramref name="audio"/> is a whole file (e.g. WAV from <see cref="WavEncoder"/>), sent as base64.
+        /// sourceLang null = auto-detect. Schema from tools/list (2026-11-13); not yet called with a key.
+        /// </summary>
+        public async Task<string> SpeechToTextAsync(byte[] audio, string sourceLang, CancellationToken ct)
+        {
+            var args = new JObject { ["audio"] = System.Convert.ToBase64String(audio), ["audioType"] = "base64" };
+            if (!string.IsNullOrEmpty(sourceLang)) args["sourceLang"] = sourceLang;
+            var o = await CallToolAsync("speech_to_text", args, ct).ConfigureAwait(false);
+            return (string)o["transcript"] ?? "";
+        }
+
+        /// <summary>word: 1..120 chars. language null = English.</summary>
+        public async Task<HypaDictionaryEntry> LookUpTermAsync(string word, string language, CancellationToken ct)
+        {
+            var args = new JObject { ["word"] = word };
+            if (!string.IsNullOrEmpty(language)) args["language"] = language;
+            var o = await CallToolAsync("look_up_term", args, ct).ConfigureAwait(false);
+            return new HypaDictionaryEntry { Raw = o["result"] as JObject };
+        }
+
+        /// <summary>
+        /// Hypa Translate's "thinking" button: why the text translates the way it does (POST /v2/translate/mt/thinking, a plain REST
+        /// call, not an MCP tool; routed by Auto). Needs the configured proxy.
+        /// </summary>
+        public async Task<string> ExplainTranslationAsync(string sourceText, string targetText, string sourceLang, string targetLang, CancellationToken ct)
+        {
+            var body = new JObject
+            {
+                ["provider"] = "auto", // the auto router, as Hypa Translate sends it (no model)
+                ["source_text"] = sourceText, ["target_text"] = targetText,
+                ["source_lang"] = string.IsNullOrEmpty(sourceLang) ? "English" : sourceLang, ["target_lang"] = targetLang,
+                ["stream"] = false, ["temperature"] = 0.3, ["top_p"] = 0.5, ["top_k"] = 1, ["max_tokens"] = 800,
+                ["client_request_id"] = "vr-" + System.Guid.NewGuid().ToString("N"),
+            };
+            var raw = await HypaHttp.PostAsync(_cfg, "/v2/translate/mt/thinking", body.ToString(Formatting.None), ct).ConfigureAwait(false);
+            try { return ((string)JObject.Parse(raw)["thinking"] ?? "").Trim(); }
+            catch (JsonException) { throw new HypaException(HypaErrorKind.InvalidResponse, "thinking: unreadable answer."); }
+        }
+    }
+}

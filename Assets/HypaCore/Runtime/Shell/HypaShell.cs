@@ -1,0 +1,351 @@
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace HypaCore
+{
+    /// <summary>Scene names. Each team owns its own scene; the shell loads them by name only (no code references).</summary>
+    public static class HypaScenes
+    {
+        public const string Shell = "HypaShell";
+        public const string Lens = "HypaLens";
+        public const string Story = "HypaStory";
+        /// <summary>Hypa Story places (ticket 3F): loaded from the campfire by HypaStories.Places, never by the shell.</summary>
+        public const string StoryHut = "HypaStoryHut";
+        public const string StoryGathering = "HypaStoryGathering";
+        public const string CoreTest = "HypaCoreTest";
+    }
+
+    /// <summary>
+    /// Lets the shell ask a mode to open a sub-view without either side referencing the other's code.
+    /// e.g. the shell sets "lens.saved" and loads HypaLens; Lens consumes it and opens the saved-words practice view.
+    /// </summary>
+    public static class AppRouter
+    {
+        public const string LensSavedWords = "lens.saved";
+        static string _pending;
+        public static void Request(string view) => _pending = view;
+        public static bool Consume(string view)
+        {
+            if (_pending != view) return false;
+            _pending = null;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// App shell, in the HypaShell scene (first in Build Settings). Keeps the camera rig, pinch pointer and audio alive
+    /// across modes, and shows Home for Hypa Stories: Stories, Lens and How it works. Home is the first thing the user sees; a
+    /// mode's X (or the Home button low in the view, or M in the editor) brings it back at any time.
+    /// </summary>
+    public sealed class HypaShell : MonoBehaviour
+    {
+        public static HypaShell Instance { get; private set; }
+
+        [Tooltip("Root of the camera rig to keep across scenes. Empty = the main camera's root.")]
+        [SerializeField] Transform cameraRig;
+        [Tooltip("Skip the Home card on launch and open the last mode straight away (dev convenience).")]
+        [SerializeField] bool openLastModeOnStart = false;
+
+        Transform _cam, _anchor, _menu, _help;
+        TextMesh _status;
+        /// <summary>The scene a mode lives in, or null while only the shell is loaded.</summary>
+        string _currentMode;
+        // The shell UI follows where the head points (see HeadFollow): 1 m out (beyond the hands), scaled so it reads
+        // as it would at 0.6 m. A small dead zone keeps it still while a hand ray aims at it.
+        const float Distance = 1.0f, Scale = Distance / 0.6f;
+        readonly HeadFollow _follow = new HeadFollow { Distance = Distance, Delay = 0.4f }; // a glance never moves it
+        bool _xrWasActive;
+        /// <summary>The shared Hypa mark: Assets/HypaCore/Resources/HypaLogo.png (square, transparent, white on dark).</summary>
+        const string LogoResource = "HypaLogo";
+
+        void Awake()
+        {
+            if (Instance != null) { Destroy(gameObject); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+            var cam = Camera.main;
+            if (cameraRig == null && cam != null) cameraRig = cam.transform.root;
+            if (cameraRig != null && cameraRig != transform) DontDestroyOnLoad(cameraRig.gameObject);
+            // Passthrough is its own object, not inside the camera rig. Loading Lens would otherwise
+            // destroy it and leave a black view.
+            foreach (var root in gameObject.scene.GetRootGameObjects())
+            {
+                if (root != gameObject && root.name.StartsWith("[BuildingBlock]"))
+                    DontDestroyOnLoad(root);
+            }
+            _cam = cam != null ? cam.transform : null;
+            PinchPointer.EnsureExists();
+            _ = HypaAudioPlayer.Instance;
+            EnsureAudio(); // before any sound plays: never let a "volume 0" moment at launch switch the sound off
+        }
+
+        void Start()
+        {
+            if (_cam == null) { Debug.LogError("Hypa shell: no MainCamera."); return; }
+            BuildHomeUi();
+            // Wait one frame so the camera rig can turn passthrough on before a mode replaces the scene.
+            StartCoroutine(StartNextFrame());
+        }
+
+        System.Collections.IEnumerator StartNextFrame()
+        {
+            yield return null;
+            if (openLastModeOnStart) Open(HypaSettings.LastMode);
+            else ShowMenu(true); // the Home card is the first thing the user sees
+        }
+
+        void Update()
+        {
+            if (Application.isEditor && Input.GetKeyDown(KeyCode.M)) ToggleMenu();
+        }
+
+        // Sound after a build. Build and Run launches the app while the headset is asleep. Unity opens its sound stream right
+        // then, and the Quest marks that stream "muted (appOps)" and never lifts it, even once the headset is worn (seen in
+        // `adb shell dumpsys audio`: the app's AAudio player "state:started ... mutedState:appOps"). A headset restart only
+        // helped because the next launch opened a fresh stream. So: once the app has focus again after starting or being
+        // paused, wait a moment and reopen Unity's sound output (a fresh, unmuted stream), carrying on whatever was playing.
+        // Taking the headset off and on does the same, so a muted stream can't stick there either.
+        bool _reopenAudio = true; // the stream opened at launch may be muted: reopen it once the headset is in use
+
+        void OnApplicationPause(bool paused) { if (paused) _reopenAudio = true; }
+        void OnApplicationFocus(bool focus) { if (focus) ReopenAudioWhenWorn(); }
+
+        void ReopenAudioWhenWorn()
+        {
+            if (!_reopenAudio || Application.platform != RuntimePlatform.Android) return;
+            _reopenAudio = false;
+            StartCoroutine(ReopenAudioSoon());
+        }
+
+        System.Collections.IEnumerator ReopenAudioSoon()
+        {
+            yield return new WaitForSecondsRealtime(1f); // let the headset settle into focus first
+            if (!Application.isFocused) { _reopenAudio = true; yield break; } // lost focus again: try on the next focus
+            ReopenAudio();
+        }
+
+        /// <summary>Restarts Unity's audio output on a fresh device stream; sounds that were playing carry on where they were.</summary>
+        static void ReopenAudio()
+        {
+            var playing = new System.Collections.Generic.List<(AudioSource source, float time)>();
+            foreach (var s in FindObjectsByType<AudioSource>(FindObjectsSortMode.None))
+                if (s.isPlaying) playing.Add((s, s.time));
+            AudioSettings.Reset(AudioSettings.GetConfiguration());
+            foreach (var (s, t) in playing)
+            {
+                if (s == null) continue;
+                s.Play();
+                if (s.clip != null && t < s.clip.length) s.time = t;
+            }
+            Debug.Log($"Hypa shell: reopened the audio output (fresh stream), {playing.Count} sounds carried on.");
+        }
+
+        /// <summary>Keeps "output suspension" off (also off in Project Settings > Audio), so a volume-0 moment never stops the sound.</summary>
+        static void EnsureAudio()
+        {
+            if (Application.platform != RuntimePlatform.Android) return;
+            AudioSettings.Mobile.stopAudioOutputOnMute = false;
+            if (!AudioSettings.Mobile.audioOutputStarted) AudioSettings.Mobile.StartAudioOutput();
+        }
+
+        // After the camera rig has taken this frame's head pose, so the UI doesn't trail it by a frame.
+        void LateUpdate() => FollowHead();
+
+        void FollowHead()
+        {
+            if (_anchor == null || _cam == null) return;
+            // The XR session starts a few frames in and lifts the camera to eye height: snap in front then.
+            var xrActive = UnityEngine.XR.XRSettings.isDeviceActive;
+            if (xrActive && !_xrWasActive) { _follow.Reset(); if (Application.isFocused) ReopenAudioWhenWorn(); }
+            _xrWasActive = xrActive;
+            var pose = _follow.Update(_cam.position, _cam.rotation, PointerOnShellUi, Time.unscaledDeltaTime);
+            _anchor.SetPositionAndRotation(pose.position, pose.rotation);
+        }
+
+        bool PointerOnShellUi
+        {
+            get
+            {
+                var p = PinchPointer.Instance;
+                if (p == null || _anchor == null) return false;
+                return (p.Hover != null && p.Hover.transform.IsChildOf(_anchor)) || (p.Pressed != null && p.Pressed.transform.IsChildOf(_anchor));
+            }
+        }
+
+        /// <summary>Puts the shell UI straight in front of the eyes now.</summary>
+        void PlaceInFront()
+        {
+            if (_anchor == null) return;
+            _anchor.localScale = Vector3.one * Scale;
+            _follow.Reset();
+            FollowHead();
+        }
+
+        void BuildHomeUi()
+        {
+            _anchor = new GameObject("Hypa Shell UI").transform;
+            DontDestroyOnLoad(_anchor.gameObject);
+            PlaceInFront();
+            // No floating Home button: every mode has its own way back (Stories' Back, Lens's X), and Home is the first screen.
+
+            // Home: the first thing the user sees. Title row, the modes, how it works, and an X.
+            _menu = new GameObject("Home Card").transform;
+            _menu.SetParent(_anchor, false);
+            _menu.localPosition = Vector3.zero; // dead centre of the view (a mode's HUD steps aside while Home is up)
+            const float w = 0.32f, h = 0.46f;
+            Ui.Quad("bg", _menu, new Vector3(0, 0, 0.003f), new Vector2(w, h), Ui.Panel, true, rounded: true).AddComponent<PinchTarget>();
+            var logo = Resources.Load<Texture2D>(LogoResource);
+            const float titleY = 0.18f;
+            if (logo != null)
+            {
+                var icon = Ui.Quad("logo", _menu, new Vector3(-0.115f, titleY, -0.001f), Vector2.one * 0.036f, Color.white, false, rounded: false);
+                icon.GetComponent<Renderer>().material.mainTexture = logo;
+            }
+            Ui.Text(_menu, Application.productName, 0.020f, new Vector3(-0.085f, titleY, 0), Color.white, TextAnchor.MiddleLeft);
+            // The X closes the Hypa app.
+            Ui.IconButton("x", _menu, new Vector3(0.11f, titleY, -0.001f), 0.024f, QuitApp);
+            // Stories is the first experience; Lens is still in beta
+            Ui.Button("Stories", _menu, new Vector3(0, 0.075f, 0), new Vector2(0.26f, 0.06f), Ui.Accent, () => OpenOrResume(HypaScenes.Story));
+#if !HYPA_FLAT
+            Ui.Button("Lens (beta)", _menu, new Vector3(0, 0.005f, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => OpenOrResume(HypaScenes.Lens));
+#endif
+            Ui.Button("How it works", _menu, new Vector3(0, -0.065f, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => ShowHelp(true));
+            _status = Ui.Text(_menu, "", 0.015f, new Vector3(0, -0.18f, 0), Color.white);
+            _menu.gameObject.SetActive(false);
+
+            BuildHelp();
+        }
+
+        /// <summary>How it works: the two experiences, each a heading and a short wrapped paragraph, and a way back.</summary>
+        void BuildHelp()
+        {
+            const float w = 0.50f, h = 0.44f, pad = 0.03f, left = -w / 2f + pad;
+            const float bodyH = 0.0135f, headH = 0.018f, line = 1.08f;
+            var chars = Mathf.FloorToInt((w - pad * 2f) / (bodyH * Ui.CharWidth)) - 7; // what fits across the card, with room for wide glyphs
+            var body = new Color(1f, 1f, 1f, 0.78f);
+
+            _help = new GameObject("How It Works").transform;
+            _help.SetParent(_anchor, false);
+            _help.localPosition = new Vector3(0f, 0f, -0.01f);
+            Ui.Quad("bg", _help, new Vector3(0, 0, 0.003f), new Vector2(w, h), Ui.Panel, true, rounded: true).AddComponent<PinchTarget>();
+            var top = h / 2f - pad - 0.012f;
+            Ui.Text(_help, "How it works", 0.024f, new Vector3(left, top, 0), Color.white, TextAnchor.MiddleLeft);
+            Ui.IconButton("x", _help, new Vector3(w / 2f - pad - 0.02f, top, -0.001f), 0.022f, () => ShowHelp(false)); // inside the inner edge
+
+            var y = top - 0.045f;
+            void Section(string icon, string title, string text)
+            {
+                var tex = Ui.Icon(icon);
+                if (tex != null)
+                {
+                    var q = Ui.Quad("icon", _help, new Vector3(left + 0.011f, y - headH / 2f, -0.001f), Vector2.one * 0.022f, Color.white, false, rounded: false);
+                    q.GetComponent<Renderer>().material.mainTexture = tex;
+                }
+                Ui.Text(_help, title, headH, new Vector3(left + 0.032f, y - headH / 2f, 0), Color.white, TextAnchor.MiddleLeft);
+                y -= headH + 0.012f;
+                var wrapped = Ui.Wrap(text, chars);
+                Ui.Text(_help, wrapped, bodyH, new Vector3(left, y, 0), body, TextAnchor.UpperLeft);
+                y -= wrapped.Split('\n').Length * bodyH * line + 0.03f;
+            }
+            Section("languages", "Stories",
+                "Choose a story by the campfire. The storyteller tells it in your language, and the words light up with the voice. Raise a hand to ask a question. At the end, Try Hypa translates a few words. In your room, the door leads to the hut, the village, or the fire. Step through, then step back to come home.");
+            Section("camera", "Lens (beta)",
+                "Look at a sign, menu or book and pinch Capture. The text and its translation open in a popup: hear it, or save it to practise later. Caption reads the whole view at once.");
+            Ui.Text(_help, Ui.Wrap("Return to the campfire, then select Back to go Home. In Lens, select X.", chars), bodyH,
+                new Vector3(left, y, 0), body, TextAnchor.UpperLeft);
+            // Ui.IconButton("chevron-left", _help, new Vector3(0f, -h / 2f + pad + 0.03f, -0.001f), 0.028f, () => ShowHelp(false)); // back to Home (Stories' chevron)
+            _help.gameObject.SetActive(false);
+        }
+
+        /// <summary>Opens/closes Home. Modes call this from their X.</summary>
+        public void ToggleMenu() { if (_menu != null) ShowMenu(!_menu.gameObject.activeSelf); }
+
+        /// <summary>The shell's UI in the room (Home button and cards), e.g. to keep it out of a snapshot.</summary>
+        public Transform UiRoot => _anchor;
+
+        public bool IsMenuOpen => _menu != null && (_menu.gameObject.activeSelf || _help.gameObject.activeSelf);
+
+        /// <summary>Home always comes up in front of the user, over whatever the mode is showing.</summary>
+        public void ShowMenu(bool open)
+        {
+            if (_menu == null) return;
+            if (open) PlaceInFront();
+            _menu.gameObject.SetActive(open);
+            if (!open) _help.gameObject.SetActive(false);
+        }
+
+        void ShowHelp(bool open)
+        {
+            _help.gameObject.SetActive(open);
+            _menu.gameObject.SetActive(!open);
+        }
+
+        /// <summary>
+        /// Closes the Hypa app: on the headset the user is back in Horizon Home (stops Play Mode in the editor).
+        /// On Quest the Android task is finished and removed too, so the app leaves the recent-apps list rather than
+        /// lingering in the background; Application.Quit then ends the process.
+        /// </summary>
+        public void QuitApp()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+#if UNITY_ANDROID
+            try
+            {
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                    activity.Call("finishAndRemoveTask");
+            }
+            catch (System.Exception e) { Debug.LogWarning("Hypa: finishAndRemoveTask failed, quitting anyway. " + e.Message); }
+#endif
+            Application.Quit();
+#endif
+        }
+
+        const string HomeScene = "HypaHome";
+
+        /// <summary>
+        /// Leaves the running mode and goes back to the entry screen: the mode's scene is unloaded (its world, HUD and
+        /// audio go with it) and the Home card comes up in front of the user. The camera rig, passthrough and pointer
+        /// live on (DontDestroyOnLoad), so an empty scene is all Home needs.
+        /// </summary>
+        public void ExitToHome()
+        {
+            var mode = _currentMode != null ? SceneManager.GetSceneByName(_currentMode) : default;
+            _currentMode = null;
+            if (mode.IsValid() && mode.isLoaded)
+            {
+                var home = SceneManager.GetSceneByName(HomeScene);
+                if (!home.IsValid()) home = SceneManager.CreateScene(HomeScene);
+                SceneManager.SetActiveScene(home);
+                SceneManager.UnloadSceneAsync(mode);
+            }
+            ShowMenu(true);
+        }
+
+        /// <summary>Picking the mode that is already running just closes Home; anything else loads it.</summary>
+        void OpenOrResume(string scene)
+        {
+            if (scene == _currentMode) { ShowMenu(false); return; }
+            Open(scene);
+        }
+
+        public void Open(string scene)
+        {
+            if (string.IsNullOrEmpty(scene) || scene == HypaScenes.Shell) scene = HypaScenes.Story;
+#if HYPA_FLAT
+            if (scene == HypaScenes.Lens) scene = HypaScenes.Story;
+#endif
+            if (!Application.CanStreamedLevelBeLoaded(scene))
+            {
+                if (_status != null) _status.text = scene + " isn't in Build Settings.\nRun Hypa > Sync Build Settings.";
+                return;
+            }
+            HypaSettings.LastMode = scene;
+            _currentMode = scene;
+            ShowMenu(false);
+            SceneManager.LoadScene(scene, LoadSceneMode.Single);
+        }
+    }
+}

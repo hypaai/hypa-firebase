@@ -1,0 +1,73 @@
+{
+  "firestore": {
+    "rules": "firebase/firestore.rules",
+    "indexes": "firebase/firestore.indexes.json"
+  },
+  "database": {
+    "rules": "firebase/database.rules.json"
+  },
+  "hosting": {
+    "public": "Builds/Web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**/*.br",
+        "headers": [
+          {
+            "key": "Content-Encoding",
+            "value": "br"
+          }
+        ]
+      },
+      {
+        "source": "**/*.wasm.br",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/wasm"
+          }
+        ]
+      },
+      {
+        "source": "**/*.js.br",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/javascript"
+          }
+        ]
+      },
+      {
+        "source": "**/*.data.br",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          }
+        ]
+      }
+    ]
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "database": {
+      "port": 9000
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "ui": {
+      "enabled": true
+    },
+    "singleProjectMode": true
+  }
+}

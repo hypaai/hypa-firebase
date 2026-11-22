@@ -1,0 +1,5 @@
+{
+  "name": "HypaFirebase.Runtime",
+  "rootNamespace": "HypaFirebase",
+  "references": []
+}

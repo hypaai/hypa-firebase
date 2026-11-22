@@ -1,0 +1,104 @@
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace HypaCore
+{
+    /// <summary>
+    /// The only code in the app that touches the network. Uses HttpClient so requests and response parsing run off
+    /// the Unity main thread (continuations use ConfigureAwait(false)); callers awaiting from the main thread resume there.
+    /// </summary>
+    public static class HypaHttp
+    {
+        // No client-wide timeout: each request gets its own (see Send), because Hypa's speech can take far longer than a
+        // translation, and running out of time is not the same as being offline.
+        static readonly HttpClient Client = new HttpClient { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+        public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+        public static readonly TimeSpan AudioDownloadTimeout = TimeSpan.FromSeconds(60);
+
+        /// <summary>POST JSON to the Hypa API. Calls the proxy without a Hypa API key. Returns the raw body (JSON or SSE).</summary>
+        public static async Task<string> PostAsync(HypaConfig cfg, string path, string json, CancellationToken ct, TimeSpan? timeout = null)
+        {
+            using (var req = new HttpRequestMessage(HttpMethod.Post, cfg.BaseUrl + path))
+            {
+                req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                req.Headers.TryAddWithoutValidation("Accept", "application/json, text/event-stream");
+                if (!cfg.HasProxy) throw new HypaException(HypaErrorKind.MissingConfiguration, "The Hypa proxy is not configured.");
+                using (var res = await Send(req, ct, timeout ?? DefaultTimeout).ConfigureAwait(false))
+                {
+                    var body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    if (!res.IsSuccessStatusCode) throw HypaException.FromHttp((int)res.StatusCode, body);
+                    return body;
+                }
+            }
+        }
+
+        /// <summary>GET bytes from a signed URL (TTS audio). Never sends the API key to it.</summary>
+        public static async Task<byte[]> GetBytesAsync(string url, CancellationToken ct)
+        {
+            // the link's host only: its query string signs it
+            var trace = HypaTrace.Enabled ? HypaTrace.Begin("audio download", Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : "") : null;
+            try
+            {
+                using (var req = new HttpRequestMessage(HttpMethod.Get, url))
+                using (var res = await Send(req, ct, AudioDownloadTimeout).ConfigureAwait(false))
+                {
+                    if (!res.IsSuccessStatusCode)
+                        throw new HypaException(HypaErrorKind.BadRequest, $"Audio link returned HTTP {(int)res.StatusCode} (links expire after about an hour).", (int)res.StatusCode);
+                    var bytes = await res.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                    HypaTrace.End(trace, "ok", $"{bytes.Length / 1024} KB");
+                    return bytes;
+                }
+            }
+            catch (OperationCanceledException) { HypaTrace.End(trace, "cancelled"); throw; }
+            catch (Exception e) { HypaTrace.End(trace, e is HypaException h ? h.Kind.ToString() : e.GetType().Name, e.Message); throw; }
+        }
+
+        static async Task<HttpResponseMessage> Send(HttpRequestMessage req, CancellationToken ct, TimeSpan timeout)
+        {
+            using (var limit = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                limit.CancelAfter(timeout);
+                try { return await Client.SendAsync(req, HttpCompletionOption.ResponseContentRead, limit.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (OperationCanceledException e) { throw new HypaException(HypaErrorKind.Timeout, $"Request timed out after {timeout.TotalSeconds:0} s.", 0, null, e); }
+                catch (HttpRequestException e) { throw new HypaException(HypaErrorKind.Offline, e.Message, 0, null, e); }
+            }
+        }
+
+        /// <summary>
+        /// Hypa answers either with a JSON body or with server-sent events ("event: message\ndata: {...}\n\n").
+        /// Returns each JSON payload in order. "[DONE]" markers are skipped. Pure, unit tested.
+        /// </summary>
+        public static List<string> JsonPayloads(string body)
+        {
+            var list = new List<string>();
+            if (string.IsNullOrWhiteSpace(body)) return list;
+            var trimmed = body.TrimStart();
+            if (trimmed.StartsWith("{") || trimmed.StartsWith("[")) { list.Add(trimmed); return list; }
+
+            var data = new StringBuilder();
+            void Flush()
+            {
+                if (data.Length == 0) return;
+                var s = data.ToString();
+                if (s != "[DONE]") list.Add(s);
+                data.Clear();
+            }
+            foreach (var raw in body.Replace("\r\n", "\n").Split('\n'))
+            {
+                if (raw.Length == 0) { Flush(); continue; }
+                if (!raw.StartsWith("data:")) continue;
+                var v = raw.Substring(5);
+                if (v.StartsWith(" ")) v = v.Substring(1);
+                if (data.Length > 0) data.Append('\n');
+                data.Append(v);
+            }
+            Flush();
+            return list;
+        }
+    }
+}

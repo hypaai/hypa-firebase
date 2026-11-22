@@ -1,0 +1,79 @@
+# Unity
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+# Android native build scratch (CMake/ninja), left in the project root by an Android Build And Run
+/.utmp/
+*.csproj
+*.sln
+*.pidb
+*.suo
+.vs/
+.idea/
+.DS_Store
+# Secrets and signing: never commit
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.apk
+*.aab
+*.obb
+hypa.local.json
+**/StreamingAssets/*key*
+
+# Local / generated files that should never be committed
+/.claude/
+**/TempAssembly.dll
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
+# Meta Immersive Debugger dev agent: holds a local access token and your LAN IP
+/[Aa]ssets/Resources/DevAgentSettings.asset
+/[Aa]ssets/Resources/DevAgentSettings.asset.meta
+# Unity AI Assistant per-user settings
+/ProjectSettings/Packages/com.unity.ai.assistant/
+# Crash dumps and editor/OS junk
+mono_crash.*
+*.ips
+sysinfo.txt
+crashlytics-buildid.txt
+/[Rr]ecordings/
+.vscode/
+*.pdb.meta
+*.mdb.meta
+*.pidb.meta
+# Empty folder Unity recreates; its lone .meta would warn on fresh clones
+/[Aa]ssets/StreamingAssets.meta
+/[Aa]ssets/StreamingAssets/
+# Android Gradle/CMake native build intermediates (AGP prefab/externalNativeBuild)
+.gradle/
+.cxx/
+.externalNativeBuild/
+# Hypa Stories: media this public repo may not redistribute (Epidemic Sound beds, narration of unconfirmed origin,
+# placeholder avatar). Kept locally only; the app falls back without them. See Assets/HypaStories/README.md.
+/[Aa]ssets/HypaStories/Local/
+/[Aa]ssets/HypaStories/Local.meta
+
+# Defense against accidentally reintroducing client-side key resources
+**/hypa_build_env*
+# Firebase configs stay local until App Check enforcement is verified
+**/google-services.json
+**/google-services.json.meta
+**/GoogleService-Info.plist
+**/GoogleService-Info.plist.meta
+**/*service-account*.json
+**/*serviceAccount*.json
+.firebase/
+firebase-debug*.log
+firestore-debug.log
+database-debug.log
+ui-debug.log
+node_modules/
+coverage/
