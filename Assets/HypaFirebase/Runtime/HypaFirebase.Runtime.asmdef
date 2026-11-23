@@ -1,7 +1,7 @@
 {
   "name": "HypaFirebase.Runtime",
   "rootNamespace": "HypaFirebase",
-  "references": [],
+  "references": [ "HypaCore.Runtime" ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
