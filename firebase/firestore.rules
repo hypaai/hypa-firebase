@@ -1,7 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Open only the reviewed paths once the data model is implemented.
+    // A signed-in user (anonymous counts) reads and writes only their own tree: users/{their uid}/**.
+    // users/{uid}, users/{uid}/progress/*, users/{uid}/stories/*, users/{uid}/words/*  (docs/contracts.md, section 3).
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else stays closed.
     match /{document=**} { allow read, write: if false; }
   }
 }
