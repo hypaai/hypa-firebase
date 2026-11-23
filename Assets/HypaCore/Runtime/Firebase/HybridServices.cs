@@ -19,7 +19,7 @@ namespace HypaCore.Hybrid
         public IProgressStore Progress { get; set; } = new FakeProgressStore();
         public IRemoteFlags Flags { get; set; } = new FakeRemoteFlags();
         public IRoomSync Rooms { get; set; } = new FakeRoomSync();
-        public IOnDeviceModel OnDevice { get; set; } = new FakeOnDeviceModel();
+        public IOnDeviceModel OnDevice { get; set; } = new NoOnDeviceModel();
         public ICloudModel Cloud { get; set; } = new FakeCloudModel();
 
         /// <summary>Set by the Native implementation (G02). Returns null if Firebase cannot start on this device.</summary>
