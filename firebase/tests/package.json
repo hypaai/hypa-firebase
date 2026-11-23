@@ -1,0 +1,10 @@
+{
+  "name": "hypa-firebase-rules-tests",
+  "private": true,
+  "type": "module",
+  "description": "Emulator tests for firebase/firestore.rules and firebase/database.rules.json. Run from the repository root: npx firebase-tools emulators:exec --only firestore,database --project demo-hypa \"node --test firebase/tests/rules.test.mjs\"",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase": "^10.14.1"
+  }
+}
