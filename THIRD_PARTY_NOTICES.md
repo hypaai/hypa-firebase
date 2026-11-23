@@ -16,6 +16,8 @@ This project is licensed under Apache 2.0 (see `LICENSE`). Dependencies and thei
 | Outfit, Cormorant Garamond and Noto Sans fonts (`Assets/HypaStories/Art/Fonts`) | Stories UI and story text | SIL OFL 1.1 (licence files next to the fonts) | Yes |
 | Lucide icons (`Assets/HypaStories/Art/Icons`, rendered to PNG) | Stories UI icons | ISC (`LUCIDE-LICENSE.txt`) | Yes |
 | TextMeshPro Essential Resources (`Assets/TextMesh Pro`) | SDF text shaders and settings | Unity Companion License | Yes, Unity's standard import |
+| MakeHuman system assets (base mesh, targets, mixamo_unity rig and weights, skins, eyes, brows, lashes, hair, clothes, shoes), from the [CC0 system asset pack](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) and MPFB's bundled data | The Stories profile character (`Assets/HypaStories/Resources/HypaAvatar`, generated) | CC0 1.0 | Yes |
+| MPFB 2 (Blender extension) and Blender | Build tools for the profile character (`tools/avatar/build_avatar.py`) | GPL-3.0 (tools only; their output is not covered) | No, installed per developer |
 | Epidemic Sound beds, Ready Player Me placeholder avatar | Stories audio and storyteller | Subscription / RPM terms | **No**: git-ignored `Assets/HypaStories/Local/`, never commit |
 
 Required credit: This work is based on "Camp Fire" (https://sketchfab.com/3d-models/camp-fire-b7967d9c16b64f2790b87e5ff8a80b52) by JalenJacobson (https://sketchfab.com/JalenJacobson) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). Re-encoded (meshopt and WebP removed) for import.
