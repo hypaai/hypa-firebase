@@ -59,7 +59,10 @@ Rules (`firebase/database.rules.json`): signed-in players read a room; the host 
 | `cloud_model` | `gemini-2.5-flash-lite` | G05 |
 | `live_model` | (Live API model name from the Firebase docs on Nov 22) | G10 |
 | `live_langs` | `en,fr,es,sw` | G10 |
-| `proxy_daily_seconds_per_user` | `900` | G04 |
+| `proxy_daily_seconds_per_user` | `600` | G04 |
+| `proxy_daily_requests_per_user` | `400` | G04 |
+| `proxy_global_daily_seconds` | `20000` | G04 |
+| `proxy_global_daily_requests` | `10000` | G04 |
 
 Constants and defaults: `RemoteConfigKeys` in `Models.cs`. `live_model` has no default until G10 sets it.
 
@@ -67,17 +70,21 @@ Constants and defaults: `RemoteConfigKeys` in `Models.cs`. `live_model` has no d
 
 All `POST`, JSON, headers `Authorization: Bearer <Firebase ID token>` and `X-Firebase-AppCheck: <token>`.
 
+These are the shapes the Cloud Function already serves, the same fields the Quest app sends to Hypa (`text_to_speech`, `speech_to_text`, `translate_message`, `/v2/developer/chat`).
+
 | Path | Body | Returns |
 | -- | -- | -- |
-| `/hypa/tts` | `{ text, language, voice? }` | `{ audioBase64, mime, model, voice }` |
-| `/hypa/asr` | `{ audioBase64, mime, language }` | `{ text, model }` |
-| `/hypa/chat` | `{ system, messages, language, model? }` | `{ text, model }` |
-| `/hypa/translate` | `{ text, from, to }` | `{ text, model }` |
+| `/hypa/tts` | `{ text, language, voice?, model?, inline? }` | `{ audioUrl?, audioBase64?, mime, sampleRate, route, usage }` |
+| `/hypa/asr` | `{ audio, sourceLang?, durationSeconds? }` | `{ transcript, language?, audioSeconds, route, usage }` |
+| `/hypa/chat` | `{ messages, model?, maxTokens? }` | `{ content, route, usage }` |
+| `/hypa/translate` | `{ text, targetLang, sourceLang? }` | `{ translation, language?, route, usage }` |
 | `/gemini/generate` (optional) | `{ prompt, model? }` | `{ text, model }` |
+
+`messages` is `[{ role, content }]` with roles `system`, `user` or `assistant`. `model` is `"auto"` or `"provider/model"`. `inline: true` makes TTS return `audioBase64` instead of Hypa's signed `audioUrl`. `route` is `{ provider, model, voice }`. `usage` is `{ secondsUsed, secondsLimit, requestsUsed, requestsLimit, resetsAt }`.
 
 `/gemini/generate` is built only if G02's Quest spike finds the Firebase AI Logic SDK does not run on Quest (G04). It calls Gemini through the AI Logic server path or Vertex and backs `ICloudModel.GenerateAsync` there.
 
-Errors: `{ error: { code: "quota"|"unauthenticated"|"appcheck"|"upstream"|"bad_request", message } }`.
+Errors: `{ error: { code, message } }`. `code` is `quota`, `unauthenticated`, `app_check`, `bad_request`, `too_large`, `upstream`, `not_found`, `method_not_allowed` or `internal`.
 `HypaRestClient` gets a "proxy mode": same calls, these paths, Firebase tokens instead of an API key. Request and response shapes: `ProxyApi` and the `*Request` / `*Response` classes in `Models.cs`.
 
 ## 7. Shared rules

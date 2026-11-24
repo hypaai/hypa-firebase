@@ -2,7 +2,7 @@
 
 `functions/` is the only place the Hypa API key exists. Clients (web, Android, iOS, Quest) send a Firebase ID token and an App Check token; the function checks both, counts usage, calls Hypa, and returns the answer plus which model and voice produced it.
 
-> **Contract note.** The G01 API contract was not in the repository when this was built, so the shapes below are what the code implements. If G01 §6 differs, change the matching file in `functions/src/routes/` (inputs/outputs) and this file together. The existing Unity client (`HypaMcpClient`, `HypaRestClient`) still calls `/v2/mcp` and `/v2/developer/*`; it needs to move to these routes (G05).
+> **Contract note.** These shapes are the contract in `docs/contracts.md` §6 and in `ProxyApi` (`Models.cs`). They match the fields the Quest app already sends to Hypa. G05 calls these routes instead of `/v2/mcp` and `/v2/developer/*`.
 
 ## Calling it
 
