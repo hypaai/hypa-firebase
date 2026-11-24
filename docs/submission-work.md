@@ -44,3 +44,14 @@ The rest of the Quest REST path, and the start-up that moves from the Fakes to t
 - `docs/hypa-proxy.md`: contract, limits, secrets, runbook.
 
 - Follow-up: aligned the four proxy routes with G01, moved the VR chat fallback order into the proxy and supported explicit model selection on all four routes, fixed quota refunds and room expiration, and wired the Unity calls and editor sign-in to the local proxy. The Unity WebGL build uses Brotli to match the Hosting headers.
+
+## G08 (HYP-203): progress sync, logic only
+
+Written against G01's interfaces, so it runs on the Fakes. The screens and device checks are not done yet.
+
+- `ProgressSync` (`Assets/HypaStories/Runtime/Core/ProgressSync.cs`): saves the latest position at most every 5 s, at once on close, and retries a failed save. Decides the "Continue *story* where you left off on your phone?" offer: only for a newer position from another device.
+- `UserDataSync`: records per-story results (merged) and saved words (one per word and language).
+- `PairingCode`: the 6-letter Quest pairing code. The server side (`/pair/claim`) belongs to G04.
+- Provisional contract additions: `StoryResult`, `SavedWord`, `IUserDataStore` with a fake (`Assets/HypaCore/Runtime/Firebase/UserData.cs`), waiting for Timi's OK.
+- Tests: `Assets/HypaStories/Tests/Editor/ProgressSyncTests.cs`.
+- Not done: "Sign in to sync", the Continue prompt on screen, Firestore-backed stores, and the device checks.
