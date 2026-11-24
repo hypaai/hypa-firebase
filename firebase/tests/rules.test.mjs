@@ -54,47 +54,135 @@ describe("firestore.rules", () => {
   it("keeps every other path closed, even for a signed-in user", async () => {
     const db = env.authenticatedContext("alice").firestore();
     await assertFails(setDoc(doc(db, "config/app"), { x: 1 }));
-    await assertFails(getDoc(doc(db, "rooms/ABCDE")));
+    await assertFails(getDoc(doc(db, "rooms/BCDFG")));
+    await assertFails(setDoc(doc(db, "users/alice/progress/other"), progress));
+    await assertFails(setDoc(doc(db, "users/alice/secrets/x"), { x: 1 }));
+  });
+
+  it("accepts the profile with the character's appearance, and checks its fields", async () => {
+    const db = env.authenticatedContext("alice").firestore();
+    const profile = {
+      username: "timi_01", displayName: "Timi", language: "yo", appearance: '{"skin":4}', appearanceVersion: 2,
+      createdAt: 1, lastDevice: "quest", lastSeenAt: 2,
+    };
+    await assertSucceeds(setDoc(doc(db, "users/alice"), profile));
+    await assertFails(setDoc(doc(db, "users/alice"), { ...profile, username: "Timi Space" }));
+    await assertFails(setDoc(doc(db, "users/alice"), { ...profile, username: "9lives" }));
+    await assertFails(setDoc(doc(db, "users/alice"), { ...profile, displayName: "x".repeat(25) }));
+    await assertFails(setDoc(doc(db, "users/alice"), { ...profile, isAdmin: true }));
+    await assertFails(setDoc(doc(db, "users/alice"), { ...profile, appearance: "x".repeat(4001) }));
+  });
+
+  it("checks progress, story and word fields", async () => {
+    const db = env.authenticatedContext("alice").firestore();
+    await assertFails(setDoc(doc(db, "users/alice/progress/current"), { ...progress, place: "moon" }));
+    await assertFails(setDoc(doc(db, "users/alice/progress/current"), { ...progress, lineIndex: "3" }));
+    await assertFails(setDoc(doc(db, "users/alice/progress/current"), { ...progress, extra: 1 }));
+    await assertSucceeds(setDoc(doc(db, "users/alice/stories/s1"), { finished: true, bestGameScore: 7, gamePlays: 2, lastLineId: "l9", updatedAt: 3 }));
+    await assertFails(setDoc(doc(db, "users/alice/stories/s1"), { finished: "yes" }));
+    await assertSucceeds(setDoc(doc(db, "users/alice/stories/s1"), { storyId: "s1", finished: true }));
+    await assertFails(setDoc(doc(db, "users/alice/stories/s1"), { storyId: "s2", finished: true }));
+    await assertSucceeds(setDoc(doc(db, "users/alice/words/w1"), { text: "omi", translation: "water", language: "yo", storyId: "s1", savedAt: 4 }));
+    await assertFails(setDoc(doc(db, "users/alice/words/w1"), { text: "x".repeat(201) }));
   });
 });
 
 describe("database.rules.json", () => {
+  const code = "BCDFG";
   const room = (host) => ({ host, storyId: "s1", language: "yo", state: "lobby", createdAt: 1 });
+  const player = (name, seat) => ({ name, platform: "quest", seat, online: true, handUp: false });
+  const pose = { h: [0, 1.6, 0, 0, 0, 0, 1], l: [0.2, 1.2, 0.3, 0, 0, 0, 1], t: 1 };
+
+  async function hostedRoom() {
+    const alice = env.authenticatedContext("alice").database();
+    await assertSucceeds(set(ref(alice, `rooms/${code}`), room("alice")));
+    await assertSucceeds(set(ref(alice, `rooms/${code}/players/alice`), player("Alice", 0)));
+    return alice;
+  }
 
   it("keeps a room closed to people who are not signed in", async () => {
     const anon = env.unauthenticatedContext().database();
-    await assertFails(get(ref(anon, "rooms/ABCDE")));
-    await assertFails(set(ref(anon, "rooms/ABCDE"), room("alice")));
+    await assertFails(get(ref(anon, `rooms/${code}/state`)));
+    await assertFails(set(ref(anon, `rooms/${code}`), room("alice")));
   });
 
-  it("lets a signed-in player create a room only as its host", async () => {
+  it("lets a signed-in player create a room only as its host, with a valid code", async () => {
     const alice = env.authenticatedContext("alice").database();
-    await assertFails(set(ref(alice, "rooms/ABCDE"), room("bob")));
-    await assertSucceeds(set(ref(alice, "rooms/ABCDE"), room("alice")));
+    await assertFails(set(ref(alice, `rooms/${code}`), room("bob")));
+    await assertFails(set(ref(alice, "rooms/ABCDE"), room("alice")));
+    await assertFails(set(ref(alice, "rooms/bcdfg"), room("alice")));
+    await assertFails(set(ref(alice, `rooms/${code}`), { host: "alice" }));
+    await assertFails(set(ref(alice, `rooms/${code}`), { ...room("alice"), state: "party" }));
+    await assertFails(set(ref(alice, `rooms/${code}`), { ...room("alice"), secret: 1 }));
+    await assertSucceeds(set(ref(alice, `rooms/${code}`), room("alice")));
   });
 
-  it("lets any signed-in player read a room, but only the host change it or its clock", async () => {
-    const alice = env.authenticatedContext("alice").database();
-    await assertSucceeds(set(ref(alice, "rooms/ABCDE"), room("alice")));
-    await assertSucceeds(set(ref(alice, "rooms/ABCDE/clock"), { lineIndex: 1, startedAtServerMs: 0, paused: false }));
+  it("lets anyone signed in see the lobby, but only the host change it or its clock", async () => {
+    const alice = await hostedRoom();
+    await assertSucceeds(set(ref(alice, `rooms/${code}/state`), "story"));
+    await assertSucceeds(set(ref(alice, `rooms/${code}/clock`), { lineIndex: 1, startedAtServerMs: 0, paused: false }));
+    await assertFails(set(ref(alice, `rooms/${code}/host`), "bob"));
+    await assertFails(set(ref(alice, `rooms/${code}/clock`), { lineIndex: -1, startedAtServerMs: 0, paused: false }));
 
     const bob = env.authenticatedContext("bob").database();
-    await assertSucceeds(get(ref(bob, "rooms/ABCDE")));
-    await assertFails(set(ref(bob, "rooms/ABCDE/state"), "story"));
-    await assertFails(set(ref(bob, "rooms/ABCDE/clock"), { lineIndex: 9, startedAtServerMs: 0, paused: true }));
+    await assertSucceeds(get(ref(bob, `rooms/${code}/state`)));
+    await assertSucceeds(get(ref(bob, `rooms/${code}/players`)));
+    await assertFails(set(ref(bob, `rooms/${code}/state`), "game"));
+    await assertFails(set(ref(bob, `rooms/${code}/clock`), { lineIndex: 9, startedAtServerMs: 0, paused: true }));
+    await assertFails(set(ref(bob, `rooms/${code}`), null));
   });
 
-  it("lets each player write only their own presence, pose and game entries", async () => {
-    const alice = env.authenticatedContext("alice").database();
-    await assertSucceeds(set(ref(alice, "rooms/ABCDE"), room("alice")));
+  it("shows the clock, poses and game results only to players in the room", async () => {
+    const alice = await hostedRoom();
+    await assertSucceeds(set(ref(alice, `rooms/${code}/clock`), { lineIndex: 1, startedAtServerMs: 0, paused: false }));
+    await assertSucceeds(set(ref(alice, `rooms/${code}/poses/alice`), pose));
+
+    const eve = env.authenticatedContext("eve").database();
+    await assertFails(get(ref(eve, `rooms/${code}/poses`)));
+    await assertFails(get(ref(eve, `rooms/${code}/clock`)));
+    await assertFails(get(ref(eve, `rooms/${code}/game`)));
+    await assertFails(get(ref(eve, `rooms/${code}`)));
 
     const bob = env.authenticatedContext("bob").database();
-    await assertSucceeds(set(ref(bob, "rooms/ABCDE/players/bob"), { name: "Bob", platform: "quest", seat: 1, online: true, handUp: false }));
-    await assertSucceeds(set(ref(bob, "rooms/ABCDE/poses/bob"), { t: 1 }));
-    await assertSucceeds(set(ref(bob, "rooms/ABCDE/game/bob"), { startedAt: 1, finishedMs: 2, score: 3 }));
-    await assertFails(set(ref(bob, "rooms/ABCDE/players/carol"), { name: "Carol", online: true }));
-    await assertFails(set(ref(bob, "rooms/ABCDE/poses/alice"), { t: 1 }));
-    await assertFails(set(ref(bob, "rooms/ABCDE/game/alice"), { score: 999 }));
+    await assertSucceeds(set(ref(bob, `rooms/${code}/players/bob`), player("Bob", 1)));
+    await assertSucceeds(get(ref(bob, `rooms/${code}/poses`)));
+    await assertSucceeds(get(ref(bob, `rooms/${code}/clock`)));
+  });
+
+  it("lets each player write only their own seat, pose and game entries, in the contract's shape", async () => {
+    await hostedRoom();
+    const bob = env.authenticatedContext("bob").database();
+    await assertFails(set(ref(bob, `rooms/${code}/poses/bob`), pose)); // not seated yet
+    await assertSucceeds(set(ref(bob, `rooms/${code}/players/bob`), player("Bob", 1)));
+    await assertSucceeds(set(ref(bob, `rooms/${code}/poses/bob`), pose));
+    await assertSucceeds(set(ref(bob, `rooms/${code}/game/bob`), { startedAt: 1, finishedMs: 2, score: 3 }));
+    await assertFails(set(ref(bob, `rooms/${code}/players/bob`), player("Bob", 2)));
+    await assertFails(set(ref(bob, `rooms/${code}/players/bob`), { ...player("Bob", 1), platform: "fridge" }));
+    await assertFails(set(ref(bob, `rooms/${code}/poses/bob`), { h: [0, 1, 2], t: 1 }));
+    await assertFails(set(ref(bob, `rooms/${code}/players/carol`), player("Carol", 1)));
+    await assertFails(set(ref(bob, `rooms/${code}/poses/alice`), pose));
+    await assertFails(set(ref(bob, `rooms/${code}/game/alice`), { startedAt: 1, finishedMs: 2, score: 999 }));
+    await assertSucceeds(set(ref(bob, `rooms/${code}/players/bob`), null)); // leaving
+  });
+
+  it("does not let the host overwrite other players' entries", async () => {
+    const alice = await hostedRoom();
+    const bob = env.authenticatedContext("bob").database();
+    await assertSucceeds(set(ref(bob, `rooms/${code}/players/bob`), player("Bob", 1)));
+    await assertFails(set(ref(alice, `rooms/${code}/players/bob`), { ...player("Bob", 1), online: false }));
+    await assertFails(set(ref(alice, `rooms/${code}/game/bob`), { startedAt: 1, finishedMs: 2, score: 0 }));
+  });
+
+  it("lets only the host close the room", async () => {
+    const alice = await hostedRoom();
+    const bob = env.authenticatedContext("bob").database();
+    await assertFails(set(ref(bob, `rooms/${code}`), null));
+    await assertSucceeds(set(ref(alice, `rooms/${code}`), null));
+  });
+
+  it("does not let anyone join a room that does not exist", async () => {
+    const bob = env.authenticatedContext("bob").database();
+    await assertFails(set(ref(bob, `rooms/${code}/players/bob`), player("Bob", 1)));
   });
 
   it("keeps everything outside rooms closed", async () => {

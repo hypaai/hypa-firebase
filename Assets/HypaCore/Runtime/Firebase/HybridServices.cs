@@ -17,6 +17,7 @@ namespace HypaCore.Hybrid
 
         public IHypaAuth Auth { get; set; } = new FakeAuth();
         public IProgressStore Progress { get; set; } = new FakeProgressStore();
+        public IProfileStore Profiles { get; set; } = new FakeProfileStore();
         public IRemoteFlags Flags { get; set; } = new FakeRemoteFlags();
         public IRoomSync Rooms { get; set; } = new FakeRoomSync();
         public IOnDeviceModel OnDevice { get; set; } = new NoOnDeviceModel();
@@ -39,7 +40,7 @@ namespace HypaCore.Hybrid
         /// <summary>
         /// Starts the real services in the background without blocking the story. The app keeps playing with the Fakes; when the
         /// real ones are ready they replace the Fakes in <see cref="Current"/> (so always read services through <see cref="Current"/>,
-        /// never keep your own reference), progress saved meanwhile is sent if it is newer than the server's, and
+        /// never keep your own reference), progress and a profile saved meanwhile are sent if newer than the server's, and
         /// <see cref="Upgraded"/> is raised. If starting fails the Fakes stay and nothing is thrown.
         /// </summary>
         public static async Task UpgradeAsync(Func<Task<HybridServices>> start)
@@ -55,8 +56,13 @@ namespace HypaCore.Hybrid
                 var remote = await real.Progress.LoadAsync();
                 if (pending != null && (remote == null || pending.updatedAt > remote.updatedAt)) await real.Progress.SaveAsync(pending);
 
+                var fakeProfile = await local.Profiles.LoadAsync();
+                var remoteProfile = await real.Profiles.LoadAsync();
+                if (fakeProfile != null && (remoteProfile == null || fakeProfile.lastSeenAt > remoteProfile.lastSeenAt)) await real.Profiles.SaveAsync(fakeProfile);
+
                 local.Auth = real.Auth;
                 local.Progress = real.Progress;
+                local.Profiles = real.Profiles;
                 local.Flags = real.Flags;
                 local.Rooms = real.Rooms;
                 local.OnDevice = real.OnDevice;

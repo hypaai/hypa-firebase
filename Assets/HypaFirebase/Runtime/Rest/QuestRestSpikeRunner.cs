@@ -21,8 +21,8 @@ namespace HypaFirebase.Rest
     /// The Quest spike for the REST path (HYP-197, scope item 6): runs each REST call the game would need, one step at a time,
     /// and reports which worked. Put <see cref="QuestRestSpike"/> in a scene, run it on a Quest, and read the report in the log.
     /// The report never contains a token: a step says only that a token arrived, how long it is, or which error code came back.
-    /// It writes only to <c>rooms/spike-{uid}</c> (its own room, so a run that failed before clean-up never blocks someone
-    /// else's) and the signed-in user's own progress document, and removes the room afterwards.
+    /// It writes only to a new room it hosts (a fresh 5-letter code, as the rules require) and the signed-in user's own progress
+    /// document, and removes the room afterwards. A room left by a failed run is deleted by <c>cleanupRooms</c> after 2 hours.
     /// </summary>
     public sealed class QuestRestSpikeRunner
     {
@@ -67,14 +67,14 @@ namespace HypaFirebase.Rest
             });
 
             var db = new RestRealtimeDatabase(_config, auth, _handler);
-            var roomPath = "rooms/spike-" + auth.Uid;
+            var roomPath = "rooms/" + RoomCode.New(); // the rules accept only real 5-letter codes
             if (await Step(steps, "Realtime Database write and read", async () =>
             {
                 var uid = auth.Uid;
                 var room = new JObject { ["host"] = uid, ["storyId"] = "spike", ["language"] = "en", ["state"] = "lobby", ["createdAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
                 await db.SetAsync(roomPath, room.ToString(Newtonsoft.Json.Formatting.None), ct);
-                var read = JObject.Parse(await db.GetAsync(roomPath, ct));
-                if ((string)read["host"] != uid) throw new InvalidOperationException("read back something different from what was written");
+                var read = JToken.Parse(await db.GetAsync(roomPath + "/host", ct)); // rooms are readable field by field, not whole
+                if ((string)read != uid) throw new InvalidOperationException("read back something different from what was written");
                 return "wrote a room and read it back";
             }))
             {
@@ -85,7 +85,7 @@ namespace HypaFirebase.Rest
                         limit.CancelAfter(TimeSpan.FromSeconds(10));
                         try
                         {
-                            await foreach (var evt in db.StreamAsync(roomPath, limit.Token)) return $"first event: {evt.Name}";
+                            await foreach (var evt in db.StreamAsync(roomPath + "/state", limit.Token)) return $"first event: {evt.Name}";
                         }
                         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new TimeoutException("no event within 10 seconds"); }
                     }
