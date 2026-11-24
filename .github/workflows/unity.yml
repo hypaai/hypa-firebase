@@ -2,6 +2,7 @@ name: Unity validation
 on: [pull_request, workflow_dispatch]
 permissions:
   contents: read
+  checks: write # unity-test-runner posts the test results as a check run
 jobs:
   editmode:
     runs-on: ubuntu-latest
