@@ -1,6 +1,6 @@
 export type ErrorCode =
   | "unauthenticated"
-  | "app_check"
+  | "appcheck"
   | "quota"
   | "bad_request"
   | "too_large"

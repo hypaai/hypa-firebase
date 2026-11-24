@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HypaCore.Hybrid;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -72,23 +73,20 @@ namespace HypaCore
             return content;
         }
 
-        /// <summary>
-        /// Chat, not streamed. model = "provider/model" (e.g. "meta/muse-wonder-1.0"); messages = [{ role, content }] with roles
-        /// system / user / assistant. maxTokens covers the model's reasoning too, so leave room. Verified live (Meta): the final
-        /// event carries choices[0].message.content.
-        /// </summary>
-        public async Task<string> ChatAsync(string model, JArray messages, int maxTokens, CancellationToken ct)
+        /// <summary>Sends a G01 chat request. A blank model uses the proxy's configured default.</summary>
+        public async Task<string> ChatAsync(string model, JArray messages, string language, int maxTokens, CancellationToken ct)
         {
-            var slash = model?.IndexOf('/') ?? -1;
-            if (slash <= 0) throw new HypaException(HypaErrorKind.InvalidResponse, $"chat: model must be \"provider/model\", got \"{model}\".");
-            var body = new JObject
+            var history = new JArray(messages);
+            var body = new JObject { ["messages"] = history, ["language"] = language, ["maxTokens"] = maxTokens };
+            if (history.First is JObject first && (string)first["role"] == "system")
             {
-                ["provider"] = model.Substring(0, slash), ["model"] = model.Substring(slash + 1), ["messages"] = messages,
-                ["stream"] = false, ["thinking"] = false, ["max_tokens"] = maxTokens,
-            };
-            var res = await PostAsync(Endpoints.Chat, body, ct).ConfigureAwait(false);
-            var content = (string)res.SelectToken("choices[0].message.content");
-            if (string.IsNullOrWhiteSpace(content)) throw new HypaException(HypaErrorKind.InvalidResponse, "chat: no choices[0].message.content.");
+                body["system"] = (string)first["content"];
+                first.Remove();
+            }
+            if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
+            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Chat, body.ToString(Formatting.None), ct).ConfigureAwait(false);
+            var content = (string)JObject.Parse(raw)["text"];
+            if (string.IsNullOrWhiteSpace(content)) throw new HypaException(HypaErrorKind.InvalidResponse, "chat: the proxy returned no text.");
             return content;
         }
 

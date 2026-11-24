@@ -11,8 +11,16 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { handleRequest } from "./api/handler";
 import { HypaHttpClient } from "./api/hypa";
 import type { Deps } from "./api/types";
-import { DEFAULT_LIMITS, emulatorSettings, FUNCTION_TIMEOUT_SECONDS, MIN_INSTANCES, RC_KEYS, REGION } from "./config";
-import { RemoteConfigLimits } from "./services/limits";
+import {
+  defaultChatModel,
+  DEFAULT_LIMITS,
+  emulatorSettings,
+  FUNCTION_TIMEOUT_SECONDS,
+  MIN_INSTANCES,
+  RC_KEYS,
+  REGION,
+} from "./config";
+import { RemoteConfigLimits, type LimitsProvider } from "./services/limits";
 import { FirestoreQuotaStore } from "./services/quota";
 import { deleteStaleRooms } from "./services/rooms";
 
@@ -26,34 +34,44 @@ const emulator = emulatorSettings();
 let deps: Deps | undefined;
 function getDeps(): Deps {
   if (deps) return deps;
-  const template = getRemoteConfig().initServerTemplate({
-    defaultConfig: Object.fromEntries(
-      Object.entries(RC_KEYS).map(([k, rc]) => [rc, DEFAULT_LIMITS[k as keyof typeof DEFAULT_LIMITS]]),
-    ),
-  });
-  let config: ReturnType<typeof template.evaluate> | undefined;
   return (deps = {
     verifiers: {
       verifyIdToken: (t) => getAuth().verifyIdToken(t),
       verifyAppCheck: (t) => getAppCheck().verifyToken(t),
     },
     quota: new FirestoreQuotaStore(getFirestore()),
-    limits: new RemoteConfigLimits(
-      {
-        load: async () => {
-          await template.load();
-          config = template.evaluate();
-        },
-        // NaN (not loaded yet) is rejected by the limits and replaced with the default
-        getNumber: (key) => config?.getNumber(key) ?? NaN,
-      },
-      Date.now,
-      (e) => logger.warn("Remote Config unavailable, using last known or default limits", { error: String(e) }),
-    ),
-    hypa: new HypaHttpClient({ baseUrl: emulator.hypaApiBase, apiKey: () => HYPA_API_KEY.value() }),
+    limits: getLimits(),
+    hypa: new HypaHttpClient({
+      baseUrl: emulator.hypaApiBase,
+      apiKey: () => HYPA_API_KEY.value(),
+      defaultChatModel,
+    }),
     skipAppCheck: emulator.skipAppCheck,
     log: logger,
   });
+}
+
+function getLimits(): LimitsProvider {
+  if (emulator.enabled) return { get: async () => DEFAULT_LIMITS };
+
+  const template = getRemoteConfig().initServerTemplate({
+    defaultConfig: Object.fromEntries(
+      Object.entries(RC_KEYS).map(([k, rc]) => [rc, DEFAULT_LIMITS[k as keyof typeof DEFAULT_LIMITS]]),
+    ),
+  });
+  let config: ReturnType<typeof template.evaluate> | undefined;
+  return new RemoteConfigLimits(
+    {
+      load: async () => {
+        await template.load();
+        config = template.evaluate();
+      },
+      // NaN (not loaded yet) is rejected by the limits and replaced with the default
+      getNumber: (key) => config?.getNumber(key) ?? NaN,
+    },
+    Date.now,
+    (e) => logger.warn("Remote Config unavailable, using last known or default limits", { error: String(e) }),
+  );
 }
 
 /**
@@ -87,6 +105,6 @@ export const hypa = onRequest(
 export const cleanupRooms = onSchedule(
   { region: REGION, schedule: "every 30 minutes", timeoutSeconds: 120, retryCount: 0 },
   async () => {
-    logger.info("rooms cleanup", { removed: await deleteStaleRooms(getDatabase() as never, Date.now()) });
+    logger.info("rooms cleanup", { removed: await deleteStaleRooms(getDatabase(), Date.now()) });
   },
 );

@@ -84,12 +84,12 @@ export class FirestoreQuotaStore implements QuotaStore {
   async release(uid: string, cost: Cost, now: Date) {
     const { user, global } = this.refs(uid, now);
     await this.db.runTransaction(async (tx) => {
-      for (const ref of [user, global]) {
-        const snap = await tx.get(ref);
+      const snapshots = await tx.getAll(user, global);
+      for (const snap of snapshots) {
         if (!snap.exists) continue;
         const used = usageOf(snap.data());
         tx.set(
-          ref,
+          snap.ref,
           { seconds: Math.max(0, used.seconds - cost.seconds), requests: Math.max(0, used.requests - cost.requests) },
           { merge: true },
         );

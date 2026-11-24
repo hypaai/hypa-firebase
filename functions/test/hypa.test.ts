@@ -22,7 +22,15 @@ function client(respond: (url: string, init: RequestInit) => Response | Promise<
     if (r instanceof Error) throw r;
     return r;
   }) as typeof fetch;
-  return { seen, hypa: new HypaHttpClient({ baseUrl: "https://hypa.test/", apiKey: () => key, fetchImpl }) };
+  return {
+    seen,
+    hypa: new HypaHttpClient({
+      baseUrl: "https://hypa.test/",
+      apiKey: () => key,
+      defaultChatModel: () => "google/gemini-3.5-flash",
+      fetchImpl,
+    }),
+  };
 }
 
 describe("parsing", () => {
@@ -104,7 +112,7 @@ describe("calls", () => {
       () =>
         new Response(
           toolOk({
-            audioUrl: "https://a/b.mp3",
+            audioBase64: "YXVkaW8=",
             mime: "audio/mpeg",
             voice: "Ife",
             model: "hypa/auto",
@@ -119,52 +127,93 @@ describe("calls", () => {
     expect(String(sent.init.body)).not.toContain("KEY-123456");
     expect(JSON.parse(String(sent.init.body)).params).toEqual({
       name: "text_to_speech",
-      arguments: { text: "Bawo", language: "Yoruba", model: "auto" },
+      arguments: { text: "Bawo", language: "Yoruba", model: "auto", format: "base64" },
     });
     expect(out.route).toEqual({ provider: "hypaai", model: "hypa/auto", voice: "Ife" });
   });
 
-  it("sends a named voice only with its model", async () => {
-    const c = client(() => new Response(toolOk({ audioUrl: "https://a/b.mp3" })));
-    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "Ife" }); // no model: voice dropped
-    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "Ife", model: "m1" });
-    expect(JSON.parse(String(c.seen[0].init.body)).params.arguments).toEqual({
-      text: "a",
-      language: "Yoruba",
-      model: "auto",
+  it("resolves a voice-only request and forwards the selected voice and model", async () => {
+    const c = client((_, init) => {
+      const { name } = JSON.parse(String(init.body)).params;
+      return new Response(
+        toolOk(
+          name === "list_voices"
+            ? { options: [{ model: "hypa/model-1", voices: ["Ife"] }] }
+            : { audioBase64: "YXVkaW8=", mime: "audio/mpeg", voice: "Ife", model: "model-1" },
+        ),
+      );
+    });
+    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "ife" });
+    expect(JSON.parse(String(c.seen[0].init.body)).params).toEqual({
+      name: "list_voices",
+      arguments: { language: "Yoruba" },
     });
     expect(JSON.parse(String(c.seen[1].init.body)).params.arguments).toEqual({
       text: "a",
       language: "Yoruba",
-      model: "m1",
+      model: "hypa/model-1",
       voice: "Ife",
+      format: "base64",
     });
+    expect(c.seen[0].init.signal).toBe(c.seen[1].init.signal);
   });
 
-  it("downloads the audio on the server for inline TTS, https only, without the key", async () => {
-    const c = client((url) =>
-      url.endsWith("/v2/mcp")
-        ? new Response(toolOk({ audioUrl: "https://cdn.test/a.mp3", mime: "audio/mpeg" }))
-        : new Response(Buffer.from("AUDIO")),
+  it("honors a TTS model pin even without a voice", async () => {
+    const c = client(
+      () =>
+        new Response(
+          toolOk({
+            audioBase64: "YXVkaW8=",
+            mime: "audio/mpeg",
+            voice: "Ife",
+            model: "model-1",
+          }),
+        ),
     );
-    const out = await c.hypa.tts({ text: "a", language: "Yoruba", inline: true });
-    expect(out.audioBase64).toBe(Buffer.from("AUDIO").toString("base64"));
-    expect(out.audioUrl).toBeUndefined();
-    expect(JSON.stringify(c.seen[1].init ?? {})).not.toContain("KEY-123456");
-    const bad = client(() => new Response(toolOk({ audioUrl: "http://evil.test/a.mp3" })));
-    expect((await failure(bad.hypa.tts({ text: "a", language: "Yoruba", inline: true }))).code).toBe("upstream");
+    const out = await c.hypa.tts({ text: "a", language: "Yoruba", model: "hypa/model-1" });
+    expect(JSON.parse(String(c.seen[0].init.body)).params.arguments).toMatchObject({
+      model: "hypa/model-1",
+      format: "base64",
+    });
+    expect(out.audioBase64).toBe("YXVkaW8=");
   });
 
-  it("chat: auto routes by provider, a pinned model is split like the Unity client", async () => {
+  it("rejects a voice shared by multiple models until the caller specifies one", async () => {
+    const c = client(
+      () =>
+        new Response(
+          toolOk({
+            options: [
+              { model: "hypa/one", voices: ["Ife"] },
+              { model: "hypa/two", voices: ["Ife"] },
+            ],
+          }),
+        ),
+    );
+    const err = await failure(c.hypa.tts({ text: "a", language: "Yoruba", voice: "Ife" }));
+    expect(err.code).toBe("bad_request");
+    expect(c.seen).toHaveLength(1);
+  });
+
+  it("uses the configured chat default and preserves slashes in explicit model IDs", async () => {
     const reply = () =>
       new Response(JSON.stringify({ choices: [{ message: { content: "Ẹ n lẹ́" } }], model: "muse", provider: "meta" }));
     const c = client(reply);
     const out = await c.hypa.chat({ messages: [{ role: "user", content: "Báwo ni?" }], maxTokens: 100 });
     expect(c.seen[0].url).toBe("https://hypa.test/v2/developer/chat");
-    expect(JSON.parse(String(c.seen[0].init.body))).toMatchObject({ provider: "auto", stream: false, max_tokens: 100 });
+    expect(JSON.parse(String(c.seen[0].init.body))).toMatchObject({
+      provider: "google",
+      model: "gemini-3.5-flash",
+      stream: false,
+      max_tokens: 100,
+    });
     expect(out).toEqual({ content: "Ẹ n lẹ́", route: { provider: "meta", model: "muse" } });
-    await c.hypa.chat({ messages: [{ role: "user", content: "x" }], model: "meta/muse-wonder-1.0", maxTokens: 10 });
-    expect(JSON.parse(String(c.seen[1].init.body))).toMatchObject({ provider: "meta", model: "muse-wonder-1.0" });
+    await c.hypa.chat({
+      messages: [{ role: "user", content: "x" }],
+      model: "meta/team/muse-wonder-1.0",
+      maxTokens: 10,
+    });
+    expect(JSON.parse(String(c.seen[1].init.body))).toMatchObject({ provider: "meta", model: "team/muse-wonder-1.0" });
   });
 
   it("rejects an empty chat answer as `upstream`", async () => {

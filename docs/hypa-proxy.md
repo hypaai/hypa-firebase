@@ -2,7 +2,7 @@
 
 `functions/` is the only place the Hypa API key exists. Clients (web, Android, iOS, Quest) send a Firebase ID token and an App Check token; the function checks both, counts usage, calls Hypa, and returns the answer plus which model and voice produced it.
 
-> **Contract note.** The G01 API contract was not in the repository when this was built, so the shapes below are what the code implements. If G01 §6 differs, change the matching file in `functions/src/routes/` (inputs/outputs) and this file together. The existing Unity client (`HypaMcpClient`, `HypaRestClient`) still calls `/v2/mcp` and `/v2/developer/*`; it needs to move to these routes (G05).
+The public request and response fields follow G01 section 6 in [contracts.md](contracts.md). The Unity routes for story speech, transcription, chat and translation use this proxy.
 
 ## Calling it
 
@@ -17,14 +17,14 @@ Hosting rewrites `/hypa/**` to the function, so the web build calls same-origin 
 
 | Route | Body | Success (plus `usage`) |
 | --- | --- | --- |
-| `/hypa/tts` | `text` (≤1000 chars), `language` (e.g. `"Yoruba"`), optional `voice` + `model` (a voice only works with its model), optional `inline: true` | `audioUrl` or `audioBase64`, `mime`, `sampleRate`, `route` |
-| `/hypa/asr` | `audio` (base64, ≤1 MiB decoded, ≤30 s), optional `sourceLang`, optional `durationSeconds` | `transcript`, `language`, `audioSeconds`, `route` |
-| `/hypa/chat` | `messages` (≤20, ≤8000 chars total, roles system/user/assistant), optional `model` (`"auto"` or `"provider/model"`), optional `maxTokens` (≤1024) | `content`, `route` |
-| `/hypa/translate` | `text` (≤2000 chars), `targetLang`, optional `sourceLang` | `translation`, `language`, `route` |
+| `/hypa/tts` | `text` (max 1000 chars), `language`, optional `voice` and `model` | `audioBase64`, `mime`, `model`, `voice` |
+| `/hypa/asr` | `audioBase64` (max 1 MiB decoded and 30 s), `mime`, `language`, optional `durationSeconds` | `text`, `model` |
+| `/hypa/chat` | Optional `system`, `messages`, `language`, optional `model` and `maxTokens` | `text`, `model` |
+| `/hypa/translate` | `text` (max 2000 chars), `from`, `to` | `text`, `model` |
 
-`route` is `{ provider, model, voice }` as Hypa reported them, for the route chip. `usage` is `{ secondsUsed, secondsLimit, requestsUsed, requestsLimit, resetsAt }` for the caller today.
+For ASR, set `language` to `auto` to omit the language hint. For translation, set `from` to `auto` to detect the source. Each response also includes the reported `route` and current user `usage`.
 
-`inline: true` makes the function download Hypa's signed audio link and return base64, so a browser never fetches a third-party host (CORS). Without it the app gets Hypa's `audioUrl`.
+TTS requests inline audio in one call to Hypa. A named voice uses its named model when supplied. For a voice-only request, the proxy looks up a matching model and asks for an explicit model if several match. Chat uses the configured `HYPA_CHAT_DEFAULT_MODEL` when the request omits `model` (default `google/gemini-3.5-flash`). Explicit chat model IDs have the form `provider/model`.
 
 ### Errors
 
@@ -33,7 +33,7 @@ Every failure is `{ "error": { "code", "message", ... } }`.
 | HTTP | `code` | When |
 | --- | --- | --- |
 | 401 | `unauthenticated` | no / invalid / expired ID token |
-| 401 / 403 | `app_check` | App Check token missing (401) / invalid (403) |
+| 401 / 403 | `appcheck` | App Check token missing (401) / invalid (403) |
 | 400 | `bad_request` | missing or malformed field |
 | 413 | `too_large` | text, conversation, audio bytes or audio length over the cap |
 | 429 | `quota` | `scope`: `user_seconds`, `user_requests`, `global_seconds`, `global_requests`, or `provider_balance` (Hypa key out of budget). Includes `limit`, `used`, `resetsAt`, `retryAfterSeconds` (also the `Retry-After` header) |
@@ -67,11 +67,21 @@ Usage documents carry `expireAt` (35 days). Create a Firestore TTL policy on `ex
 ## Run locally
 
 ```sh
-cd functions && npm ci && npm run check   # typecheck, lint, formatting, unit tests (no Firebase needed)
-cd .. && firebase emulators:start --only functions,firestore,auth,hosting
+npm --prefix functions ci
+npm --prefix functions run build
+ firebase emulators:start --project demo-hypa --only "functions,firestore,auth,database"
 ```
 
-The Firestore emulator needs Java 21+. Hosting serves `Builds/Web` (output of `tools/build.sh web`) on port 5002 and rewrites `/hypa/**` to the Functions emulator. Emulator Hosting moved from 5000 to 5002 because macOS uses 5000 for AirPlay.
+The Firestore emulator needs Java 21+. To test the scene in Unity Editor, set `HYPA_SKIP_APP_CHECK=true` in the git-ignored `functions/.env.local`, then add these values to the git-ignored `.env` in the project root and restart Play Mode:
+
+```dotenv
+HYPA_BASE_URL=http://127.0.0.1:5001/demo-hypa/us-central1
+HYPA_FIREBASE_AUTH_EMULATOR_URL=http://127.0.0.1:9099
+```
+
+Use the same project ID in `HYPA_BASE_URL` as in the emulator command. Editor sign-in uses the local Auth emulator and keeps its session in memory. The Functions emulator reads the dev key from `functions/.secret.local`.
+
+To test a built WebGL site, include `hosting` in the emulator list. Hosting serves `Builds/Web` (output of `tools/build.sh web`) on port 5002 and rewrites `/hypa/**` to the Functions emulator. Emulator Hosting moved from 5000 to 5002 because macOS uses 5000 for AirPlay.
 
 ## Deploy (needs the owner's go-ahead)
 
@@ -80,7 +90,7 @@ firebase functions:secrets:set HYPA_API_KEY      # once, paste the entry-scoped 
 firebase deploy --only functions,hosting
 ```
 
-Nothing has been deployed from this repository yet.
+Set `HYPA_CHAT_DEFAULT_MODEL` in the Functions environment if this entry needs a different Gemini model or provider. Enable and verify the target platform's Firebase Auth and App Check integration before testing the deployed build.
 
 ### Judging window: warm instance
 
@@ -88,9 +98,9 @@ Nothing has been deployed from this repository yet.
 
 ## Realtime Database room cleanup (G09)
 
-`cleanupRooms` runs every 30 minutes and deletes `/rooms/{id}` entries whose numeric `createdAt` (epoch ms) is older than 2 hours. Rooms without a numeric `createdAt` are left alone. The path and field are **assumptions** (`ROOMS_PATH`, `ROOMS_CREATED_FIELD` in `functions/src/config.ts`): multiplayer is undecided, so align them with G09's data model or remove the function. For a large `rooms` tree, add `".indexOn": ["createdAt"]` under `rooms` in `firebase/database.rules.json`.
+`cleanupRooms` runs every 30 minutes and deletes `/rooms/{id}` entries whose numeric `createdAt` (epoch ms) is older than 2 hours. The query only selects non-negative numeric timestamps strictly before the cutoff. The room path and field follow section 4 of [contracts.md](contracts.md), and the database rules index `createdAt`.
 
-## Not done here
+## Hosted acceptance
 
-- `/gemini/generate`: only needed if G02's Quest spike asks for it; nothing in the repo does.
-- Deploy, hosted-web check of speech and Yorùbá chat, and the `cp-a` tag: need the Firebase project, the Hypa key and G05's cloud route.
+- `/gemini/generate`: needed if G02's Quest spike finds the AI Logic SDK can't run on Quest. See [quest-path.md](quest-path.md).
+- Deploy, hosted-web check of speech and Yorùbá chat, and the `cp-a` tag: need the Firebase project, the entry's scoped key and G05's cloud-only route.

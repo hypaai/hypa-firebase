@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import type { Firestore } from "firebase-admin/firestore";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_LIMITS, LIMITS_CACHE_MS } from "../src/config";
 import { ProxyError } from "../src/api/errors";
 import { RemoteConfigLimits, sanitizeLimit } from "../src/services/limits";
-import { applyReservation } from "../src/services/quota";
+import { applyReservation, FirestoreQuotaStore } from "../src/services/quota";
 import { dayKey, nextReset } from "../src/utils/time";
 import { LIMITS } from "./helpers";
 
@@ -84,6 +85,38 @@ describe("daily counting", () => {
     const user = { seconds: 59, requests: 1 };
     quotaError(() => applyReservation(user, zero, { seconds: 5, requests: 1 }, LIMITS, T));
     expect(user).toEqual({ seconds: 59, requests: 1 });
+  });
+});
+
+describe("Firestore quota refunds", () => {
+  it("loads the two daily counters before writing either refund", async () => {
+    type Ref = { path: string; collection(name: string): ReturnType<typeof collection> };
+    const collection = (path: string) => ({
+      doc: (id: string): Ref => ({
+        path: path + "/" + id,
+        collection: (name: string) => collection(path + "/" + id + "/" + name),
+      }),
+    });
+    const set = vi.fn();
+    const get = async (ref: Ref) => {
+      if (set.mock.calls.length) throw new Error("Firestore requires reads before writes");
+      return { ref, exists: true, data: () => ({ seconds: 7, requests: 2 }) };
+    };
+    const db = {
+      collection,
+      runTransaction: (callback: (tx: unknown) => Promise<void>) =>
+        callback({ get, getAll: (...refs: Ref[]) => Promise.all(refs.map(get)), set }),
+    } as unknown as Firestore;
+
+    await new FirestoreQuotaStore(db).release("reader", { seconds: 3, requests: 1 }, T);
+
+    const usage = { seconds: 4, requests: 1 };
+    expect(set).toHaveBeenNthCalledWith(1, expect.objectContaining({ path: "usage/reader/days/2026-11-24" }), usage, {
+      merge: true,
+    });
+    expect(set).toHaveBeenNthCalledWith(2, expect.objectContaining({ path: "usage_global/2026-11-24" }), usage, {
+      merge: true,
+    });
   });
 });
 

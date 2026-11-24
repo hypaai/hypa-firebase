@@ -22,12 +22,12 @@ describe("who may call", () => {
 
   it("401 without App Check, 403 with a forged one", async () => {
     const a = await handleRequest(request("/hypa/tts", {}, { authorization: "Bearer good-id" }), deps());
-    expect([a.status, err(a).code]).toEqual([401, "app_check"]);
+    expect([a.status, err(a).code]).toEqual([401, "appcheck"]);
     const b = await handleRequest(
       request("/hypa/tts", {}, { authorization: "Bearer good-id", "x-firebase-appcheck": "forged" }),
       deps(),
     );
-    expect([b.status, err(b).code]).toEqual([403, "app_check"]);
+    expect([b.status, err(b).code]).toEqual([403, "appcheck"]);
   });
 
   it("answers 404 and 405 before auth for unknown routes and methods", async () => {
@@ -48,7 +48,10 @@ describe("/hypa/tts", () => {
     const r = await handleRequest(request("/hypa/tts", { text: "Bawo ni", language: "Yoruba" }), d);
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({
-      audioUrl: "https://cdn.example/a.mp3",
+      audioBase64: "YXVkaW8=",
+      mime: "audio/mpeg",
+      model: "auto-1",
+      voice: "Ife",
       route: { provider: "hypaai", model: "auto-1", voice: "Ife" },
       usage: {
         secondsUsed: 1,
@@ -81,11 +84,11 @@ describe("quota enforcement", () => {
   it("returns a quota error the app can show once the user's requests run out", async () => {
     const d = deps();
     for (let i = 0; i < LIMITS.userRequestsPerDay; i++) {
-      expect((await handleRequest(request("/hypa/translate", { text: "hi", targetLang: "Yoruba" }), d)).status).toBe(
-        200,
-      );
+      expect(
+        (await handleRequest(request("/hypa/translate", { text: "hi", from: "English", to: "Yoruba" }), d)).status,
+      ).toBe(200);
     }
-    const r = await handleRequest(request("/hypa/translate", { text: "hi", targetLang: "Yoruba" }), d);
+    const r = await handleRequest(request("/hypa/translate", { text: "hi", from: "English", to: "Yoruba" }), d);
     expect(r.status).toBe(429);
     expect(r.headers?.["retry-after"]).toBe(String(14 * 3600));
     expect(err(r)).toMatchObject({
@@ -119,7 +122,10 @@ describe("quota enforcement", () => {
         },
       }),
     });
-    const r = await handleRequest(request("/hypa/chat", { messages: [{ role: "user", content: "hi" }] }), d);
+    const r = await handleRequest(
+      request("/hypa/chat", { language: "Yoruba", messages: [{ role: "user", content: "hi" }] }),
+      d,
+    );
     expect(r.status).toBe(500);
     expect(JSON.stringify(r.body)).not.toContain("KEY-9");
     expect(d.quota.users.get("user-1")).toEqual({ seconds: 0, requests: 0 });
@@ -128,13 +134,16 @@ describe("quota enforcement", () => {
 
 describe("/hypa/asr", () => {
   const send = (buf: Buffer, extra: object = {}, d = deps()) =>
-    handleRequest(request("/hypa/asr", { audio: buf.toString("base64"), ...extra }), d).then((r) => ({ r, d }));
+    handleRequest(
+      request("/hypa/asr", { audioBase64: buf.toString("base64"), mime: "audio/wav", language: "Yoruba", ...extra }),
+      d,
+    ).then((r) => ({ r, d }));
 
   it("reads the WAV duration and charges whole seconds", async () => {
     expect(wavSeconds(wav(2.5))).toBeCloseTo(2.5, 2);
     const { r, d } = await send(wav(2.5));
     expect(r.status).toBe(200);
-    expect((r.body as any).transcript).toBe("bawo ni");
+    expect(r.body).toMatchObject({ text: "bawo ni", model: "asr-1" });
     expect(d.quota.users.get("user-1")).toEqual({ seconds: 3, requests: 1 });
   });
 
@@ -153,7 +162,7 @@ describe("/hypa/asr", () => {
   it("rejects audio over the byte cap and base64 over the character cap", async () => {
     const big = await send(Buffer.alloc(1024 * 1024 + 1));
     expect([big.r.status, err(big.r).code]).toEqual([413, "too_large"]);
-    const r = await handleRequest(request("/hypa/asr", { audio: "A".repeat(MAX_ASR_BASE64_CHARS + 1) }), deps());
+    const r = await handleRequest(request("/hypa/asr", { audioBase64: "A".repeat(MAX_ASR_BASE64_CHARS + 1) }), deps());
     expect(r.status).toBe(413);
   });
 
@@ -166,22 +175,22 @@ describe("/hypa/chat and /hypa/translate", () => {
   it("answers a Yorùbá question and reports the route, charging a request but no audio seconds", async () => {
     const d = deps();
     const r = await handleRequest(
-      request("/hypa/chat", { messages: [{ role: "user", content: "Báwo ni ọjọ́ ṣe rí?" }] }),
+      request("/hypa/chat", { language: "Yoruba", messages: [{ role: "user", content: "Báwo ni ọjọ́ ṣe rí?" }] }),
       d,
     );
     expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ content: "Ẹ n lẹ́", route: { provider: "meta", model: "muse" } });
+    expect(r.body).toMatchObject({ text: "Ẹ n lẹ́", model: "muse", route: { provider: "meta", model: "muse" } });
     expect(d.quota.users.get("user-1")).toEqual({ seconds: 0, requests: 1 });
   });
 
   it("validates messages, model and max tokens", async () => {
     const bad = (body: object) => handleRequest(request("/hypa/chat", body), deps()).then((r) => r.status);
     expect(await bad({})).toBe(400);
-    expect(await bad({ messages: [{ role: "robot", content: "x" }] })).toBe(400);
-    expect(await bad({ messages: [{ role: "user", content: "x" }], model: "nonsense" })).toBe(400);
-    expect(await bad({ messages: [{ role: "user", content: "x" }], maxTokens: 0 })).toBe(400);
-    expect(await bad({ messages: [{ role: "user", content: "x".repeat(8001) }] })).toBe(413);
-    expect(await bad({ messages: Array(21).fill({ role: "user", content: "x" }) })).toBe(413);
+    expect(await bad({ language: "Yoruba", messages: [{ role: "robot", content: "x" }] })).toBe(400);
+    expect(await bad({ language: "Yoruba", messages: [{ role: "user", content: "x" }], model: "nonsense" })).toBe(400);
+    expect(await bad({ language: "Yoruba", messages: [{ role: "user", content: "x" }], maxTokens: 0 })).toBe(400);
+    expect(await bad({ language: "Yoruba", messages: [{ role: "user", content: "x".repeat(8001) }] })).toBe(413);
+    expect(await bad({ language: "Yoruba", messages: Array(21).fill({ role: "user", content: "x" }) })).toBe(413);
   });
 
   it("passes the pinned model and caps max tokens", async () => {
@@ -195,15 +204,28 @@ describe("/hypa/chat and /hypa/translate", () => {
       }),
     });
     await handleRequest(
-      request("/hypa/chat", { messages: [{ role: "user", content: "x" }], model: "meta/muse", maxTokens: 99999 }),
+      request("/hypa/chat", {
+        language: "Yoruba",
+        messages: [{ role: "user", content: "x" }],
+        system: "You are a storyteller.",
+        model: "meta/team/muse",
+        maxTokens: 99999,
+      }),
       d,
     );
-    expect(seen).toMatchObject({ model: "meta/muse", maxTokens: 1024 });
+    expect(seen).toMatchObject({
+      model: "meta/team/muse",
+      maxTokens: 1024,
+      messages: [
+        { role: "system", content: "You are a storyteller.\n\nAnswer in Yoruba." },
+        { role: "user", content: "x" },
+      ],
+    });
   });
 
   it("translates", async () => {
-    const r = await handleRequest(request("/hypa/translate", { text: "hello", targetLang: "Yoruba" }), deps());
-    expect(r.body).toMatchObject({ translation: "hello", language: "Yoruba" });
+    const r = await handleRequest(request("/hypa/translate", { text: "hello", from: "English", to: "Yoruba" }), deps());
+    expect(r.body).toMatchObject({ text: "hello", model: "mt-1" });
     expect((await handleRequest(request("/hypa/translate", { text: "hello" }), deps())).status).toBe(400);
   });
 });

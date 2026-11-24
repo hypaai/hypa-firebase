@@ -55,7 +55,7 @@ export function fakeHypa(overrides: Partial<HypaApi> = {}): HypaApi & { calls: s
     tts: async () => {
       calls.push("tts");
       return {
-        audioUrl: "https://cdn.example/a.mp3",
+        audioBase64: "YXVkaW8=",
         mime: "audio/mpeg",
         route: { provider: "hypaai", model: "auto-1", voice: "Ife" },
       };

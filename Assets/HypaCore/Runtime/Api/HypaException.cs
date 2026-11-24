@@ -47,7 +47,7 @@ namespace HypaCore
             else if (status == 503) kind = HypaErrorKind.Unavailable;
             else if (status >= 500) kind = HypaErrorKind.Server;
             else kind = HypaErrorKind.BadRequest;
-            return new HypaException(kind, $"HTTP {status}: {msg}", status, code);
+            return new HypaException(kind, code == "quota" ? msg : $"HTTP {status}: {msg}", status, code);
         }
 
         static string Trim(string s) => string.IsNullOrEmpty(s) ? "(empty body)" : (s.Length > 300 ? s.Substring(0, 300) + "..." : s);
@@ -60,7 +60,8 @@ namespace HypaCore
                 case HypaErrorKind.MissingConfiguration: return "The Hypa proxy is not configured. See the project README.";
                 case HypaErrorKind.Unauthorized: return "Authentication was rejected. Sign in again.";
                 case HypaErrorKind.InsufficientBalance: return "The Hypa account is out of credit.";
-                case HypaErrorKind.RateLimited: return "Too many requests. Wait a moment and try again.";
+                case HypaErrorKind.RateLimited:
+                    return Code == "quota" ? Message : "Too many requests. Wait a moment and try again.";
                 case HypaErrorKind.Unavailable: return "Hypa is busy right now. Try again shortly.";
                 case HypaErrorKind.Offline: return "You're offline. Reconnect and try again.";
                 case HypaErrorKind.Timeout: return "Hypa took too long to answer. Try again.";

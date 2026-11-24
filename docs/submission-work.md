@@ -42,3 +42,5 @@ The rest of the Quest REST path, and the start-up that moves from the Fakes to t
 - `functions/`: TypeScript, Node 22, Cloud Functions v2 (`us-central1`). `hypa` function with `/hypa/tts`, `/hypa/asr`, `/hypa/chat`, `/hypa/translate`; Firebase ID token and App Check verification; per-user and global daily quotas in Firestore with Remote Config limits; Hypa error mapping; key via Secret Manager only. `cleanupRooms` scheduled function. Unit tests with Vitest and `firebase-functions-test`.
 - `firebase.json`: `functions` block, `/hypa/**` Hosting rewrite, Functions emulator, Hosting emulator on 5002.
 - `docs/hypa-proxy.md`: contract, limits, secrets, runbook.
+
+- Follow-up: aligned the four proxy routes with G01, added the configurable Gemini chat default, fixed quota refunds and room expiration, and wired the Unity calls and editor sign-in to the local proxy. The Unity WebGL build uses Brotli to match the Hosting headers.

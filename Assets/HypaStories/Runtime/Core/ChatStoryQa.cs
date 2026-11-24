@@ -55,7 +55,7 @@ namespace HypaStories
                 foreach (var model in Order(story?.Models, Missing))
                 {
                     string reply;
-                    try { reply = await _rest.ChatAsync(model, messages, MaxTokens, deadline.Token); }
+                    try { reply = await _rest.ChatAsync(model, messages, req.Language?.HypaLabel ?? "English", MaxTokens, deadline.Token); }
                     catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                     {
                         throw new TimeoutException($"no answer within {DeadlineMs / 1000} s (last tried {model})");

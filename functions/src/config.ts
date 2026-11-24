@@ -1,6 +1,11 @@
 export const REGION = "us-central1";
 export const MIN_INSTANCES = 0;
 export const DEFAULT_HYPA_API_BASE = "https://api.hypaintelligence.com";
+const DEFAULT_CHAT_MODEL = "google/gemini-3.5-flash";
+
+export function defaultChatModel(env: Record<string, string | undefined> = process.env): string {
+  return env.HYPA_CHAT_DEFAULT_MODEL?.trim() || DEFAULT_CHAT_MODEL;
+}
 export const TIMEOUT_MS = { tts: 20_000, chat: 20_000, translate: 20_000, asr: 30_000 } as const;
 export const FUNCTION_TIMEOUT_SECONDS = 60;
 
@@ -43,12 +48,13 @@ export const ROOMS_CREATED_FIELD = "createdAt";
 export const ROOMS_MAX_AGE_MS = 2 * 60 * 60_000;
 
 /**
- * The only place environment variables are read. They exist only in the local emulator (functions/.env.local);
+ * These development overrides are read from the local emulator environment (functions/.env.local);
  * when deployed, FUNCTIONS_EMULATOR is unset so both settings are forced back to safe values.
  */
 export function emulatorSettings(env: Record<string, string | undefined> = process.env) {
   const emulated = env.FUNCTIONS_EMULATOR === "true";
   return {
+    enabled: emulated,
     /** HYPA_SKIP_APP_CHECK=true: the emulator has no App Check, so let it through (sign-in is still required). */
     skipAppCheck: emulated && env.HYPA_SKIP_APP_CHECK === "true",
     /** HYPA_API_BASE=http://127.0.0.1:9911: call a fake Hypa. Deployed, the key can only go to the real API. */

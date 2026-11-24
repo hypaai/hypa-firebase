@@ -33,11 +33,11 @@ export async function authenticate(req: HeaderReader, verifiers: Verifiers, skip
 
   if (!skipAppCheck) {
     const appCheck = req.header("x-firebase-appcheck");
-    if (!appCheck) throw new ProxyError("app_check", 401, "Missing App Check token ('X-Firebase-AppCheck').");
+    if (!appCheck) throw new ProxyError("appcheck", 401, "Missing App Check token ('X-Firebase-AppCheck').");
     try {
       await verifiers.verifyAppCheck(appCheck);
     } catch {
-      throw new ProxyError("app_check", 403, "The App Check token is invalid or expired.");
+      throw new ProxyError("appcheck", 403, "The App Check token is invalid or expired.");
     }
   }
   return { uid };
