@@ -17,6 +17,7 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           testMode: EditMode
+          cliVersion: v0.1.77 # 'latest' asks the GitHub API each run and can get a 403
           artifactsPath: TestResults
       - uses: actions/upload-artifact@v4
         if: always()
