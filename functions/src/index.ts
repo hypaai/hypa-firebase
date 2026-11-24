@@ -11,15 +11,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { handleRequest } from "./api/handler";
 import { HypaHttpClient } from "./api/hypa";
 import type { Deps } from "./api/types";
-import {
-  defaultChatModel,
-  DEFAULT_LIMITS,
-  emulatorSettings,
-  FUNCTION_TIMEOUT_SECONDS,
-  MIN_INSTANCES,
-  RC_KEYS,
-  REGION,
-} from "./config";
+import { DEFAULT_LIMITS, emulatorSettings, FUNCTION_TIMEOUT_SECONDS, MIN_INSTANCES, RC_KEYS, REGION } from "./config";
 import { RemoteConfigLimits, type LimitsProvider } from "./services/limits";
 import { FirestoreQuotaStore } from "./services/quota";
 import { deleteStaleRooms } from "./services/rooms";
@@ -44,7 +36,6 @@ function getDeps(): Deps {
     hypa: new HypaHttpClient({
       baseUrl: emulator.hypaApiBase,
       apiKey: () => HYPA_API_KEY.value(),
-      defaultChatModel,
     }),
     skipAppCheck: emulator.skipAppCheck,
     log: logger,

@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mapHttpError, ProxyError } from "../src/api/errors";
+import { handleRequest } from "../src/api/handler";
 import { HypaHttpClient, parseToolResult } from "../src/api/hypa";
 import { jsonPayloads } from "../src/utils/sse";
+import { deps, request, wav } from "./helpers";
 
 const sse = (o: unknown) => `event: message\ndata: ${JSON.stringify(o)}\n\n`;
 const toolOk = (structuredContent: unknown) => sse({ jsonrpc: "2.0", id: 1, result: { structuredContent } });
@@ -27,7 +29,6 @@ function client(respond: (url: string, init: RequestInit) => Response | Promise<
     hypa: new HypaHttpClient({
       baseUrl: "https://hypa.test/",
       apiKey: () => key,
-      defaultChatModel: () => "google/gemini-3.5-flash",
       fetchImpl,
     }),
   };
@@ -194,32 +195,126 @@ describe("calls", () => {
     expect(err.code).toBe("bad_request");
     expect(c.seen).toHaveLength(1);
   });
+});
 
-  it("uses the configured chat default and preserves slashes in explicit model IDs", async () => {
-    const reply = () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: "Ẹ n lẹ́" } }], model: "muse", provider: "meta" }));
-    const c = client(reply);
-    const out = await c.hypa.chat({ messages: [{ role: "user", content: "Báwo ni?" }], maxTokens: 100 });
-    expect(c.seen[0].url).toBe("https://hypa.test/v2/developer/chat");
-    expect(JSON.parse(String(c.seen[0].init.body))).toMatchObject({
-      provider: "google",
-      model: "gemini-3.5-flash",
-      stream: false,
-      max_tokens: 100,
-    });
-    expect(out).toEqual({ content: "Ẹ n lẹ́", route: { provider: "meta", model: "muse" } });
-    await c.hypa.chat({
-      messages: [{ role: "user", content: "x" }],
-      model: "meta/team/muse-wonder-1.0",
-      maxTokens: 10,
-    });
-    expect(JSON.parse(String(c.seen[1].init.body))).toMatchObject({ provider: "meta", model: "team/muse-wonder-1.0" });
+describe("model selection through the proxy", () => {
+  const chatRequest = { messages: [{ role: "user", content: "Báwo ni?" }], language: "Yoruba" };
+  const speech = { audioBase64: "YXVkaW8=", mime: "audio/mpeg", voice: "Ife" };
+  const recording = { audioBase64: wav(1).toString("base64"), mime: "audio/wav", language: "Yoruba" };
+
+  it.each([
+    ["/hypa/tts", { text: "Hi", language: "English" }, "text_to_speech", speech],
+    ["/hypa/asr", recording, "speech_to_text", { transcript: "hi" }],
+    ["/hypa/translate", { text: "Hi", from: "English", to: "Yoruba" }, "translate_message", { translation: "hi" }],
+  ])("passes omitted, Auto, and pinned models for %s", async (path, body, tool, result) => {
+    for (const model of [undefined, "  ", "AUTO", "meta/team/model"]) {
+      const c = client(() => new Response(toolOk({ ...result, model: "answered-model" })));
+      const response = await handleRequest(request(path, { ...body, model }), deps({ hypa: c.hypa }));
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ model: "answered-model" });
+      expect(c.seen).toHaveLength(1);
+      expect(JSON.parse(String(c.seen[0].init.body)).params).toMatchObject({
+        name: tool,
+        arguments: { model: model === "meta/team/model" ? model : "auto" },
+      });
+    }
   });
 
-  it("rejects an empty chat answer as `upstream`", async () => {
-    const c = client(() => new Response(JSON.stringify({ choices: [{ message: { content: " " } }] })));
+  it.each([undefined, "  ", "auto"])("uses the VR fallback order for chat model %s", async (model) => {
+    const c = client((_, init) => {
+      const { provider, model: selected } = JSON.parse(String(init.body));
+      if (selected.includes("Muse-Spark")) {
+        return new Response("event: message\ndata: The requested model was not found.\n\n");
+      }
+      if (provider === "google")
+        return new Response(sse({ choices: [{ message: { content: "<think>only thinking</think>" } }] }));
+      if (selected.includes("Muse-Glimmer")) return new Response("", { status: 503 });
+      return new Response(sse({ choices: [{ message: { content: "Ẹ n lẹ́" } }], model: "reported-winner" }));
+    });
+    const d = deps({ hypa: c.hypa });
+    const response = await handleRequest(request("/hypa/chat", { ...chatRequest, model }), d);
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ text: "Ẹ n lẹ́", model: "reported-winner", route: { provider: "meta" } });
     expect(
-      (await failure(c.hypa.chat({ messages: [{ role: "user", content: "x" }], maxTokens: 10 }))).extras.reason,
-    ).toBe("invalid_response");
+      c.seen.map(({ init }) => {
+        const body = JSON.parse(String(init.body));
+        return body.provider + "/" + body.model;
+      }),
+    ).toEqual([
+      "meta/meta-models/Muse-Spark-Open-816B-A42B:baseten",
+      "google/gemini-3.5-flash",
+      "meta/meta-models/Muse-Glimmer-30B:deepinfra",
+      "meta/muse-wonder-1.0",
+    ]);
+    expect(c.seen.every(({ init }) => init.signal === c.seen[0].init.signal)).toBe(true);
+    expect(d.quota.global.requests).toBe(1);
+    expect(d.quota.released).toHaveLength(0);
+  });
+
+  it("stops at the first usable answer", async () => {
+    const c = client(() => new Response(sse({ choices: [{ message: { content: "Done." } }] })));
+    const response = await handleRequest(request("/hypa/chat", chatRequest), deps({ hypa: c.hypa }));
+    expect(response.body).toMatchObject({ model: "meta-models/Muse-Spark-Open-816B-A42B:baseten" });
+    expect(c.seen).toHaveLength(1);
+  });
+
+  it("preserves slashes in a pinned model and makes only one attempt even if it fails", async () => {
+    const c = client(() => new Response("", { status: 503 }));
+    const response = await handleRequest(
+      request("/hypa/chat", { ...chatRequest, model: "meta/team/muse-wonder-1.0" }),
+      deps({ hypa: c.hypa }),
+    );
+    expect(response.status).toBe(502);
+    expect(c.seen).toHaveLength(1);
+    expect(JSON.parse(String(c.seen[0].init.body))).toMatchObject({
+      provider: "meta",
+      model: "team/muse-wonder-1.0",
+      stream: false,
+    });
+  });
+
+  it.each([401, 402, 403, 422])("stops immediately for request-wide Hypa HTTP %i", async (status) => {
+    const c = client(() => new Response("credentials or request rejected", { status }));
+    const response = await handleRequest(request("/hypa/chat", chatRequest), deps({ hypa: c.hypa }));
+    expect(response.status).toBe(status === 402 ? 429 : 502);
+    expect(c.seen).toHaveLength(1);
+    expect(JSON.stringify(response.body)).not.toContain("credentials");
+  });
+
+  it("stops on a budget error inside a chat event", async () => {
+    const c = client(() => new Response(sse({ error: { code: "INSUFFICIENT_BALANCE" } })));
+    const response = await handleRequest(request("/hypa/chat", chatRequest), deps({ hypa: c.hypa }));
+    expect(response.status).toBe(429);
+    expect(c.seen).toHaveLength(1);
+  });
+
+  it("refunds the single reservation when no chat model can answer", async () => {
+    const c = client(() => new Response("", { status: 503 }));
+    const d = deps({ hypa: c.hypa });
+    const response = await handleRequest(request("/hypa/chat", chatRequest), d);
+    expect(response.status).toBe(502);
+    expect(c.seen).toHaveLength(4);
+    expect(d.quota.global.requests).toBe(0);
+    expect(d.quota.released).toEqual([{ requests: 1, seconds: 0 }]);
+  });
+
+  it("stops after the shared deadline, with one refunded reservation", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    try {
+      const c = client(() => {
+        controller.abort();
+        return new Response("", { status: 503 });
+      });
+      const d = deps({ hypa: c.hypa });
+      const response = await handleRequest(request("/hypa/chat", chatRequest), d);
+      expect(timeout).toHaveBeenCalledExactlyOnceWith(20_000);
+      expect(response.status).toBe(504);
+      expect(c.seen).toHaveLength(1);
+      expect(d.quota.global.requests).toBe(0);
+      expect(d.quota.released).toEqual([{ requests: 1, seconds: 0 }]);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

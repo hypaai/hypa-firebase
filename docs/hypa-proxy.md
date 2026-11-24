@@ -18,13 +18,15 @@ Hosting rewrites `/hypa/**` to the function, so the web build calls same-origin 
 | Route | Body | Success (plus `usage`) |
 | --- | --- | --- |
 | `/hypa/tts` | `text` (max 1000 chars), `language`, optional `voice` and `model` | `audioBase64`, `mime`, `model`, `voice` |
-| `/hypa/asr` | `audioBase64` (max 1 MiB decoded and 30 s), `mime`, `language`, optional `durationSeconds` | `text`, `model` |
+| `/hypa/asr` | `audioBase64` (max 1 MiB decoded and 30 s), `mime`, `language`, optional `durationSeconds` and `model` | `text`, `model` |
 | `/hypa/chat` | Optional `system`, `messages`, `language`, optional `model` and `maxTokens` | `text`, `model` |
-| `/hypa/translate` | `text` (max 2000 chars), `from`, `to` | `text`, `model` |
+| `/hypa/translate` | `text` (max 2000 chars), `from`, `to`, optional `model` | `text`, `model` |
 
 For ASR, set `language` to `auto` to omit the language hint. For translation, set `from` to `auto` to detect the source. Each response also includes the reported `route` and current user `usage`.
 
-TTS requests inline audio in one call to Hypa. A named voice uses its named model when supplied. For a voice-only request, the proxy looks up a matching model and asks for an explicit model if several match. Chat uses the configured `HYPA_CHAT_DEFAULT_MODEL` when the request omits `model` (default `google/gemini-3.5-flash`). Explicit chat model IDs have the form `provider/model`.
+TTS requests inline audio in one call to Hypa. For a voice-only request, the proxy looks up a matching model and asks for an explicit model if several match.
+
+All four routes accept an optional `model`. With a blank model or `"auto"`, speech, transcription, and translation ask Hypa to choose, with the voice matching described above. Automatic chat tries Muse Spark, Gemini 3.5 Flash, Muse Glimmer, and Muse Wonder in that order. All chat attempts share one 20-second budget and count as one proxy request. An explicit `provider/model` is tried on its own. `model` in the response identifies the model that answered.
 
 ### Errors
 
@@ -37,7 +39,7 @@ Every failure is `{ "error": { "code", "message", ... } }`.
 | 400 | `bad_request` | missing or malformed field |
 | 413 | `too_large` | text, conversation, audio bytes or audio length over the cap |
 | 429 | `quota` | `scope`: `user_seconds`, `user_requests`, `global_seconds`, `global_requests`, or `provider_balance` (Hypa key out of budget). Includes `limit`, `used`, `resetsAt`, `retryAfterSeconds` (also the `Retry-After` header) |
-| 502 / 503 / 504 | `upstream` | Hypa failed. `reason`: `timeout`, `unavailable`, `rejected`, `invalid_response`, `tool_error`; `retryable` tells the app whether to offer retry |
+| 502 / 503 / 504 | `upstream` | Hypa failed. `reason`: `timeout`, `unavailable`, `rejected`, `invalid_response`, `tool_error`, `model_unavailable`; `retryable` tells the app whether to offer retry |
 | 404 / 405 | `not_found` / `method_not_allowed` | wrong route / not POST |
 | 500 | `internal` | our bug; message is generic |
 
@@ -90,7 +92,7 @@ firebase functions:secrets:set HYPA_API_KEY      # once, paste the entry-scoped 
 firebase deploy --only functions,hosting
 ```
 
-Set `HYPA_CHAT_DEFAULT_MODEL` in the Functions environment if this entry needs a different Gemini model or provider. Enable and verify the target platform's Firebase Auth and App Check integration before testing the deployed build.
+Enable and verify the target platform's Firebase Auth and App Check integration before testing the deployed build.
 
 ### Judging window: warm instance
 

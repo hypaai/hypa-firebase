@@ -43,4 +43,4 @@ The rest of the Quest REST path, and the start-up that moves from the Fakes to t
 - `firebase.json`: `functions` block, `/hypa/**` Hosting rewrite, Functions emulator, Hosting emulator on 5002.
 - `docs/hypa-proxy.md`: contract, limits, secrets, runbook.
 
-- Follow-up: aligned the four proxy routes with G01, added the configurable Gemini chat default, fixed quota refunds and room expiration, and wired the Unity calls and editor sign-in to the local proxy. The Unity WebGL build uses Brotli to match the Hosting headers.
+- Follow-up: aligned the four proxy routes with G01, moved the VR chat fallback order into the proxy and supported explicit model selection on all four routes, fixed quota refunds and room expiration, and wired the Unity calls and editor sign-in to the local proxy. The Unity WebGL build uses Brotli to match the Hosting headers.

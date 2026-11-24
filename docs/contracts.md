@@ -67,13 +67,15 @@ All `POST`, JSON, headers `Authorization: Bearer <Firebase ID token>` and `X-Fir
 
 | Path | Body | Returns |
 | -- | -- | -- |
-| `/hypa/tts` | `{ text, language, voice? }` | `{ audioBase64, mime, model, voice }` |
-| `/hypa/asr` | `{ audioBase64, mime, language }` | `{ text, model }` |
+| `/hypa/tts` | `{ text, language, voice?, model? }` | `{ audioBase64, mime, model, voice }` |
+| `/hypa/asr` | `{ audioBase64, mime, language, model? }` | `{ text, model }` |
 | `/hypa/chat` | `{ system, messages, language, model? }` | `{ text, model }` |
-| `/hypa/translate` | `{ text, from, to }` | `{ text, model }` |
+| `/hypa/translate` | `{ text, from, to, model? }` | `{ text, model }` |
 | `/gemini/generate` (optional) | `{ prompt, model? }` | `{ text, model }` |
 
 `/gemini/generate` is built only if G02's Quest spike finds the Firebase AI Logic SDK does not run on Quest (G04). It calls Gemini through the AI Logic server path or Vertex and backs `ICloudModel.GenerateAsync` there.
+
+Omit `model` or supply `"auto"` for automatic selection. Speech, transcription, and translation use Hypa's Auto selection, with voice matching for a TTS request that names a voice. Chat tries the ordered VR model list in Firebase within one 20-second budget. An explicit `provider/model` is tried on its own. All four routes return the model that answered.
 
 Errors: `{ error: { code: "quota"|"unauthenticated"|"appcheck"|"upstream"|"bad_request", message } }`.
 `HypaRestClient` gets a "proxy mode": same calls, these paths, Firebase tokens instead of an API key. Request and response shapes: `ProxyApi` and the `*Request` / `*Response` classes in `Models.cs`.

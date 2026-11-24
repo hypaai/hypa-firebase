@@ -73,8 +73,12 @@ namespace HypaCore
             return content;
         }
 
-        /// <summary>Sends a G01 chat request. A blank model uses the proxy's configured default.</summary>
+        /// <summary>Sends a G01 chat request and returns the answer text.</summary>
         public async Task<string> ChatAsync(string model, JArray messages, string language, int maxTokens, CancellationToken ct)
+            => (await ChatWithRouteAsync(model, messages, language, maxTokens, ct).ConfigureAwait(false)).text;
+
+        /// <summary>A blank model or "auto" uses the proxy's fallback order. An explicit model is tried once.</summary>
+        public async Task<ChatResponse> ChatWithRouteAsync(string model, JArray messages, string language, int maxTokens, CancellationToken ct)
         {
             var history = new JArray(messages);
             var body = new JObject { ["messages"] = history, ["language"] = language, ["maxTokens"] = maxTokens };
@@ -85,9 +89,10 @@ namespace HypaCore
             }
             if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
             var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Chat, body.ToString(Formatting.None), ct).ConfigureAwait(false);
-            var content = (string)JObject.Parse(raw)["text"];
-            if (string.IsNullOrWhiteSpace(content)) throw new HypaException(HypaErrorKind.InvalidResponse, "chat: the proxy returned no text.");
-            return content;
+            var reply = JObject.Parse(raw).ToObject<ChatResponse>();
+            if (string.IsNullOrWhiteSpace(reply?.text))
+                throw new HypaException(HypaErrorKind.InvalidResponse, "chat: the proxy returned no text.");
+            return reply;
         }
 
         /// <summary>Dictionary lookup. UNVERIFIED request shape - confirm live.</summary>

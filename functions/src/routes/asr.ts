@@ -2,7 +2,7 @@ import { MAX_ASR_BASE64_CHARS, MAX_ASR_BYTES, MAX_ASR_SECONDS } from "../config"
 import { badRequest, tooLarge } from "../api/errors";
 import type { Route } from "../api/types";
 import { audioSeconds } from "../utils/audio";
-import { required } from "../utils/validate";
+import { optional, required } from "../utils/validate";
 
 /** Speech to text. Up to 30 s / 1 MiB of base64 audio; charged by the recording's length. */
 export const asr: Route = (body, hypa) => {
@@ -10,6 +10,7 @@ export const asr: Route = (body, hypa) => {
   const mime = required(body, "mime", 128);
   if (!/^audio\//i.test(mime)) throw badRequest("'mime' must be an audio MIME type.");
   const language = required(body, "language", 64);
+  const model = optional(body, "model", 200);
   const sourceLang = language.toLowerCase() === "auto" ? undefined : language;
   const declared = body.durationSeconds;
   if (declared !== undefined && (typeof declared !== "number" || !Number.isFinite(declared) || declared < 0)) {
@@ -24,7 +25,7 @@ export const asr: Route = (body, hypa) => {
   return {
     cost: { requests: 1, seconds },
     run: async () => {
-      const { transcript, language, route } = await hypa.asr({ audioBase64: audio, sourceLang });
+      const { transcript, language, route } = await hypa.asr({ audioBase64: audio, sourceLang, model });
       return { text: transcript, model: route.model, language, route, audioSeconds: seconds };
     },
   };

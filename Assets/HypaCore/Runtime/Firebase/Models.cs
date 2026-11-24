@@ -70,14 +70,14 @@ namespace HypaCore.Hybrid
         public const string ErrorBadRequest = "bad_request";
     }
 
-    [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; }
+    [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; public string model; }
     [Serializable] public sealed class TtsResponse { public string audioBase64; public string mime; public string model; public string voice; }
-    [Serializable] public sealed class AsrRequest { public string audioBase64; public string mime; public string language; }
+    [Serializable] public sealed class AsrRequest { public string audioBase64; public string mime; public string language; public string model; }
     [Serializable] public sealed class AsrResponse { public string text; public string model; }
     [Serializable] public sealed class ChatMessage { public string role; public string content; }
     [Serializable] public sealed class ChatRequest { public string system; public ChatMessage[] messages; public string language; public string model; }
     [Serializable] public sealed class ChatResponse { public string text; public string model; }
-    [Serializable] public sealed class TranslateRequest { public string text; public string from; public string to; }
+    [Serializable] public sealed class TranslateRequest { public string text; public string from; public string to; public string model; }
     [Serializable] public sealed class TranslateResponse { public string text; public string model; }
     [Serializable] public sealed class ProxyErrorBody { public string code; public string message; }
 }

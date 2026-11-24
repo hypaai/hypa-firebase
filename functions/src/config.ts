@@ -1,11 +1,13 @@
 export const REGION = "us-central1";
 export const MIN_INSTANCES = 0;
 export const DEFAULT_HYPA_API_BASE = "https://api.hypaintelligence.com";
-const DEFAULT_CHAT_MODEL = "google/gemini-3.5-flash";
-
-export function defaultChatModel(env: Record<string, string | undefined> = process.env): string {
-  return env.HYPA_CHAT_DEFAULT_MODEL?.trim() || DEFAULT_CHAT_MODEL;
-}
+/** Hypa VR's priority order for story chat. */
+export const CHAT_FALLBACK_MODELS = [
+  "meta/meta-models/Muse-Spark-Open-816B-A42B:baseten",
+  "google/gemini-3.5-flash",
+  "meta/meta-models/Muse-Glimmer-30B:deepinfra",
+  "meta/muse-wonder-1.0",
+] as const;
 export const TIMEOUT_MS = { tts: 20_000, chat: 20_000, translate: 20_000, asr: 30_000 } as const;
 export const FUNCTION_TIMEOUT_SECONDS = 60;
 

@@ -22,7 +22,7 @@ export const chat: Route = (body, hypa) => {
     throw tooLarge("The conversation is too long.");
 
   const model = optional(body, "model", 200)?.trim() || undefined;
-  if (model && !/^[^/\s]+\/[^/\s]+(?:\/[^/\s]+)*$/.test(model))
+  if (model && model.toLowerCase() !== "auto" && !/^[^/\s]+\/[^/\s]+(?:\/[^/\s]+)*$/.test(model))
     throw badRequest("'model' must be in provider/model format.");
 
   const { maxTokens = DEFAULT_CHAT_MAX_TOKENS } = body;

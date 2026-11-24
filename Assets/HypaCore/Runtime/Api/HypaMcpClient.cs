@@ -131,9 +131,10 @@ namespace HypaCore
         }
 
         /// <summary>sourceLang null = auto-detect; the detected label comes back in DetectedLanguage (may be null).</summary>
-        public async Task<HypaTranslation> TranslateAsync(string text, string targetLang, string sourceLang, CancellationToken ct)
+        public async Task<HypaTranslation> TranslateAsync(string text, string targetLang, string sourceLang, CancellationToken ct, string model = null)
         {
             var body = new JObject { ["text"] = text, ["from"] = sourceLang ?? "auto", ["to"] = targetLang };
+            if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
             var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Translate, body.ToString(Formatting.None), ct).ConfigureAwait(false);
             var o = JObject.Parse(raw);
             return new HypaTranslation { Text = (string)o["text"], DetectedLanguage = (string)o["language"], Model = (string)o["model"] };
@@ -237,12 +238,13 @@ namespace HypaCore
         /// Speech to text. <paramref name="audio"/> is a whole file (e.g. WAV from <see cref="WavEncoder"/>), sent as base64.
         /// sourceLang null = auto-detect. Schema from tools/list (2026-11-13); not yet called with a key.
         /// </summary>
-        public async Task<string> SpeechToTextAsync(byte[] audio, string sourceLang, CancellationToken ct)
+        public async Task<string> SpeechToTextAsync(byte[] audio, string sourceLang, CancellationToken ct, string model = null)
         {
             var body = new JObject
             {
                 ["audioBase64"] = Convert.ToBase64String(audio), ["mime"] = "audio/wav", ["language"] = sourceLang ?? "auto",
             };
+            if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
             var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Asr, body.ToString(Formatting.None), ct).ConfigureAwait(false);
             return (string)JObject.Parse(raw)["text"] ?? "";
         }

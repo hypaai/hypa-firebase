@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultChatModel, DEFAULT_HYPA_API_BASE, emulatorSettings } from "../src/config";
+import { DEFAULT_HYPA_API_BASE, emulatorSettings } from "../src/config";
 
 describe("emulatorSettings", () => {
   const fake = { HYPA_SKIP_APP_CHECK: "true", HYPA_API_BASE: "http://127.0.0.1:9911" };
@@ -22,13 +22,5 @@ describe("emulatorSettings", () => {
       skipAppCheck: false,
       hypaApiBase: DEFAULT_HYPA_API_BASE,
     });
-  });
-});
-
-describe("defaultChatModel", () => {
-  it("uses Gemini unless a non-blank override is configured", () => {
-    expect(defaultChatModel({})).toBe("google/gemini-3.5-flash");
-    expect(defaultChatModel({ HYPA_CHAT_DEFAULT_MODEL: "   " })).toBe("google/gemini-3.5-flash");
-    expect(defaultChatModel({ HYPA_CHAT_DEFAULT_MODEL: " google/test-model " })).toBe("google/test-model");
   });
 });
