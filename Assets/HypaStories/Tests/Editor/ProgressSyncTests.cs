@@ -182,6 +182,24 @@ namespace HypaStories.Tests
             Assert.AreEqual(12, offer.Saved.lineIndex);
         }
 
+        [Test] public void AfterRelaunch_AnOlderUpdateFromAnotherDevice_IsNotOffered()
+        {
+            var store = new CountingStore { Stored = new Progress { storyId = "s", lineIndex = 8, device = "quest", updatedAt = 5000 } };
+            var sync = new ProgressSync(store, "quest", () => 6000);
+            ContinueOffer offered = null;
+            sync.ContinueOffered += o => offered = o;
+
+            Assert.IsNull(Run(sync.CheckAsync()));
+            Assert.AreEqual(5000, sync.LastSaved.updatedAt);
+
+            sync.Attach();
+            store.Elsewhere(new Progress { storyId = "s", lineIndex = 1, device = "android", updatedAt = 1000 });
+            Assert.IsNull(offered, "older than the position loaded for this device");
+
+            store.Elsewhere(new Progress { storyId = "s", lineIndex = 20, device = "android", updatedAt = 7000 });
+            Assert.AreEqual(20, offered.Saved.lineIndex);
+        }
+
         [Test] public void WhenProgressChangesElsewhere_TheOfferIsRaised_OnlyWhileAttached()
         {
             var store = new CountingStore();
@@ -254,6 +272,12 @@ namespace HypaStories.Tests
 
             var words = Run(sync.WordsAsync());
             Assert.AreEqual(2, words.Count, "yo and ha are different words");
+
+            now = 5;
+            Run(sync.SaveWordAsync("omi", "agua", "yo", "other"));
+            var kept = Run(sync.WordsAsync()).First(w => w.language == "yo");
+            Assert.AreEqual("water", kept.translation, "an older save does not replace the later one");
+            Assert.AreEqual(20, kept.savedAt);
 
             var merged = SavedWord.Merge(new[] { new SavedWord { text = "ìyá", language = "yo", savedAt = 1 } }, new[] { new SavedWord { text = "Ìyá", language = "yo", savedAt = 9 }, new SavedWord { text = "baba", language = "yo", savedAt = 5 } });
             Assert.AreEqual(new[] { "baba", "Ìyá" }, merged.Select(w => w.text).ToArray(), "one ìyá (the later save), plus baba, in the order saved");

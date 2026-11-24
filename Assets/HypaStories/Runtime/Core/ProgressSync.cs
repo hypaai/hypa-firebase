@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HypaCore.Hybrid;
@@ -115,7 +116,14 @@ namespace HypaStories
 
         /// <summary>On launch: is the saved position newer and from another device? Returns the offer, or null.</summary>
         public async Task<ContinueOffer> CheckAsync()
-            => Decide(await _store.LoadAsync(), Newest, _device);
+        {
+            var loaded = await _store.LoadAsync();
+            // This device's own saved position is the baseline after a relaunch, before anything new is saved.
+            if (loaded != null && string.Equals(loaded.device, _device, StringComparison.OrdinalIgnoreCase)
+                && (LastSaved == null || loaded.updatedAt > LastSaved.updatedAt))
+                LastSaved = loaded;
+            return Decide(loaded, Newest, _device);
+        }
 
         /// <summary>Connect <see cref="IProgressStore.ChangedElsewhere"/> to <see cref="ContinueOffered"/>.</summary>
         public void Attach() => _store.ChangedElsewhere += OnChangedElsewhere;
@@ -142,8 +150,8 @@ namespace HypaStories
 
     /// <summary>
     /// Per-story results and saved words (HYP-203 item 2). A result is read, merged with what this device has
-    /// (<see cref="StoryResult.Merge"/>: best score is the higher, finished stays finished) and written back; a word is saved under an id
-    /// built from its text and language, so the same word saved on two devices is one word.
+    /// (<see cref="StoryResult.Merge"/>: best score is the higher, finished stays finished) and written back. A word is saved under an id
+    /// built from its text and language, and merged (<see cref="SavedWord.Merge"/>) so the later save of that word is the one kept.
     /// </summary>
     public sealed class UserDataSync
     {
@@ -170,8 +178,13 @@ namespace HypaStories
             return merged;
         }
 
-        public Task SaveWordAsync(string text, string translation, string language, string storyId)
-            => _store.SaveWordAsync(new SavedWord { text = text, translation = translation, language = language, storyId = storyId, savedAt = _nowMs() });
+        public async Task SaveWordAsync(string text, string translation, string language, string storyId)
+        {
+            var incoming = new SavedWord { text = text, translation = translation, language = language, storyId = storyId, savedAt = _nowMs() };
+            var existing = (await _store.ListWordsAsync())?.FirstOrDefault(w => w != null && w.Id == incoming.Id);
+            var kept = SavedWord.Merge(existing == null ? null : new[] { existing }, new[] { incoming })[0];
+            await _store.SaveWordAsync(kept);
+        }
 
         public Task<System.Collections.Generic.IReadOnlyList<SavedWord>> WordsAsync() => _store.ListWordsAsync();
     }
