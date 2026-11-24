@@ -13,6 +13,19 @@ The shared interfaces, data shapes and wire formats, so G02–G12 can build in p
 - Tests: EditMode tests in `Assets/HypaCore/Tests/Editor/HybridContractsTests.cs`, 9 rules tests on the Firebase emulators.
 - Merged without the four reviews the ticket asks for.
 
+## G01 (HYP-196), part 2: rooms, profile and proxy client
+
+Filled in what the first draft left open. The contract is still `docs/contracts.md`.
+
+- `IRoomSync` for G09, with its types in `Rooms.cs`: create, join (not found, full, expired), leave, host-only state and clock, presence and raised hand, poses at most 10 a second, game results, server time. `RoomCode`: 5 letters without vowels, 2-hour lifetime. `FakeRoomSync` clients sharing a `FakeRoomServer` act like two devices.
+- `UserProfile` (`users/{uid}`: username, display name, the character as JSON) and `IProfileStore` with a fake, so a character follows the player across devices. `UpgradeAsync` also hands the profile over. `FirestorePaths`.
+- `RouteDecision.Chip()` for the route chip.
+- Section 6 of the contract now matches G04's Cloud Function (field names, `route` and `usage` in replies, error codes and details). `HypaProxyClient`: typed calls to `/hypa/*` with the ID token and App Check token, errors as `HypaProxyException`.
+- Rules: each Firestore document accepts only its contract fields and types; Realtime Database rooms check the code format, the host can no longer overwrite other players, and clock, poses and game results are readable only by players in the room. `createdAt` is indexed for `cleanupRooms`.
+- `docs/contracts.md`: which Firebase product does each feature on each platform (Quest through the REST APIs), and the Cloud Functions list.
+- Tests: `HybridRoomsTests`, `HypaProxyClientTests`, a profile case in `HybridUpgradeTests`; 15 rules tests on the Firebase emulators.
+- Not yet tested against real Firebase or on a device.
+
 ## G02 (HYP-197), part 1: REST auth and App Check for Quest
 
 Fallback for Quest in case the Firebase Unity SDK does not run there. Code in `Assets/HypaFirebase/Runtime/Rest/`.

@@ -136,13 +136,17 @@ namespace HypaCore.Tests
 
         [Test] public void ProxyBodies_UseTheContractFieldNames()
         {
-            var chat = JObject.FromObject(new ChatRequest { system = "s", messages = new[] { new ChatMessage { role = "user", content = "hi" } }, language = "yo", model = null });
-            Assert.AreEqual("s", (string)chat["system"]);
-            Assert.AreEqual("hi", (string)chat["messages"][0]["content"]);
+            var chat = JObject.FromObject(new ChatRequest { messages = new[] { new ChatMessage { role = "system", content = "s" }, new ChatMessage { role = "user", content = "hi" } }, model = "auto", maxTokens = 256 });
+            CollectionAssert.AreEquivalent(new[] { "messages", "model", "maxTokens" }, chat.Properties().Select(p => p.Name));
+            Assert.AreEqual("hi", (string)chat["messages"][1]["content"]);
             Assert.AreEqual("/hypa/chat", ProxyApi.Chat);
             Assert.AreEqual("X-Firebase-AppCheck", ProxyApi.AppCheckHeader);
-            var tts = JObject.FromObject(new TtsResponse { audioBase64 = "AA==", mime = "audio/mpeg", model = "m", voice = "v" });
-            CollectionAssert.AreEquivalent(new[] { "audioBase64", "mime", "model", "voice" }, tts.Properties().Select(p => p.Name));
+            Assert.AreEqual("app_check", ProxyApi.ErrorAppCheck);
+            var asr = JObject.FromObject(new AsrRequest { audio = "AA==", sourceLang = "yo", durationSeconds = 2 });
+            CollectionAssert.AreEquivalent(new[] { "audio", "sourceLang", "durationSeconds" }, asr.Properties().Select(p => p.Name));
+            var tts = JObject.FromObject(new TtsResponse { audioBase64 = "AA==", mime = "audio/mpeg", route = new ProxyRoute { model = "m", voice = "v" } });
+            Assert.AreEqual("v", (string)tts["route"]["voice"]);
+            CollectionAssert.AreEquivalent(new[] { "audioUrl", "audioBase64", "mime", "sampleRate", "route", "usage" }, tts.Properties().Select(p => p.Name));
         }
     }
 }
