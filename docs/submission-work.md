@@ -49,3 +49,12 @@ The rest of the Quest REST path, and the start-up that moves from the Fakes to t
 - `QuestRestSpike` / `QuestRestSpikeRunner`: runs each REST call on a Quest and logs which worked. `NoOnDeviceModel` for platforms without one.
 - Tests: EditMode tests in `Assets/HypaFirebase/Tests/Editor/` and `HybridUpgradeTests`.
 - Not yet tested against real Firebase or on a Quest.
+
+## Stories: character profile
+
+A profile card for Stories with a realistic character the player shapes. Code in `Assets/HypaStories/Runtime/Profile/`.
+
+- `ProfileCreator`: a simple card with the character as a round portrait, rendered only when something changes, and a mixed-reality panel close to the player on Quest.
+- `ProfileAvatar`, `ProfileCatalog`, `StoryProfile`: the character (MakeHuman CC0, built by `tools/avatar/build_avatar.py`), its choices and the saved profile. The imported assets are listed in `docs/pre-existing-work.md`.
+- Tests: `Assets/HypaStories/Tests/Editor/StoryProfileTests.cs`.
+- Not yet synced through Firebase.
