@@ -87,6 +87,16 @@ namespace HypaCore.Tests
             Assert.AreEqual(model.Reply, Run(model.GenerateAsync("hi", CancellationToken.None)));
         }
 
+        [Test] public void NoOnDeviceModel_IsNeverAvailable_AndIsTheDefault()
+        {
+            var model = new NoOnDeviceModel();
+            Assert.IsFalse(model.Available);
+            Assert.AreEqual("unavailable", Run(model.StatusAsync()));
+            Assert.Throws<InvalidOperationException>(() => Run(model.GenerateAsync("hi", CancellationToken.None)));
+            Assert.Throws<InvalidOperationException>(() => model.StreamAsync("hi", CancellationToken.None));
+            Assert.IsInstanceOf<NoOnDeviceModel>(new HybridServices().OnDevice);
+        }
+
         [Test] public void Models_StreamTheSameTextTheyReturn()
         {
             var cloud = new FakeCloudModel { Reply = "one two three" };

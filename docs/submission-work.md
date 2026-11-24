@@ -23,3 +23,16 @@ Fallback for Quest in case the Firebase Unity SDK does not run there. Code in `A
 - No token is logged. The web API key and app id are passed in, not committed.
 - Tests: EditMode tests in `Assets/HypaFirebase/Tests/Editor/RestAuthTests.cs`, using a fake HTTP handler.
 - Not yet tested against real Firebase or on a device.
+
+## G02 (HYP-197), part 2: Quest REST services
+
+The rest of the Quest REST path, and the start-up that moves from the Fakes to the real services. How to run the Quest spike: `docs/quest-path.md`.
+
+- `RestHypaAuth`: `IHypaAuth` over `RestAuthSession` and `RestAppCheck`. Google and Apple linking are not available on Quest, so Quest users stay anonymous.
+- `RestProgressStore`: `IProgressStore` over Firestore REST, with its own offline queue. Saves go out one at a time, so an older save never overwrites a newer one.
+- `RestRealtimeDatabase`: get, set, update, delete and a server-sent-events stream, for G09. REST has no `onDisconnect`, so presence needs a heartbeat.
+- `HybridServices.UpgradeAsync`: starts the real services in the background and swaps them in, sending progress saved on the Fakes meanwhile.
+- `PlayerPrefsKeyValueStore`: lets the REST classes store data from any thread (PlayerPrefs works only on Unity's main thread).
+- `QuestRestSpike` / `QuestRestSpikeRunner`: runs each REST call on a Quest and logs which worked. `NoOnDeviceModel` for platforms without one.
+- Tests: EditMode tests in `Assets/HypaFirebase/Tests/Editor/` and `HybridUpgradeTests`.
+- Not yet tested against real Firebase or on a Quest.
