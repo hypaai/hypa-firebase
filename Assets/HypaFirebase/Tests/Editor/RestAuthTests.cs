@@ -17,10 +17,13 @@ namespace HypaFirebase.Tests
             public readonly List<(string Url, string Body)> Requests = new List<(string, string)>();
             readonly Queue<(HttpStatusCode Status, string Body)> _responses = new Queue<(HttpStatusCode, string)>();
             public void Reply(string body, HttpStatusCode status = HttpStatusCode.OK) => _responses.Enqueue((status, body));
+            /// <summary>When set, each reply waits for this, so a test can act while a call is in flight.</summary>
+            public TaskCompletionSource<bool> Hold;
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
             {
                 Requests.Add((request.RequestUri.ToString(), request.Content == null ? "" : await request.Content.ReadAsStringAsync()));
+                if (Hold != null) await Hold.Task;
                 var next = _responses.Dequeue();
                 return new HttpResponseMessage(next.Status) { Content = new StringContent(next.Body) };
             }
@@ -113,14 +116,55 @@ namespace HypaFirebase.Tests
 
         [Test] public void FailedCall_NamesTheFirebaseError_AndLeaksNoToken()
         {
-            var http = new FakeHandler(); http.Reply("{\"error\":{\"message\":\"INVALID_REFRESH_TOKEN\"}}", HttpStatusCode.BadRequest);
-            var auth = new RestAuthSession("KEY", new MemoryStore { Value = "secret-refresh" }, http);
+            var http = new FakeHandler(); http.Reply("{\"error\":{\"message\":\"USER_DISABLED\"}}", HttpStatusCode.BadRequest);
+            var store = new MemoryStore { Value = "secret-refresh" };
+            var auth = new RestAuthSession("KEY", store, http);
 
             var e = Assert.Throws<HypaFirebaseException>(() => Run(auth.SignInAnonymouslyAsync(CancellationToken.None)));
 
             Assert.AreEqual(400, e.StatusCode);
-            Assert.AreEqual("INVALID_REFRESH_TOKEN", e.Message);
+            Assert.AreEqual("USER_DISABLED", e.Message);
             StringAssert.DoesNotContain("secret-refresh", e.ToString());
+            Assert.AreEqual("secret-refresh", store.Value, "a disabled user is not replaced by a new one");
+        }
+
+        [TestCase("INVALID_REFRESH_TOKEN")]
+        [TestCase("TOKEN_EXPIRED")]
+        [TestCase("USER_NOT_FOUND")]
+        public void DeadSavedToken_IsCleared_AndANewUserSignsUp(string error)
+        {
+            var http = new FakeHandler();
+            http.Reply("{\"error\":{\"message\":\"" + error + "\"}}", HttpStatusCode.BadRequest);
+            http.Reply(SignUpReply);
+            var store = new MemoryStore { Value = "dead-refresh" };
+            var auth = new RestAuthSession("KEY", store, http);
+
+            Run(auth.SignInAnonymouslyAsync(CancellationToken.None));
+
+            Assert.IsTrue(auth.IsSignedIn);
+            Assert.AreEqual("user-1", auth.UserId);
+            Assert.AreEqual("refresh-1", store.Value);
+            Assert.AreEqual(2, http.Requests.Count);
+            StringAssert.StartsWith("https://identitytoolkit.googleapis.com/v1/accounts:signUp", http.Requests[1].Url);
+        }
+
+        [Test] public void SignOut_DuringARefresh_StaysSignedOut()
+        {
+            var http = new FakeHandler(); http.Reply(SignUpReply); http.Reply(RefreshReply);
+            var store = new MemoryStore();
+            var auth = new RestAuthSession("KEY", store, http);
+            Run(auth.SignInAnonymouslyAsync(CancellationToken.None));
+
+            http.Hold = new TaskCompletionSource<bool>();
+            var refresh = Task.Run(() => auth.GetIdTokenAsync(true, CancellationToken.None));
+            SpinWait.SpinUntil(() => http.Requests.Count == 2, 5000);
+
+            auth.SignOut();
+            http.Hold.SetResult(true);
+
+            Assert.Throws<InvalidOperationException>(() => Run(refresh));
+            Assert.IsFalse(auth.IsSignedIn);
+            Assert.IsNull(store.Value, "the refresh that finished late must not save its token");
         }
 
         [Test] public void AppCheck_ExchangesTheDebugToken_AndCachesTheResult()
