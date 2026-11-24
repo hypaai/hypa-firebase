@@ -22,6 +22,8 @@ Hosting rewrites `/hypa/**` to the function, so the web build calls same-origin 
 | `/hypa/chat` | Optional `system`, `messages`, `language`, optional `model` and `maxTokens` | `text`, `model` |
 | `/hypa/translate` | `text` (max 2000 chars), `from`, `to`, optional `model` | `text`, `model` |
 
+The typed G01 client can also send ASR as audio and sourceLang, put chat instructions in a system message without a separate language field, and send translation with targetLang and sourceLang. Responses include transcript, content, and translation respectively, alongside the story client fields in the table.
+
 For ASR, set `language` to `auto` to omit the language hint. For translation, set `from` to `auto` to detect the source. Each response also includes the reported `route` and current user `usage`.
 
 TTS requests inline audio in one call to Hypa. For a voice-only request, the proxy looks up a matching model and asks for an explicit model if several match.
@@ -35,7 +37,7 @@ Every failure is `{ "error": { "code", "message", ... } }`.
 | HTTP | `code` | When |
 | --- | --- | --- |
 | 401 | `unauthenticated` | no / invalid / expired ID token |
-| 401 / 403 | `appcheck` | App Check token missing (401) / invalid (403) |
+| 401 / 403 | `app_check` | App Check token missing (401) / invalid (403) |
 | 400 | `bad_request` | missing or malformed field |
 | 413 | `too_large` | text, conversation, audio bytes or audio length over the cap |
 | 429 | `quota` | `scope`: `user_seconds`, `user_requests`, `global_seconds`, `global_requests`, or `provider_balance` (Hypa key out of budget). Includes `limit`, `used`, `resetsAt`, `retryAfterSeconds` (also the `Retry-After` header) |

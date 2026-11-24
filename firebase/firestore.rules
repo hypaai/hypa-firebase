@@ -1,16 +1,51 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // A signed-in user (anonymous counts) reads and writes only their own tree: users/{their uid}/**.
-    // users/{uid}, users/{uid}/progress/*, users/{uid}/stories/*, users/{uid}/words/*  (docs/contracts.md, section 3).
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
+    // A signed-in user (anonymous counts) reads and writes only their own tree: users/{their uid}/**, and only the fields of
+    // the contract (docs/contracts.md, section 3). Times are Unix ms, or a server timestamp.
+
+    function signedInAs(uid) { return request.auth != null && request.auth.uid == uid; }
+    function data() { return request.resource.data; }
+    function onlyKeys(keys) { return data().keys().hasOnly(keys); }
+    function str(field, max) { return !(field in data()) || (data()[field] is string && data()[field].size() <= max); }
+    function num(field) { return !(field in data()) || data()[field] is int; }
+    function flag(field) { return !(field in data()) || data()[field] is bool; }
+    function time(field) { return !(field in data()) || data()[field] is int || data()[field] is timestamp; }
+
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, delete: if signedInAs(uid);
+      allow create, update: if signedInAs(uid)
+        && onlyKeys(['username', 'displayName', 'language', 'appearance', 'appearanceVersion', 'createdAt', 'lastDevice', 'lastSeenAt'])
+        && (!('username' in data()) || (data().username is string && data().username.matches('^[a-z][a-z0-9_]{2,19}$')))
+        && str('displayName', 24) && str('language', 16) && str('appearance', 4000) && num('appearanceVersion')
+        && time('createdAt') && str('lastDevice', 32) && time('lastSeenAt');
+
+      match /progress/current {
+        allow read, delete: if signedInAs(uid);
+        allow create, update: if signedInAs(uid)
+          && onlyKeys(['storyId', 'lineId', 'lineIndex', 'language', 'place', 'updatedAt', 'device'])
+          && str('storyId', 64) && str('lineId', 64) && num('lineIndex') && str('language', 16)
+          && (!('place' in data()) || data().place in ['camp', 'hut', 'village'])
+          && time('updatedAt') && str('device', 32);
+      }
+
+      match /stories/{storyId} {
+        allow read, delete: if signedInAs(uid);
+        allow create, update: if signedInAs(uid) && storyId.size() <= 64
+          && onlyKeys(['storyId', 'finished', 'bestGameScore', 'gamePlays', 'lastLineId', 'updatedAt'])
+          && (!('storyId' in data()) || data().storyId == storyId)
+          && flag('finished') && num('bestGameScore') && num('gamePlays') && str('lastLineId', 64) && time('updatedAt');
+      }
+
+      match /words/{wordId} {
+        allow read, delete: if signedInAs(uid);
+        allow create, update: if signedInAs(uid) && wordId.size() <= 128
+          && onlyKeys(['text', 'translation', 'language', 'storyId', 'savedAt'])
+          && str('text', 200) && str('translation', 400) && str('language', 16) && str('storyId', 64) && time('savedAt');
+      }
     }
 
-    // Everything else stays closed.
+    // Everything else stays closed, including other documents under users/{uid}.
     match /{document=**} { allow read, write: if false; }
   }
 }

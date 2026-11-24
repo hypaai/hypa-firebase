@@ -26,7 +26,7 @@ namespace HypaFirebase.Tests
             var http = new StubHandler()
                 .Reply(SignUpReply).Reply(AppCheckReply)                  // sign-in, App Check
                 .Reply("{}").Reply(ProgressDoc)                            // progress: save, load
-                .Reply("{}").Reply("{\"host\":\"user-123456789\"}")        // room: write, read
+                .Reply("{}").Reply("\"user-123456789\"")                  // room: write, read its host
                 .Reply("event: put\ndata: {\"path\":\"/\",\"data\":null}\n\n") // event stream
                 .Reply("null");                                            // clean up
             var runner = Runner(http, out _);
@@ -36,6 +36,10 @@ namespace HypaFirebase.Tests
 
             Assert.IsTrue(steps.All(s => s.Passed), report);
             Assert.AreEqual(7, steps.Count);
+            // A real 5-letter room the rules accept, read field by field (the whole room is not readable).
+            StringAssert.IsMatch(@"/rooms/[BCDFGHJKLMNPQRSTVWXZ]{5}\.json", http.Requests[4].Url);
+            StringAssert.IsMatch(@"/rooms/[BCDFGHJKLMNPQRSTVWXZ]{5}/host\.json", http.Requests[5].Url);
+            StringAssert.IsMatch(@"/rooms/[BCDFGHJKLMNPQRSTVWXZ]{5}/state\.json", http.Requests[6].Url);
             StringAssert.Contains("RESULT: the REST path works on this device.", report);
             foreach (var secret in new[] { "secret-id-token", "secret-refresh", "secret-app-check", "secret-debug-token", "user-123456789" })
                 StringAssert.DoesNotContain(secret, report);

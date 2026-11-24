@@ -40,11 +40,11 @@ namespace HypaStories
                 {
                     var reply = await _rest.ChatWithRouteAsync(RequestedModel(story), messages,
                         req.Language?.HypaLabel ?? "English", MaxTokens, deadline.Token);
-                    var sentences = Sentences(reply.text);
+                    var sentences = Sentences(reply.content);
                     if (sentences.Count == 0)
                         throw new HypaException(HypaErrorKind.InvalidResponse, "chat: the proxy returned no speakable text.");
 
-                    Debug.Log($"Hypa Stories: {reply.model} answered the question.");
+                    Debug.Log($"Hypa Stories: {reply.route?.model} answered the question.");
                     for (var i = 0; i < sentences.Count; i++) onSentence(sentences[i], i, i == sentences.Count - 1);
                 }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)

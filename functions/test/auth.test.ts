@@ -35,12 +35,12 @@ describe("token checks", () => {
 
   it("401 without App Check", async () => {
     const e = await failure(call({ authorization: "Bearer good-id" }));
-    expect([e.status, e.code]).toEqual([401, "appcheck"]);
+    expect([e.status, e.code]).toEqual([401, "app_check"]);
   });
 
   it("403 with an invalid App Check token", async () => {
     const e = await failure(call({ authorization: "Bearer good-id", "x-firebase-appcheck": "forged" }));
-    expect([e.status, e.code]).toEqual([403, "appcheck"]);
+    expect([e.status, e.code]).toEqual([403, "app_check"]);
   });
 
   it("checks sign-in before App Check, so a probe learns nothing about App Check", async () => {
@@ -61,6 +61,6 @@ describe("skipping App Check (emulator only)", () => {
   });
 
   it("is off by default", async () => {
-    expect((await failure(call({ authorization: "Bearer good-id" }))).code).toBe("appcheck");
+    expect((await failure(call({ authorization: "Bearer good-id" }))).code).toBe("app_check");
   });
 });

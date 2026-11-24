@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MAX_ASR_BASE64_CHARS } from "../src/config";
 import { ProxyError } from "../src/api/errors";
 import { handleRequest } from "../src/api/handler";
@@ -22,12 +22,12 @@ describe("who may call", () => {
 
   it("401 without App Check, 403 with a forged one", async () => {
     const a = await handleRequest(request("/hypa/tts", {}, { authorization: "Bearer good-id" }), deps());
-    expect([a.status, err(a).code]).toEqual([401, "appcheck"]);
+    expect([a.status, err(a).code]).toEqual([401, "app_check"]);
     const b = await handleRequest(
       request("/hypa/tts", {}, { authorization: "Bearer good-id", "x-firebase-appcheck": "forged" }),
       deps(),
     );
-    expect([b.status, err(b).code]).toEqual([403, "appcheck"]);
+    expect([b.status, err(b).code]).toEqual([403, "app_check"]);
   });
 
   it("answers 404 and 405 before auth for unknown routes and methods", async () => {
@@ -221,6 +221,24 @@ describe("/hypa/chat and /hypa/translate", () => {
         { role: "user", content: "x" },
       ],
     });
+  });
+
+  it("supports the typed G01 clients alongside the existing story requests", async () => {
+    const d = deps();
+    const asr = await handleRequest(request("/hypa/asr", { audio: wav(1).toString("base64"), sourceLang: "yo" }), d);
+    expect(asr.body).toMatchObject({ transcript: "bawo ni", text: "bawo ni" });
+
+    const messages = [
+      { role: "system", content: "Answer in Yoruba." },
+      { role: "user", content: "Hello" },
+    ];
+    const upstreamChat = vi.spyOn(d.hypa, "chat");
+    const chat = await handleRequest(request("/hypa/chat", { messages }), d);
+    expect(chat.body).toMatchObject({ content: "Ẹ n lẹ́", text: "Ẹ n lẹ́" });
+    expect(upstreamChat).toHaveBeenCalledWith(expect.objectContaining({ messages }));
+
+    const translate = await handleRequest(request("/hypa/translate", { text: "hello", targetLang: "yo" }), d);
+    expect(translate.body).toMatchObject({ translation: "hello", text: "hello" });
   });
 
   it("translates", async () => {

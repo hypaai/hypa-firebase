@@ -101,7 +101,28 @@ namespace HypaStories
         bool Playing => (_game != null && _game.Active) || (_hatGame != null && _hatGame.Active) || (_drumGame != null && _drumGame.Active);
         void EndGames() { if (_game != null) _game.End(); if (_hatGame != null) _hatGame.End(); if (_drumGame != null) _drumGame.End(); }
 
+        bool _creatingProfile;
+
         void Start()
+        {
+            if (assets == null || Camera.main == null)
+            {
+                Debug.LogError("Hypa Stories: a MainCamera and StoryAssets are required.");
+                enabled = false;
+                return;
+            }
+            bool editing = AppRouter.Consume(ProfileCreator.EditRoute);
+            if (!editing && StoryProfileStore.Load() != null) { BeginStory(); return; }
+            _creatingProfile = true;
+            ProfileCreator.Show(assets, saved =>
+            {
+                _creatingProfile = false;
+                if (saved || StoryProfileStore.Load() != null) BeginStory();
+                else if (HypaShell.Instance != null) HypaShell.Instance.ExitToHome();
+            });
+        }
+
+        void BeginStory()
         {
             var cam = Camera.main;
             if (cam == null) { Debug.LogError("Hypa Stories: no MainCamera."); enabled = false; return; }
@@ -132,7 +153,7 @@ namespace HypaStories
             // Back (to the Hypa home menu: only under the shell), Hut, Gather round, Village: one row in front of you at the start.
             _splash = new SplashView(_world, _ui, _camp.Fire.Root, assets.logo, () => OpenStories(false), on => _portalHover = on,
                 HypaShell.Instance != null ? (System.Action)(() => HypaShell.Instance.ExitToHome()) : null,
-                () => Places.GoTo(PlaceIds.Hut), () => Places.GoTo(PlaceIds.Gathering));
+                () => Places.GoTo(PlaceIds.Hut), () => Places.GoTo(PlaceIds.Gathering), EditProfile);
             _list = new StoryListView(_ui, assets, Play, () => Go(Screen.Splash), ToggleSound, PickLanguage);
             _player = new PlayerView(_ui, () => _story.Jump(-1), () => _story.TogglePause(), () => _story.Jump(1),
                 OpenTry, CornerTap, ExitPlay, ToggleSound, q => _ask.SubmitText(q), ToggleRoom);
@@ -711,6 +732,7 @@ namespace HypaStories
 
         void Update()
         {
+            if (_creatingProfile || _camp == null) return;
             if (_away) return; // at another place: the camp waits, hidden
             UpdateNarrationAudio();
             var dt = Time.deltaTime;
@@ -837,6 +859,13 @@ namespace HypaStories
                     }
                     break;
             }
+        }
+
+        void EditProfile()
+        {
+            // Available from the splash only; reload returns through the creator with a copy of the saved profile.
+            AppRouter.Request(ProfileCreator.EditRoute);
+            UnityEngine.SceneManagement.SceneManager.LoadScene(HypaScenes.Story);
         }
 
         float _qDown;

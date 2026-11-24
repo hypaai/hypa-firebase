@@ -2,12 +2,12 @@ import { DEFAULT_CHAT_MAX_TOKENS, MAX_CHAT_CHARS, MAX_CHAT_MAX_TOKENS, MAX_CHAT_
 import { badRequest, tooLarge } from "../api/errors";
 import type { ChatMessage } from "../api/hypa";
 import type { Route } from "../api/types";
-import { optional, required } from "../utils/validate";
+import { optional } from "../utils/validate";
 
 /** Chat. One request, no audio seconds. An explicit model uses provider/model format. */
 export const chat: Route = (body, hypa) => {
   const system = optional(body, "system", MAX_CHAT_CHARS);
-  const language = required(body, "language", 64);
+  const language = optional(body, "language", 64);
   const raw = body.messages;
   if (!Array.isArray(raw) || raw.length === 0) throw badRequest("'messages' must be a non-empty array.");
   if (raw.length > MAX_CHAT_MESSAGES) throw tooLarge("Too many messages.");
@@ -17,7 +17,7 @@ export const chat: Route = (body, hypa) => {
     if (typeof m.content !== "string" || !m.content.trim()) throw badRequest("Each message needs text 'content'.");
     return { role: m.role, content: m.content };
   });
-  const instructions = [system, "Answer in " + language + "."].filter(Boolean).join("\n\n");
+  const instructions = [system, language && "Answer in " + language + "."].filter(Boolean).join("\n\n");
   if (messages.reduce((n, m) => n + m.content.length, instructions.length) > MAX_CHAT_CHARS)
     throw tooLarge("The conversation is too long.");
 
@@ -33,11 +33,11 @@ export const chat: Route = (body, hypa) => {
     cost: { requests: 1, seconds: 0 },
     run: async () => {
       const { content, route } = await hypa.chat({
-        messages: [{ role: "system", content: instructions }, ...messages],
+        messages: instructions ? [{ role: "system", content: instructions }, ...messages] : messages,
         model,
         maxTokens: Math.min(maxTokens, MAX_CHAT_MAX_TOKENS),
       });
-      return { text: content, model: route.model, route };
+      return { content, text: content, model: route.model, route };
     },
   };
 };

@@ -81,6 +81,24 @@ namespace HypaCore.Tests
             Assert.AreEqual(20, Run(realStore.LoadAsync()).lineIndex);
         }
 
+        [Test] public void Upgrade_SendsAProfileMadeBeforeSignIn_UnlessTheServersIsNewer()
+        {
+            var local = new HybridServices();
+            HybridServices.Override(local);
+            Run(local.Profiles.SaveAsync(new UserProfile { username = "timi", appearance = "{}", lastSeenAt = 200 }));
+
+            var realStore = new FakeProfileStore();
+            Run(HybridServices.UpgradeAsync(() => Task.FromResult(new HybridServices { Profiles = realStore })));
+            Assert.AreEqual("timi", Run(realStore.LoadAsync()).username);
+            Assert.AreSame(realStore, HybridServices.Current.Profiles);
+
+            var again = new HybridServices();
+            HybridServices.Override(again);
+            Run(again.Profiles.SaveAsync(new UserProfile { username = "old", lastSeenAt = 100 }));
+            Run(HybridServices.UpgradeAsync(() => Task.FromResult(new HybridServices { Profiles = realStore })));
+            Assert.AreEqual("timi", Run(realStore.LoadAsync()).username);
+        }
+
         [Test] public void Upgrade_WhenStartingFails_KeepsTheFakes_AndDoesNotThrow()
         {
             var local = new HybridServices();

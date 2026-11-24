@@ -49,7 +49,7 @@ Quest has no Google Play services, so the Firebase Unity SDK may not run there. 
 
    A failed step names the error code Firebase sent (for example `403 PERMISSION_DENIED`) or the kind of failure. The report never contains a token.
 
-The spike writes only to its own room, `rooms/spike-{uid}`, and the signed-in user's own progress document, and removes the room afterwards. It also exercises the thread-safe `PlayerPrefs` store on the device.
+The spike writes only to its own room (a new 5-letter code that it hosts), and the signed-in user's own progress document, and removes the room afterwards. It also exercises the thread-safe `PlayerPrefs` store on the device.
 
 ## B. Test the SDK path (needs the SDK imported, G02)
 
@@ -58,7 +58,7 @@ On the Quest, in a build with the Firebase Unity SDK:
 1. `FirebaseApp.CheckAndFixDependenciesAsync()`: record the status it returns.
 2. Anonymous sign-in with Firebase Auth.
 3. One Firestore write and read (`users/{uid}/progress/current`).
-4. One Realtime Database write and listener on `rooms/spike-{uid}`.
+4. One Realtime Database write and listener on that room's `host` and `state`.
 5. One AI Logic `GenerateContentAsync`.
 
 If any of these fails on Quest, Quest uses the REST path (A) for that service.

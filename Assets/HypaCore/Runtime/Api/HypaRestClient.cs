@@ -75,7 +75,7 @@ namespace HypaCore
 
         /// <summary>Sends a G01 chat request and returns the answer text.</summary>
         public async Task<string> ChatAsync(string model, JArray messages, string language, int maxTokens, CancellationToken ct)
-            => (await ChatWithRouteAsync(model, messages, language, maxTokens, ct).ConfigureAwait(false)).text;
+            => (await ChatWithRouteAsync(model, messages, language, maxTokens, ct).ConfigureAwait(false)).content;
 
         /// <summary>A blank model or "auto" uses the proxy's fallback order. An explicit model is tried once.</summary>
         public async Task<ChatResponse> ChatWithRouteAsync(string model, JArray messages, string language, int maxTokens, CancellationToken ct)
@@ -89,8 +89,10 @@ namespace HypaCore
             }
             if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
             var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Chat, body.ToString(Formatting.None), ct).ConfigureAwait(false);
-            var reply = JObject.Parse(raw).ToObject<ChatResponse>();
-            if (string.IsNullOrWhiteSpace(reply?.text))
+            var json = JObject.Parse(raw);
+            var reply = json.ToObject<ChatResponse>();
+            if (reply != null) reply.content ??= (string)json["text"];
+            if (string.IsNullOrWhiteSpace(reply?.content))
                 throw new HypaException(HypaErrorKind.InvalidResponse, "chat: the proxy returned no text.");
             return reply;
         }
