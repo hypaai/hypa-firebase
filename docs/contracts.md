@@ -66,6 +66,8 @@ users/{uid}/words/{wordId}       { text, translation, language, storyId, savedAt
 - Rules (`firebase/firestore.rules`): a user reads and writes only `users/{their uid}` and the three collections above, and only
   the listed fields with the listed types. Everything else is closed, including other documents under `users/{uid}`.
 
+**Provisional (G08, waiting for Timi's OK):** `stories/*` and `words/*` go through `IUserDataStore` (`GetStoryAsync`, `SaveStoryAsync`, `ListWordsAsync`, `SaveWordAsync`) with `StoryResult` and `SavedWord`, in `UserData.cs`. Results merge: finished stays finished, `bestGameScore` and `gamePlays` take the higher, `lastLineId` comes from the later update. A word's id is built from its text and language, so the same word saved on two devices is one document.
+
 ## 4. Realtime Database (rooms, G09)
 
 ```
@@ -115,7 +117,7 @@ Constants and defaults: `RemoteConfigKeys` in `Models.cs`. `live_model` has no d
 
 All `POST`, JSON, headers `Authorization: Bearer <Firebase ID token>` and `X-Firebase-AppCheck: <token>`. The functions verify
 both, read the Hypa key from Secret Manager, and count each user's use per UTC day. Hosting rewrites `/hypa/**` to the function, so
-the web build calls same-origin paths. These are the shapes G04's function implements (`docs/hypa-proxy.md` on G04's branch).
+the web build calls same-origin paths. These are the shapes G04's function implements (`docs/hypa-proxy.md`).
 
 | Path | Body | Returns (plus `usage`) |
 | -- | -- | -- |
@@ -157,7 +159,7 @@ paths. No Hypa key is ever in the app.
 | -- | -- | -- |
 | `hypa` (`/hypa/tts`, `asr`, `chat`, `translate`) | HTTPS | The proxy above. |
 | `hypa` (`/gemini/generate`, optional) | HTTPS | Gemini for Quest, only if the Firebase AI Logic SDK does not run there (above). |
-| `questAppCheck` | HTTPS | Exchanges a Meta Platform Integrity attestation for an App Check token (Admin SDK `createToken`), so Quest passes App Check. |
+| `questAppCheck` (not built yet) | HTTPS | Exchanges a Meta Platform Integrity attestation for an App Check token (Admin SDK `createToken`), so Quest passes App Check. |
 | `cleanupRooms` | Scheduled, every 30 minutes | Deletes `rooms/{code}` older than 2 hours (indexed on `createdAt`). |
 
 ## 7. Shared rules

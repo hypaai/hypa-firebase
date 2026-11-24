@@ -1,0 +1,36 @@
+{
+  "name": "hypa-proxy-functions",
+  "private": true,
+  "description": "Authenticated Hypa proxy (Cloud Functions v2) for the Hypa Firebase entry. Holds the Hypa key server-side.",
+  "license": "Apache-2.0",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "serve": "npm run build && firebase emulators:start --only functions,firestore,auth,database,hosting",
+    "deploy": "firebase deploy --only functions",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.15.0",
+    "firebase-functions-test": "^3.5.0",
+    "prettier": "^3.10.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1"
+  }
+}

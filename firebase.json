@@ -1,4 +1,26 @@
 {
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        ".secret.local",
+        "secret.local.example",
+        ".env.local",
+        "test",
+        "coverage",
+        "vitest.config.mts"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" ci",
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
   "firestore": {
     "rules": "firebase/firestore.rules",
     "indexes": "firebase/firestore.indexes.json"
@@ -50,6 +72,15 @@
           }
         ]
       }
+    ],
+    "rewrites": [
+      {
+        "source": "/hypa/**",
+        "function": {
+          "functionId": "hypa",
+          "region": "us-central1"
+        }
+      }
     ]
   },
   "emulators": {
@@ -63,11 +94,14 @@
       "port": 9000
     },
     "hosting": {
-      "port": 5000
+      "port": 5002
     },
     "ui": {
       "enabled": true
     },
-    "singleProjectMode": true
+    "singleProjectMode": true,
+    "functions": {
+      "port": 5001
+    }
   }
 }

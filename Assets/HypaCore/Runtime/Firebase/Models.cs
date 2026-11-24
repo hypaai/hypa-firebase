@@ -76,6 +76,9 @@ namespace HypaCore.Hybrid
         public const string LiveModel = "live_model";
         public const string LiveLangs = "live_langs";
         public const string ProxyDailySecondsPerUser = "proxy_daily_seconds_per_user";
+        public const string ProxyDailyRequestsPerUser = "proxy_daily_requests_per_user";
+        public const string ProxyGlobalDailySeconds = "proxy_global_daily_seconds";
+        public const string ProxyGlobalDailyRequests = "proxy_global_daily_requests";
 
         /// <summary>The default for a key. <c>live_model</c> has none until G10 picks the model name from the Firebase docs.</summary>
         public static string Default(string key)
@@ -89,6 +92,9 @@ namespace HypaCore.Hybrid
                 case CloudModel: return "gemini-2.5-flash-lite";
                 case LiveLangs: return "en,fr,es,sw";
                 case ProxyDailySecondsPerUser: return "600";
+                case ProxyDailyRequestsPerUser: return "400";
+                case ProxyGlobalDailySeconds: return "20000";
+                case ProxyGlobalDailyRequests: return "10000";
                 default: return null;
             }
         }

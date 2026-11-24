@@ -1,0 +1,23 @@
+name: Functions tests
+on:
+  pull_request:
+    paths: ["functions/**", "firebase.json"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
