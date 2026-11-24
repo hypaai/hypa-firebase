@@ -32,6 +32,8 @@ users/{uid}/words/{wordId}       { text, translation, language, storyId, savedAt
 
 A user reads and writes only `users/{their uid}/**` (`firebase/firestore.rules`). `Progress` in `Models.cs` is `progress/current`.
 
+**Provisional (G08, waiting for Timi's OK):** `stories/*` and `words/*` go through `IUserDataStore` (`GetStoryAsync`, `SaveStoryAsync`, `ListWordsAsync`, `SaveWordAsync`) with `StoryResult` and `SavedWord`, in `UserData.cs`. Results merge: finished stays finished, `bestGameScore` and `gamePlays` take the higher, `lastLineId` comes from the later update. A word's id is built from its text and language, so the same word saved on two devices is one document.
+
 ## 4. Realtime Database (rooms, G09)
 
 ```

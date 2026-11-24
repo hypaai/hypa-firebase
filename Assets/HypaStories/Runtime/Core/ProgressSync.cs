@@ -160,7 +160,7 @@ namespace HypaStories
     /// <summary>
     /// The 6-letter pairing code for signing a Quest in from another device (HYP-203 item 4). Only the code: the short-lived Firestore
     /// document and the <c>/pair/claim</c> function that issues the custom token belong to G04 and do not exist yet.
-    /// Consonants only, so a code can never spell a word, and no letter that is easy to misread.
+    /// Consonants only (no vowels, no Y), so a code can never spell a word.
     /// </summary>
     public static class PairingCode
     {
