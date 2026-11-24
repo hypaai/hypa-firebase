@@ -136,13 +136,20 @@ namespace HypaCore.Tests
 
         [Test] public void ProxyBodies_UseTheContractFieldNames()
         {
-            var chat = JObject.FromObject(new ChatRequest { system = "s", messages = new[] { new ChatMessage { role = "user", content = "hi" } }, language = "yo", model = null });
-            Assert.AreEqual("s", (string)chat["system"]);
+            var chat = JObject.FromObject(new ChatRequest { messages = new[] { new ChatMessage { role = "user", content = "hi" } }, model = "auto", maxTokens = 512 });
             Assert.AreEqual("hi", (string)chat["messages"][0]["content"]);
+            Assert.AreEqual("auto", (string)chat["model"]);
+            var noLimit = JObject.FromObject(new ChatRequest { messages = new ChatMessage[0] });
+            Assert.AreEqual(JTokenType.Null, noLimit["maxTokens"].Type, "0 would be rejected by the proxy");
             Assert.AreEqual("/hypa/chat", ProxyApi.Chat);
+            Assert.AreEqual("app_check", ProxyApi.ErrorAppCheck);
             Assert.AreEqual("X-Firebase-AppCheck", ProxyApi.AppCheckHeader);
-            var tts = JObject.FromObject(new TtsResponse { audioBase64 = "AA==", mime = "audio/mpeg", model = "m", voice = "v" });
-            CollectionAssert.AreEquivalent(new[] { "audioBase64", "mime", "model", "voice" }, tts.Properties().Select(p => p.Name));
+            var tts = JObject.FromObject(new TtsResponse { audioUrl = "https://example/a", mime = "audio/mpeg", sampleRate = 24000, route = new ProxyRoute { model = "m", voice = "v" } });
+            Assert.AreEqual("m", (string)tts["route"]["model"]);
+            Assert.AreEqual("v", (string)tts["route"]["voice"]);
+            var translate = JObject.FromObject(new TranslateRequest { text = "omi", targetLang = "English", sourceLang = "Yoruba" });
+            Assert.AreEqual("English", (string)translate["targetLang"]);
+            Assert.AreEqual("600", RemoteConfigKeys.Default(RemoteConfigKeys.ProxyDailySecondsPerUser));
         }
     }
 }

@@ -20,10 +20,11 @@ No Hypa API key belongs in the client. Proxy configuration lives in `Assets/Hypa
 | `Assets/HypaLens` | Existing Quest camera experience; hidden on flat builds |
 | `Assets/HypaFirebase` | Auth boundary and future Firebase SDK/platform adapters |
 | `Assets/HypaMultiplayer` | Reserved module; requirements and transport undecided |
+| `functions/` | Authenticated Hypa proxy and scheduled cleanup (Cloud Functions) |
 | `firebase/` | Firestore/Realtime Database rules and indexes |
 | `tools/` | Local builds and repository checks |
 
-Unity stays at the root so existing scene paths and asset GUIDs remain intact. Server proxy code can be introduced in a separate `functions/` module once its API and runtime are selected.
+Unity stays at the root so existing scene paths and asset GUIDs remain intact. The Hypa proxy lives in `functions/` (Cloud Functions v2, Node 22); see [Hypa proxy](docs/hypa-proxy.md).
 
 ## Platform builds
 

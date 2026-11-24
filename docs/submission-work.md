@@ -8,6 +8,7 @@ The shared interfaces, data shapes and wire formats, so G02–G12 can build in p
 
 - Interfaces in `Assets/HypaCore/Runtime/Firebase/` (namespace `HypaCore.Hybrid`): `IHypaAuth`, `IProgressStore`, `IRemoteFlags`, `IRoomSync` (empty until G09), `IOnDeviceModel`, `ICloudModel`.
 - Types: `Route` / `RouteDecision`, `Progress`, `RemoteConfigKeys` with defaults, `ProxyApi` and the proxy request and response classes.
+- The proxy wire format now matches the Cloud Function and the Quest app: `audio` / `audioUrl`, `targetLang`, `messages` plus `maxTokens`, `route`, `usage`, and the error code `app_check`. Daily audio limit default is 600 seconds.
 - Fakes for every interface, and `HybridServices.Current` (WebGL: Web, builds: Native, editor: Fake unless "Use real Firebase" is on).
 - `firebase/firestore.rules` (each user only their own `users/{uid}/**`) and `firebase/database.rules.json` (rooms: the host controls the room and clock, each player writes only their own entries), with emulator tests in `firebase/tests/`.
 - Tests: EditMode tests in `Assets/HypaCore/Tests/Editor/HybridContractsTests.cs`, 9 rules tests on the Firebase emulators.
@@ -47,3 +48,9 @@ Written against G01's interfaces, so it runs on the Fakes. The screens and devic
 - Provisional contract additions: `StoryResult`, `SavedWord`, `IUserDataStore` with a fake (`Assets/HypaCore/Runtime/Firebase/UserData.cs`), waiting for Timi's OK.
 - Tests: `Assets/HypaStories/Tests/Editor/ProgressSyncTests.cs`.
 - Not done: "Sign in to sync", the Continue prompt on screen, Firestore-backed stores, and the device checks.
+
+## G04: Hypa proxy and hosting (HYP-199)
+
+- `functions/`: TypeScript, Node 22, Cloud Functions v2 (`us-central1`). `hypa` function with `/hypa/tts`, `/hypa/asr`, `/hypa/chat`, `/hypa/translate`; Firebase ID token and App Check verification; per-user and global daily quotas in Firestore with Remote Config limits; Hypa error mapping; key via Secret Manager only. `cleanupRooms` scheduled function. Unit tests with Vitest and `firebase-functions-test`.
+- `firebase.json`: `functions` block, `/hypa/**` Hosting rewrite, Functions emulator, Hosting emulator on 5002.
+- `docs/hypa-proxy.md`: contract, limits, secrets, runbook.

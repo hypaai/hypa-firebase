@@ -34,6 +34,9 @@ namespace HypaCore.Hybrid
         public const string LiveModel = "live_model";
         public const string LiveLangs = "live_langs";
         public const string ProxyDailySecondsPerUser = "proxy_daily_seconds_per_user";
+        public const string ProxyDailyRequestsPerUser = "proxy_daily_requests_per_user";
+        public const string ProxyGlobalDailySeconds = "proxy_global_daily_seconds";
+        public const string ProxyGlobalDailyRequests = "proxy_global_daily_requests";
 
         /// <summary>The default for a key. <c>live_model</c> has none until G10 picks the model name from the Firebase docs.</summary>
         public static string Default(string key)
@@ -46,7 +49,10 @@ namespace HypaCore.Hybrid
                 case RouteMaxOnDeviceTokens: return "5000";
                 case CloudModel: return "gemini-2.5-flash-lite";
                 case LiveLangs: return "en,fr,es,sw";
-                case ProxyDailySecondsPerUser: return "900";
+                case ProxyDailySecondsPerUser: return "600";
+                case ProxyDailyRequestsPerUser: return "400";
+                case ProxyGlobalDailySeconds: return "20000";
+                case ProxyGlobalDailyRequests: return "10000";
                 default: return null;
             }
         }
@@ -65,19 +71,37 @@ namespace HypaCore.Hybrid
         // Error codes in { "error": { "code", "message" } }.
         public const string ErrorQuota = "quota";
         public const string ErrorUnauthenticated = "unauthenticated";
-        public const string ErrorAppCheck = "appcheck";
+        public const string ErrorAppCheck = "app_check";
         public const string ErrorUpstream = "upstream";
         public const string ErrorBadRequest = "bad_request";
+        public const string ErrorTooLarge = "too_large";
+        public const string ErrorNotFound = "not_found";
+        public const string ErrorMethodNotAllowed = "method_not_allowed";
+        public const string ErrorInternal = "internal";
     }
 
-    [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; }
-    [Serializable] public sealed class TtsResponse { public string audioBase64; public string mime; public string model; public string voice; }
-    [Serializable] public sealed class AsrRequest { public string audioBase64; public string mime; public string language; }
-    [Serializable] public sealed class AsrResponse { public string text; public string model; }
+    /// <summary>Which Hypa model answered. Same object on every proxy success.</summary>
+    [Serializable] public sealed class ProxyRoute { public string provider; public string model; public string voice; }
+
+    /// <summary>Today's usage for the signed-in user, counted by the proxy.</summary>
+    [Serializable] public sealed class ProxyUsage
+    {
+        public int secondsUsed;
+        public int secondsLimit;
+        public int requestsUsed;
+        public int requestsLimit;
+        public string resetsAt;
+    }
+
+    [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; public string model; public bool inline; }
+    [Serializable] public sealed class TtsResponse { public string audioUrl; public string audioBase64; public string mime; public int sampleRate; public ProxyRoute route; public ProxyUsage usage; }
+    [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public float? durationSeconds; }
+    [Serializable] public sealed class AsrResponse { public string transcript; public string language; public int audioSeconds; public ProxyRoute route; public ProxyUsage usage; }
     [Serializable] public sealed class ChatMessage { public string role; public string content; }
-    [Serializable] public sealed class ChatRequest { public string system; public ChatMessage[] messages; public string language; public string model; }
-    [Serializable] public sealed class ChatResponse { public string text; public string model; }
-    [Serializable] public sealed class TranslateRequest { public string text; public string from; public string to; }
-    [Serializable] public sealed class TranslateResponse { public string text; public string model; }
+    /// <summary><c>model</c> is "auto" or "provider/model". <c>maxTokens</c> is optional (null = proxy default); when sent it is at least 1.</summary>
+    [Serializable] public sealed class ChatRequest { public ChatMessage[] messages; public string model; public int? maxTokens; }
+    [Serializable] public sealed class ChatResponse { public string content; public ProxyRoute route; public ProxyUsage usage; }
+    [Serializable] public sealed class TranslateRequest { public string text; public string targetLang; public string sourceLang; }
+    [Serializable] public sealed class TranslateResponse { public string translation; public string language; public ProxyRoute route; public ProxyUsage usage; }
     [Serializable] public sealed class ProxyErrorBody { public string code; public string message; }
 }
