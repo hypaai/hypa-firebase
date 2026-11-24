@@ -35,7 +35,7 @@ On `localhost` or `127.0.0.1` the web build uses the Firebase Emulator Suite, pr
 
 1. Build: close Unity, then `tools/build.sh web`.
 2. From the repository root: `npx firebase-tools emulators:start --project demo-hypa`.
-3. Open `http://localhost:5000` in Chrome. The hosting emulator serves `Builds/Web` with the `.br` headers from `firebase.json`.
+3. Open `http://localhost:5002` in Chrome. The hosting emulator serves `Builds/Web` with the compression headers from `firebase.json` (port 5002, because macOS AirPlay Receiver holds 5000).
 4. Watch the data in the Emulator UI at `http://localhost:4000`: anonymous users under Authentication, and `users/{uid}/progress/current` under Firestore. `firebase/firestore.rules` is enforced.
 
 | Service | With the emulators |
@@ -46,7 +46,7 @@ On `localhost` or `127.0.0.1` the web build uses the Firebase Emulator Suite, pr
 | Cloud Gemini | No emulator, so calls fail. Use `?firebase=live` |
 | Gemini Nano | Works: it runs on the device |
 
-`http://localhost:5000/?firebase=live` uses the real project from `firebaseWeb` instead, with the App Check debug provider.
+`http://localhost:5002/?firebase=live` uses the real project from `firebaseWeb` instead, with the App Check debug provider.
 
 ## Gemini Nano
 
