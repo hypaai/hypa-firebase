@@ -20,6 +20,9 @@ namespace HypaFirebase.Rest
         const string RefreshUrl = "https://securetoken.googleapis.com/v1/token?key=";
         static readonly TimeSpan RefreshMargin = TimeSpan.FromSeconds(60);
 
+        // Errors that mean the saved refresh token can never work again, so we start over as a new anonymous user.
+        static readonly string[] DeadTokenErrors = { "INVALID_REFRESH_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND" };
+
         readonly string _apiKey;
         readonly IRefreshTokenStore _store;
         readonly HttpClient _http;
@@ -29,6 +32,8 @@ namespace HypaFirebase.Rest
         string _idToken;
         string _refreshToken;
         DateTime _expiresAt;
+        int _generation; // bumped by SignOut, so a call still in flight cannot bring the user back
+        readonly object _stateLock = new object(); // makes SignOut and Apply all-or-nothing against each other
 
         public string UserId { get; private set; }
         public bool IsSignedIn => !string.IsNullOrEmpty(UserId);
@@ -49,8 +54,20 @@ namespace HypaFirebase.Rest
             try
             {
                 _refreshToken = _store.Load();
-                if (!string.IsNullOrEmpty(_refreshToken)) await RefreshAsync(cancellationToken).ConfigureAwait(false);
-                else await SignUpAsync(cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(_refreshToken))
+                {
+                    try
+                    {
+                        await RefreshAsync(cancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+                    catch (HypaFirebaseException e) when (IsDeadToken(e))
+                    {
+                        _refreshToken = null;
+                        _store.Clear();
+                    }
+                }
+                await SignUpAsync(cancellationToken).ConfigureAwait(false);
             }
             finally { _gate.Release(); }
         }
@@ -62,44 +79,59 @@ namespace HypaFirebase.Rest
             {
                 if (!IsSignedIn) throw new InvalidOperationException("Not signed in.");
                 if (forceRefresh || _now() + RefreshMargin >= _expiresAt) await RefreshAsync(cancellationToken).ConfigureAwait(false);
-                return _idToken;
+                return _idToken ?? throw new InvalidOperationException("Signed out.");
             }
             finally { _gate.Release(); }
         }
 
         public void SignOut()
         {
-            _idToken = null;
-            _refreshToken = null;
-            UserId = null;
-            _store.Clear();
+            lock (_stateLock)
+            {
+                _generation++;
+                _idToken = null;
+                _refreshToken = null;
+                UserId = null;
+                _store.Clear();
+            }
             Changed?.Invoke();
         }
 
         async Task SignUpAsync(CancellationToken ct)
         {
+            int generation = Volatile.Read(ref _generation);
             var content = new StringContent("{\"returnSecureToken\":true}", Encoding.UTF8, "application/json");
             var body = await PostAsync(SignUpUrl + _apiKey, content, ct).ConfigureAwait(false);
-            Apply((string)body["idToken"], (string)body["refreshToken"], (string)body["expiresIn"], (string)body["localId"]);
+            Apply(generation, (string)body["idToken"], (string)body["refreshToken"], (string)body["expiresIn"], (string)body["localId"]);
         }
 
         async Task RefreshAsync(CancellationToken ct)
         {
+            int generation = Volatile.Read(ref _generation);
             var form = new FormUrlEncodedContent(new Dictionary<string, string> { { "grant_type", "refresh_token" }, { "refresh_token", _refreshToken } });
             var body = await PostAsync(RefreshUrl + _apiKey, form, ct).ConfigureAwait(false);
-            Apply((string)body["id_token"], (string)body["refresh_token"], (string)body["expires_in"], (string)body["user_id"]);
+            Apply(generation, (string)body["id_token"], (string)body["refresh_token"], (string)body["expires_in"], (string)body["user_id"]);
         }
 
-        void Apply(string idToken, string refreshToken, string expiresInSeconds, string userId)
+        void Apply(int generation, string idToken, string refreshToken, string expiresInSeconds, string userId)
         {
-            bool changed = userId != UserId;
-            _idToken = idToken;
-            _refreshToken = refreshToken;
-            _expiresAt = _now() + TimeSpan.FromSeconds(double.Parse(expiresInSeconds, CultureInfo.InvariantCulture));
-            UserId = userId;
-            _store.Save(refreshToken);
+            bool changed;
+            lock (_stateLock)
+            {
+                if (generation != _generation) return; // signed out while this call was running
+                changed = userId != UserId;
+                _idToken = idToken;
+                _refreshToken = refreshToken;
+                _expiresAt = _now() + TimeSpan.FromSeconds(double.Parse(expiresInSeconds, CultureInfo.InvariantCulture));
+                UserId = userId;
+                _store.Save(refreshToken);
+            }
             if (changed) Changed?.Invoke();
         }
+
+        // Securetoken may add detail after the code, as in "TOKEN_EXPIRED : ...".
+        static bool IsDeadToken(HypaFirebaseException e) =>
+            e.StatusCode == 400 && Array.Exists(DeadTokenErrors, code => e.Message.StartsWith(code, StringComparison.Ordinal));
 
         async Task<JObject> PostAsync(string url, HttpContent content, CancellationToken ct)
         {
