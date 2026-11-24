@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using HypaCore.Hybrid;
 
@@ -43,6 +44,8 @@ namespace HypaStories
         readonly Func<long> _nowMs;
         Progress _pending;
         long? _lastSentAt; // null until the first send, so the first position goes out at once
+        // One save at a time, so a slow older save can never finish after (and overwrite) a newer one.
+        readonly SemaphoreSlim _sendGate = new SemaphoreSlim(1, 1);
 
         /// <summary>What this device last saved, or null. A newer save from another device is compared against its time.</summary>
         public Progress LastSaved { get; private set; }
@@ -67,36 +70,52 @@ namespace HypaStories
         }
 
         /// <summary>Saves the latest position if there is one and the last save was at least <see cref="MinIntervalMs"/> ago.</summary>
-        public async Task TickAsync()
-        {
-            if (_pending != null && (_lastSentAt == null || _nowMs() - _lastSentAt.Value >= MinIntervalMs)) await SendAsync();
-        }
+        public Task TickAsync() => SendAsync(force: false);
 
         /// <summary>Saves the latest position now, whatever the interval. For when the app closes.</summary>
-        public async Task FlushAsync()
-        {
-            if (_pending != null) await SendAsync();
-        }
+        public Task FlushAsync() => SendAsync(force: true);
 
-        async Task SendAsync()
+        async Task SendAsync(bool force)
         {
-            var p = _pending;
-            _lastSentAt = _nowMs();
+            if (_pending == null) return;
+            await _sendGate.WaitAsync();
             try
             {
-                await _store.SaveAsync(p);
-                LastSaved = p;
-                if (ReferenceEquals(_pending, p)) _pending = null;
+                // Checked again inside the gate: a save that was waiting may already have sent this position.
+                var p = _pending;
+                if (p == null) return;
+                if (!force && _lastSentAt != null && _nowMs() - _lastSentAt.Value < MinIntervalMs) return;
+                _lastSentAt = _nowMs();
+                try
+                {
+                    await _store.SaveAsync(p);
+                    LastSaved = p;
+                    if (ReferenceEquals(_pending, p)) _pending = null;
+                }
+                catch (Exception)
+                {
+                    // The store keeps a local copy and syncs later; if it still fails, keep the position and try again on a later tick.
+                }
             }
-            catch (Exception)
+            finally { _sendGate.Release(); }
+        }
+
+        /// <summary>This device's newest position: one still waiting to be saved, or else the last one saved.</summary>
+        Progress Newest
+        {
+            get
             {
-                // The store keeps a local copy and syncs later; if it still fails, keep the position and try again on a later tick.
+                var pending = _pending;
+                var saved = LastSaved;
+                if (pending == null) return saved;
+                if (saved == null) return pending;
+                return pending.updatedAt >= saved.updatedAt ? pending : saved;
             }
         }
 
         /// <summary>On launch: is the saved position newer and from another device? Returns the offer, or null.</summary>
         public async Task<ContinueOffer> CheckAsync()
-            => Decide(await _store.LoadAsync(), LastSaved, _device);
+            => Decide(await _store.LoadAsync(), Newest, _device);
 
         /// <summary>Connect <see cref="IProgressStore.ChangedElsewhere"/> to <see cref="ContinueOffered"/>.</summary>
         public void Attach() => _store.ChangedElsewhere += OnChangedElsewhere;
@@ -104,7 +123,7 @@ namespace HypaStories
 
         void OnChangedElsewhere(Progress p)
         {
-            var offer = Decide(p, LastSaved, _device);
+            var offer = Decide(p, Newest, _device);
             if (offer != null) ContinueOffered?.Invoke(offer);
         }
 

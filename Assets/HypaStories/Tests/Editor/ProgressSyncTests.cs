@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HypaCore.Hybrid;
 using NUnit.Framework;
@@ -27,6 +28,59 @@ namespace HypaStories.Tests
                 return Task.CompletedTask;
             }
             public void Elsewhere(Progress p) => ChangedElsewhere?.Invoke(p);
+        }
+
+        /// <summary>Holds the first save until released; records each save when it finishes.</summary>
+        sealed class SlowFirstStore : IProgressStore
+        {
+            public readonly TaskCompletionSource<bool> Release = new TaskCompletionSource<bool>();
+            public readonly List<Progress> Finished = new List<Progress>();
+            public volatile bool Started;
+            int _count;
+            public event Action<Progress> ChangedElsewhere { add { } remove { } }
+            public Task<Progress> LoadAsync() => Task.FromResult<Progress>(null);
+            public async Task SaveAsync(Progress p)
+            {
+                if (Interlocked.Increment(ref _count) == 1) { Started = true; await Release.Task; }
+                lock (Finished) Finished.Add(p);
+            }
+        }
+
+        [Test] public void ASlowOlderSave_FinishesBeforeTheNewerOne_SoTheNewerOneWins()
+        {
+            long now = 0;
+            var store = new SlowFirstStore();
+            var sync = new ProgressSync(store, "android", () => now);
+
+            // Off the main thread: a test that blocks Unity's main thread must not wait on work that resumes there.
+            sync.Record(At(1));
+            var tick = Task.Run(() => sync.TickAsync());   // waits inside the store
+            SpinWait.SpinUntil(() => store.Started, 2000);
+            now = 1000; sync.Record(At(2));
+            var flush = Task.Run(() => sync.FlushAsync()); // must wait for the first save
+            Thread.Sleep(50);
+            store.Release.SetResult(true);
+            Run(Task.WhenAll(tick, flush));
+
+            Assert.AreEqual(new[] { 1, 2 }, store.Finished.Select(p => p.lineIndex).ToArray());
+            Assert.AreEqual(2, sync.LastSaved.lineIndex);
+        }
+
+        [Test] public void NoOffer_ForAnOlderPositionElsewhere_WhileANewerOneHereWaitsToBeSaved()
+        {
+            long now = 0;
+            var store = new CountingStore();
+            var sync = new ProgressSync(store, "quest", () => now);
+            ContinueOffer offered = null;
+            sync.ContinueOffered += o => offered = o;
+            sync.Attach();
+
+            sync.Record(At(1)); Run(sync.TickAsync());       // saved at 0
+            now = 2000; sync.Record(At(2)); Run(sync.TickAsync()); // waiting: too soon to save
+
+            store.Elsewhere(new Progress { storyId = "seven-hot-stones", lineIndex = 1, device = "android", updatedAt = 1500 });
+
+            Assert.IsNull(offered, "the phone's position is older than where this device is now");
         }
 
         static Progress At(int line, string story = "seven-hot-stones", string place = "camp")
