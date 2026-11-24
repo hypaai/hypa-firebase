@@ -18,18 +18,19 @@ Firebase SDK's own `Firebase` namespace). Every feature in the hackathon build r
 | Room cleanup, quotas | Cloud Functions (scheduled) + Firestore | | | |
 | The web build | Hosting | | | |
 
-Quest has no Google Play services, so the Firebase Android SDK is unreliable there and Play Integrity cannot run. Quest still uses
-the same Firebase project, through Firebase's REST APIs (G02's `HypaFirebase.Rest`). Its App Check must not use a debug token
+Quest has no Google Play services, so the Firebase Android SDK may not run there and Play Integrity cannot run. The Quest column
+shows the expected REST path (G02's `HypaFirebase.Rest`, same Firebase project); G02's spike decides between it and the SDK
+(`docs/quest-path.md`). Its App Check must not use a debug token
 outside development: debug tokens skip the check.
 
 ## 1. Platform services
 
 `IHypaAuth`, `IProgressStore`, `IProfileStore`, `IRemoteFlags`, `IRoomSync`, `IOnDeviceModel`, `ICloudModel` (`Interfaces.cs`).
 
-- Three real implementations: **Native** (Firebase Unity SDK; Android, iOS; G02), **Rest** (Firebase REST APIs; Quest; G02, in
-  `Assets/HypaFirebase/Runtime/Rest`) and **Web** (`.jslib` + Firebase JS SDK; G03). **Fake** (in-memory) for the editor and tests
+- Three real implementations: **Native** (Firebase Unity SDK; Android, iOS, and Quest if the spike passes; G02), **Rest**
+  (Firebase REST APIs; Quest if the SDK fails there; G02, in `Assets/HypaFirebase/Runtime/Rest`) and **Web** (`.jslib` + Firebase JS SDK; G03). **Fake** (in-memory) for the editor and tests
   (`Fakes.cs`).
-- `HybridServices.Current` picks one at start-up: WebGL build → Web; Android, iOS → Native; Quest → Rest; editor → Fake unless
+- `HybridServices.Current` picks one at start-up: WebGL build → Web; Android, iOS, Quest → `NativeFactory` (on Quest G02 registers the SDK or the REST services, whichever the spike picks); editor → Fake unless
   "Use real Firebase" is ticked (`PlayerPrefs` key `hypa.useRealFirebase`). G02 sets `HybridServices.NativeFactory`, G03 sets
   `WebFactory`. With no factory registered the Fakes are used, so the app always runs.
 - `HybridServices.UpgradeAsync` starts the real services in the background and swaps them in; progress and a profile saved to the
