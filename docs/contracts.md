@@ -71,6 +71,9 @@ All `POST`, JSON, headers `Authorization: Bearer <Firebase ID token>` and `X-Fir
 | `/hypa/asr` | `{ audioBase64, mime, language }` | `{ text, model }` |
 | `/hypa/chat` | `{ system, messages, language, model? }` | `{ text, model }` |
 | `/hypa/translate` | `{ text, from, to }` | `{ text, model }` |
+| `/gemini/generate` (optional) | `{ prompt, model? }` | `{ text, model }` |
+
+`/gemini/generate` is built only if G02's Quest spike finds the Firebase AI Logic SDK does not run on Quest (G04). It calls Gemini through the AI Logic server path or Vertex and backs `ICloudModel.GenerateAsync` there.
 
 Errors: `{ error: { code: "quota"|"unauthenticated"|"appcheck"|"upstream"|"bad_request", message } }`.
 `HypaRestClient` gets a "proxy mode": same calls, these paths, Firebase tokens instead of an API key. Request and response shapes: `ProxyApi` and the `*Request` / `*Response` classes in `Models.cs`.
