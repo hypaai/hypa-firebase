@@ -95,11 +95,11 @@ namespace HypaCore.Hybrid
 
     [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; public string model; public bool inline; }
     [Serializable] public sealed class TtsResponse { public string audioUrl; public string audioBase64; public string mime; public int sampleRate; public ProxyRoute route; public ProxyUsage usage; }
-    [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public float durationSeconds; }
+    [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public float? durationSeconds; }
     [Serializable] public sealed class AsrResponse { public string transcript; public string language; public int audioSeconds; public ProxyRoute route; public ProxyUsage usage; }
     [Serializable] public sealed class ChatMessage { public string role; public string content; }
-    /// <summary><c>model</c> is "auto" or "provider/model". <c>maxTokens</c> is optional; when sent it is at least 1.</summary>
-    [Serializable] public sealed class ChatRequest { public ChatMessage[] messages; public string model; public int maxTokens; }
+    /// <summary><c>model</c> is "auto" or "provider/model". <c>maxTokens</c> is optional (null = proxy default); when sent it is at least 1.</summary>
+    [Serializable] public sealed class ChatRequest { public ChatMessage[] messages; public string model; public int? maxTokens; }
     [Serializable] public sealed class ChatResponse { public string content; public ProxyRoute route; public ProxyUsage usage; }
     [Serializable] public sealed class TranslateRequest { public string text; public string targetLang; public string sourceLang; }
     [Serializable] public sealed class TranslateResponse { public string translation; public string language; public ProxyRoute route; public ProxyUsage usage; }

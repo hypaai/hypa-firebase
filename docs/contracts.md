@@ -80,7 +80,7 @@ These are the shapes the Cloud Function already serves, the same fields the Ques
 | `/hypa/translate` | `{ text, targetLang, sourceLang? }` | `{ translation, language?, route, usage }` |
 | `/gemini/generate` (optional) | `{ prompt, model? }` | `{ text, model }` |
 
-`messages` is `[{ role, content }]` with roles `system`, `user` or `assistant`. `model` is `"auto"` or `"provider/model"`. `inline: true` makes TTS return `audioBase64` instead of Hypa's signed `audioUrl`. `route` is `{ provider, model, voice }`. `usage` is `{ secondsUsed, secondsLimit, requestsUsed, requestsLimit, resetsAt }`.
+`messages` is `[{ role, content }]` with roles `system`, `user` or `assistant`. `model` is `"auto"` or `"provider/model"`. `inline: true` makes TTS return `audioBase64` instead of Hypa's signed `audioUrl`; the web build must send it (a browser can't fetch Hypa's link: CORS). `route` is `{ provider, model, voice }`. `usage` is `{ secondsUsed, secondsLimit, requestsUsed, requestsLimit, resetsAt }`.
 
 `/gemini/generate` is built only if G02's Quest spike finds the Firebase AI Logic SDK does not run on Quest (G04). It calls Gemini through the AI Logic server path or Vertex and backs `ICloudModel.GenerateAsync` there.
 

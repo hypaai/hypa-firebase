@@ -139,6 +139,8 @@ namespace HypaCore.Tests
             var chat = JObject.FromObject(new ChatRequest { messages = new[] { new ChatMessage { role = "user", content = "hi" } }, model = "auto", maxTokens = 512 });
             Assert.AreEqual("hi", (string)chat["messages"][0]["content"]);
             Assert.AreEqual("auto", (string)chat["model"]);
+            var noLimit = JObject.FromObject(new ChatRequest { messages = new ChatMessage[0] });
+            Assert.AreEqual(JTokenType.Null, noLimit["maxTokens"].Type, "0 would be rejected by the proxy");
             Assert.AreEqual("/hypa/chat", ProxyApi.Chat);
             Assert.AreEqual("app_check", ProxyApi.ErrorAppCheck);
             Assert.AreEqual("X-Firebase-AppCheck", ProxyApi.AppCheckHeader);
