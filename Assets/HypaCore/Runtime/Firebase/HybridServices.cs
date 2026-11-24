@@ -50,7 +50,8 @@ namespace HypaCore.Hybrid
                 var real = await start();
                 if (real == null) return;
 
-                var pending = await local.Progress.LoadAsync();
+                var fakeProgress = local.Progress;
+                var pending = await fakeProgress.LoadAsync();
                 var remote = await real.Progress.LoadAsync();
                 if (pending != null && (remote == null || pending.updatedAt > remote.updatedAt)) await real.Progress.SaveAsync(pending);
 
@@ -60,6 +61,11 @@ namespace HypaCore.Hybrid
                 local.Rooms = real.Rooms;
                 local.OnDevice = real.OnDevice;
                 local.Cloud = real.Cloud;
+
+                // The player may have saved to the Fakes while the server was being read. Send that too.
+                var late = await fakeProgress.LoadAsync();
+                if (late != null && late != pending && (remote == null || late.updatedAt > remote.updatedAt)) await real.Progress.SaveAsync(late);
+
                 Upgraded?.Invoke();
             }
             catch (Exception e)

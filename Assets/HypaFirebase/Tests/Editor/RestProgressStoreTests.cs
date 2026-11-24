@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using HypaCore.Hybrid;
 using HypaFirebase.Rest;
@@ -96,6 +98,43 @@ namespace HypaFirebase.Tests
             local.Set(RestProgressStore.LocalKey, Newtonsoft.Json.JsonConvert.SerializeObject(Sample(4)));
 
             Assert.AreEqual(4, Run(store.LoadAsync()).lineIndex);
+        }
+
+        /// <summary>Holds the first request until released, and records each request's body when its reply goes out.</summary>
+        sealed class HoldFirstHandler : HttpMessageHandler
+        {
+            public readonly TaskCompletionSource<bool> Release = new TaskCompletionSource<bool>();
+            public readonly List<string> Landed = new List<string>();
+            int _count;
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            {
+                var body = request.Content == null ? "" : await request.Content.ReadAsStringAsync();
+                if (Interlocked.Increment(ref _count) == 1) await Release.Task;
+                lock (Landed) Landed.Add(body);
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+            }
+        }
+
+        [Test] public void Save_WhileAnOlderSaveIsSending_TheNewerOneLandsLast_AndNothingStaysQueued()
+        {
+            var http = new HoldFirstHandler();
+            var auth = new FakeAuth();
+            Run(auth.SignInAnonymouslyAsync());
+            var local = new MemoryKeyValueStore();
+            var store = new RestProgressStore(new FirebaseRestConfig("KEY", "proj", "app", "debug", "https://db.example"), auth, local, http);
+
+            var older = Task.Run(() => store.SaveAsync(Sample(1, 100)));
+            SpinWait.SpinUntil(() => local.Get(RestProgressStore.DirtyKey) != null && !older.IsCompleted, 2000);
+            Thread.Sleep(50); // let the older save reach the network and wait there
+            var newer = Task.Run(() => store.SaveAsync(Sample(2, 200)));
+            Thread.Sleep(50);
+            http.Release.SetResult(true);
+            Run(Task.WhenAll(older, newer));
+
+            var last = JObject.Parse(http.Landed[http.Landed.Count - 1])["fields"];
+            Assert.AreEqual("2", (string)last["lineIndex"]["integerValue"], "the server ends with the newer save");
+            Assert.IsNull(local.Get(RestProgressStore.DirtyKey));
         }
 
         [Test] public void Save_RefusedByFirestore_StaysQueued()

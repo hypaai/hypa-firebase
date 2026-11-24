@@ -44,6 +44,30 @@ namespace HypaCore.Tests
             Assert.AreEqual(8, Run(realStore.LoadAsync()).lineIndex, "the newer local progress was sent");
         }
 
+        /// <summary>A server store whose first read lets the player save to the Fakes, as if they played on meanwhile.</summary>
+        sealed class SlowServerStore : IProgressStore
+        {
+            public readonly FakeProgressStore Saved = new FakeProgressStore();
+            public Action DuringFirstLoad;
+            public event Action<Progress> ChangedElsewhere { add { } remove { } }
+            public Task<Progress> LoadAsync() { var a = DuringFirstLoad; DuringFirstLoad = null; a?.Invoke(); return Saved.LoadAsync(); }
+            public Task SaveAsync(Progress p) => Saved.SaveAsync(p);
+        }
+
+        [Test] public void Upgrade_SendsASaveMadeWhileTheServerWasBeingRead()
+        {
+            var local = new HybridServices();
+            HybridServices.Override(local);
+            var fake = local.Progress;
+            Run(fake.SaveAsync(new Progress { storyId = "s1", lineIndex = 8, updatedAt = 200 }));
+
+            var server = new SlowServerStore();
+            server.DuringFirstLoad = () => Run(fake.SaveAsync(new Progress { storyId = "s1", lineIndex = 9, updatedAt = 300 }));
+            Run(HybridServices.UpgradeAsync(() => Task.FromResult(new HybridServices { Progress = server })));
+
+            Assert.AreEqual(9, Run(server.Saved.LoadAsync()).lineIndex, "the save made during the switch reached the server");
+        }
+
         [Test] public void Upgrade_KeepsTheServersProgress_IfItIsNewer()
         {
             var local = new HybridServices();

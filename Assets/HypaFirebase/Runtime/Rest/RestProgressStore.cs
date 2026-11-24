@@ -27,6 +27,10 @@ namespace HypaFirebase.Rest
         readonly IHypaAuth _auth;
         readonly IKeyValueStore _local;
         readonly HttpClient _http;
+        // One send at a time, so an older save can never land on the server after a newer one.
+        readonly SemaphoreSlim _sendGate = new SemaphoreSlim(1, 1);
+        // Bumped by every save. A send clears the queue only if no save came in while it was running.
+        int _version;
 
         public event Action<Progress> ChangedElsewhere { add { } remove { } }
 
@@ -58,12 +62,21 @@ namespace HypaFirebase.Rest
         {
             WriteLocal(p);
             _local.Set(DirtyKey, "1");
+            Interlocked.Increment(ref _version); // after the write, so a send that sees this version also sees this progress
             await TrySendAsync().ConfigureAwait(false);
         }
 
         async Task TrySendAsync()
         {
+            await _sendGate.WaitAsync().ConfigureAwait(false);
+            try { await SendQueuedAsync().ConfigureAwait(false); }
+            finally { _sendGate.Release(); }
+        }
+
+        async Task SendQueuedAsync()
+        {
             if (!Dirty || _auth.Uid == null) return;
+            int version = Volatile.Read(ref _version);
             var progress = ReadLocal();
             if (progress == null) return;
             try
@@ -76,7 +89,8 @@ namespace HypaFirebase.Rest
                         if (!res.IsSuccessStatusCode) throw new HypaFirebaseException((int)res.StatusCode, "Firestore refused the save.");
                     }
                 }
-                _local.Remove(DirtyKey);
+                // A save that came in meanwhile stays queued; its own send (waiting on the gate) sends it next.
+                if (version == Volatile.Read(ref _version)) _local.Remove(DirtyKey);
             }
             catch (Exception e) when (IsOffline(e))
             {
