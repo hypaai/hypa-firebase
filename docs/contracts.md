@@ -37,6 +37,18 @@ outside development: debug tokens skip the check.
   Fakes meanwhile are sent if they are newer. Always read services through `HybridServices.Current`.
 - `IOnDeviceModel` implementations: `ChromeNanoModel` (G03), `AndroidNanoModel` (G06), `AppleFoundationModel` (G07),
   `NoOnDeviceModel` (Quest, editor).
+- `AndroidNanoModel` (G06) is Gemini Nano through Google ML Kit's GenAI Prompt API (AICore), reached by a small Java bridge
+  (`Assets/HypaCore/Plugins/Android/HypaNano.androidlib`, pinned `genai-prompt:1.0.0-beta5`, needs API 26). It answers on the device
+  only; when it cannot, the router sends the question to the cloud model, so the Hypa proxy stays the one cloud path. The platform
+  registers it with `HybridServices.OnDeviceFactory`, which every new `HybridServices` reads, so the real services built by
+  `NativeFactory` get it too. `Available` is the last status seen (the router reads it without waiting; the registration reads the
+  status once at start-up, and `StatusAsync()` refreshes it). Status is "available", "downloadable", "downloading" or
+  "unavailable"; on Quest and on a phone with no AICore it is "unavailable" and nothing runs. A failed reply throws
+  `OnDeviceModelException` with a short `Reason` ("busy", "background", "quota", "no-space", "needs-update", "unavailable",
+  "too-large", "cancelled", "error"), never the prompt. If the status is "downloadable", `IDownloadableOnDeviceModel.DownloadAsync`
+  fetches the model with progress for the settings screen. Limits set by Google: text in, text out, one question at a time,
+  the prompt under about 4,000 tokens, and only while the app is in the foreground. Tests: `AndroidNanoModelTests` (a fake
+  bridge, so they run anywhere) and the `Android on-device bridge` workflow (compiles the Java against the real library).
 - Tokens are fetched per call and never stored or logged by gameplay code.
 
 ## 2. Hybrid route decision (G05 owns the logic, everyone reads it)

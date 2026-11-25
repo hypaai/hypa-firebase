@@ -20,8 +20,14 @@ namespace HypaCore.Hybrid
         public IProfileStore Profiles { get; set; } = new FakeProfileStore();
         public IRemoteFlags Flags { get; set; } = new FakeRemoteFlags();
         public IRoomSync Rooms { get; set; } = new FakeRoomSync();
-        public IOnDeviceModel OnDevice { get; set; } = new NoOnDeviceModel();
+        public IOnDeviceModel OnDevice { get; set; } = OnDeviceFactory?.Invoke() ?? new NoOnDeviceModel();
         public ICloudModel Cloud { get; set; } = new FakeCloudModel();
+
+        /// <summary>
+        /// Set by a platform that has an on-device model (<c>AndroidNano</c> on Android phones). Read each time services are created, so
+        /// the real services built by <see cref="NativeFactory"/> and the Fakes both get it. Without it, <see cref="NoOnDeviceModel"/>.
+        /// </summary>
+        public static Func<IOnDeviceModel> OnDeviceFactory { get; set; }
 
         /// <summary>Set by the Native implementation (G02). Returns null if Firebase cannot start on this device.</summary>
         public static Func<HybridServices> NativeFactory { get; set; }
