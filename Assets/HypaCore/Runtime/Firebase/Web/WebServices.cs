@@ -57,6 +57,7 @@ namespace HypaCore.Hybrid.Web
                 Flags = flags,
                 OnDevice = new ChromeNanoModel(),
                 Cloud = new WebCloudModel(flags),
+                RouteLog = new WebRouteLog(),
             };
         }
 
@@ -175,11 +176,45 @@ namespace HypaCore.Hybrid.Web
 
         public async Task<string> GenerateAsync(string prompt, CancellationToken ct) => (string)await WebBridge.CallAsync("generate", Args(prompt), ct);
 
-        public Task<string> GenerateAsync(string prompt, IReadOnlyList<CloudTool> tools, CancellationToken ct) => GenerateAsync(prompt, ct);
+        public async Task<string> GenerateAsync(string prompt, IReadOnlyList<CloudTool> tools, CancellationToken ct)
+        {
+            if (tools == null || tools.Count == 0) return await GenerateAsync(prompt, ct);
+            var contents = new JArray { new JObject { ["role"] = "user", ["parts"] = new JArray { new JObject { ["text"] = prompt } } } };
+            var declarations = CloudToolCalls.Declarations(tools);
+            for (var round = 0; ; round++)
+            {
+                var last = round >= CloudToolCalls.MaxRounds;
+                var args = new JObject { ["model"] = _flags.Get(RemoteConfigKeys.CloudModel, null), ["contents"] = contents, ["tools"] = last ? new JArray() : declarations };
+                var reply = await WebBridge.CallAsync("generateTurn", args, ct) as JObject;
+                var calls = reply?["calls"] as JArray;
+                if (last || calls == null || calls.Count == 0) return (string)reply?["text"] ?? "";
+                contents.Add(reply["content"]);
+                var answers = new JArray();
+                foreach (var call in calls) answers.Add(await CloudToolCalls.RunAsync(tools, call as JObject, ct));
+                contents.Add(new JObject { ["role"] = "function", ["parts"] = answers });
+            }
+        }
 
         public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct)
         {
             await foreach (var chunk in WebBridge.StreamAsync("stream", Args(prompt), ct)) yield return (string)chunk;
+        }
+    }
+
+    public sealed class WebRouteLog : IRouteLog
+    {
+        static readonly Newtonsoft.Json.JsonSerializer NoNulls = Newtonsoft.Json.JsonSerializer.Create(
+            new Newtonsoft.Json.JsonSerializerSettings { NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore });
+
+        public void Log(RouteEvent e)
+        {
+            if (e != null) _ = Send(JObject.FromObject(e, NoNulls));
+        }
+
+        static async Task Send(JObject e)
+        {
+            try { await WebBridge.CallAsync("logRoute", e); }
+            catch (WebBridgeException x) { Debug.LogWarning($"Hypa: route event not saved ({x.Code})."); }
         }
     }
 

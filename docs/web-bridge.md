@@ -14,6 +14,8 @@ C# WebBridge.CallAsync / StreamAsync (request id)
 
 Events travel the same way with `id: 0`: `uid` when the signed-in user changes, and `progress` when another device saves newer progress. Cancelling a C# call, or stopping a stream early, tells JS to stop and drops any late answer. WebGL has one thread: await bridged tasks, never `.Result` or `.Wait()`.
 
+G05 adds two methods: `generateTurn` (one turn of cloud Gemini with function calling; `WebCloudModel` runs the tool calls in C#, through the Hypa proxy, and sends the results back, at most four rounds) and `logRoute` (an anonymous route event to `routes/{uid}/events`, `WebRouteLog`).
+
 | Interface | Web implementation | Notes |
 | --- | --- | --- |
 | `IHypaAuth` | `WebAuth` | Anonymous on first launch; the user is restored from IndexedDB on later visits. Google and Apple link with a popup, so call them from a button press. Linking an account that already belongs to another player fails with `already_linked` and never swaps the player. |

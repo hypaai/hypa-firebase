@@ -9,6 +9,7 @@ import {
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app-check.js";
 import {
   initializeFirestore, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromCache, setDoc, onSnapshot,
+  collection, addDoc,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 import {
   getRemoteConfig, ensureInitialized, fetchAndActivate, getAll,
@@ -205,6 +206,24 @@ async function stream({ side, model, prompt }, { emit, signal }) {
   return null;
 }
 
+// One turn of cloud Gemini with function calling. C# runs the calls (they go through the Hypa proxy) and sends the results
+// back as a "function" turn.
+async function generateTurn({ model, contents, tools }, { signal }) {
+  const params = { model };
+  if (tools && tools.length) params.tools = [{ functionDeclarations: tools }];
+  const response = (await getGenerativeModel(ai, params).generateContent({ contents }, { signal })).response;
+  const calls = (response.functionCalls && response.functionCalls()) || [];
+  const content = (response.candidates && response.candidates[0] && response.candidates[0].content) || { role: "model", parts: [] };
+  return { content, calls, text: calls.length ? "" : response.text() };
+}
+
+// Anonymous route statistics (routes/{uid}/events). The local cache keeps it while offline; errors are logged without the data.
+async function logRoute(event) {
+  const u = await user();
+  addDoc(collection(db, "routes", u.uid, "events"), event).catch((e) => console.warn("Hypa: route event not saved (" + e.code + ")."));
+  return null;
+}
+
 async function nanoDownload(args, { emit }) {
   // Needs a recent user gesture (Chrome's rule for starting a download); C# calls it from a button press.
   await (await nanoModel()).initializeDeviceModel((fraction) => emit(fraction));
@@ -213,7 +232,7 @@ async function nanoDownload(args, { emit }) {
 
 const methods = {
   init, signIn, link, idToken: async () => (await user()).getIdToken(), appCheckToken,
-  loadProgress, saveProgress, fetchFlags, generate, stream, nanoStatus, nanoDownload,
+  loadProgress, saveProgress, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
 };
 
 /** Runs a method. ctx: { emit(chunk), event(name, value), signal }. */

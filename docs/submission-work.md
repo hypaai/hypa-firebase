@@ -87,6 +87,7 @@ Every storyteller answer and Try Hypa translation picks where it runs, says wher
 - `HybridTryApi`: Try Hypa's translation through the same router.
 - Players never see which model answered; each answer's route is written to the log (`Hypa Stories answered: Cloud · Gemini · 1.2 s (why)`). While the device's model is still downloading, the Q&A says "On-device model downloading (first time only)" in the story's language (`QaLines.Preparing`).
 - Anonymous route statistics to Firestore `routes/{uid}/events`, with rules; `RestRouteLog` writes them over REST (in `QuestRestServices`).
+- Web (with G03): `WebCloudModel` does function calling (`generateTurn` in the bridge, tool calls run in C# via `CloudToolCalls`), and `WebRouteLog` writes route events through the bridge.
 - `HypaProxyClient` uses `UnityWebRequest` in a web build (`HttpClient` does not work in the browser), so Hypa answers work on the web.
 - Tests: `HybridRouterTests` (every combination of network, language, model status, prompt size, tools, setting and preference), `HybridStoryQaTests`, 2 more rules tests.
 - Not yet tested on a device or a web build, nor against real Firebase or Hypa: the on-device and cloud models are G03, G06 and G07's, and the "back online" and "getting ready" lines in Hausa, Igbo, Naija, Kiswahili and Yorùbá need a native speaker's check.
