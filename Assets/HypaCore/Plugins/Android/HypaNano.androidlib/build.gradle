@@ -1,0 +1,36 @@
+// Hypa on-device model: Gemini Nano through Google ML Kit's GenAI Prompt API (AICore). Unity Android library plug-in.
+// Used by AndroidNanoModel (C#). On a phone with no AICore, and on Quest, status() says "unavailable" and nothing else runs.
+// ML Kit is downloaded from Google's Maven repo at build time; nothing from it is checked into this repo.
+apply plugin: 'com.android.library'
+
+android {
+    namespace "ai.hypa.nano"
+    compileSdk 34
+
+    defaultConfig {
+        // ML Kit GenAI Prompt needs API 26; the app's own minimum (29) is higher.
+        minSdk 29
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src/main/java']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Pinned. Its own dependencies (genai-common, play-services-tasks and -basement, kotlin-stdlib) come with it.
+    implementation 'com.google.mlkit:genai-prompt:1.0.0-beta5'
+}
