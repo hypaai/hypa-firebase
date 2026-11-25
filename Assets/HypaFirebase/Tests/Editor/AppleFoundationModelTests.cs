@@ -167,6 +167,33 @@ namespace HypaFirebase.Tests
         }
 
         [Test]
+        public void Check_ReportsAnAnswerAndAStream()
+        {
+            _swift.Replies.AddRange(new[] { (0, "Uno "), (0, "dos"), (1, "") });
+            var report = Run(AppleModelCheck.RunAsync(new AppleFoundationModel()));
+            StringAssert.Contains("status: available (AppleFoundationModel)", report);
+            StringAssert.Contains("stream in 2 pieces: Uno dos", report);
+            StringAssert.EndsWith("RESULT: answered on this device.", report);
+        }
+
+        [Test]
+        public void Check_OnAnUnsupportedPhone_SaysWhyAndUsesTheCloud()
+        {
+            _swift.StatusCode = 2;
+            var report = Run(AppleModelCheck.RunAsync(new AppleFoundationModel()));
+            StringAssert.Contains("This iPhone does not support Apple Intelligence.", report);
+            StringAssert.EndsWith("RESULT: this device uses the cloud.", report);
+            Assert.IsEmpty(_swift.Started);
+        }
+
+        [Test]
+        public void Check_ReportsAFailure()
+        {
+            _swift.Replies.Add((2, "guardrail"));
+            StringAssert.EndsWith("[FAIL] guardrail\nRESULT: the router would use the cloud.", Run(AppleModelCheck.RunAsync(new AppleFoundationModel())));
+        }
+
+        [Test]
         public void HybridServices_UseThePlatformsOnDeviceModel()
         {
             Assert.IsInstanceOf<NoOnDeviceModel>(new HybridServices().OnDevice);

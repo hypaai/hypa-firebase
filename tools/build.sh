@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Builds Hypa Stories without opening the editor: tools/build.sh quest|android|ios|web. Output: Builds/<Target>.
+# Builds Hypa Stories without opening the editor: tools/build.sh quest|android|ios|ios-sim|web. Output: Builds/<Target>.
+# HYPA_DEV=1 makes a development build (ios-sim always is one).
 # Close the project in the Unity editor first (one editor per project). Set UNITY=/path/to/Unity to pick the editor.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 target=${1:-}
 case $target in
   quest|android) bt=Android ;;
-  ios) bt=iOS ;;
+  ios|ios-sim) bt=iOS ;;
   web) bt=WebGL ;;
-  *) echo "usage: tools/build.sh quest|android|ios|web" >&2; exit 2 ;;
+  *) echo "usage: tools/build.sh quest|android|ios|ios-sim|web" >&2; exit 2 ;;
 esac
 ver=$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)
 unity=${UNITY:-}

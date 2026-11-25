@@ -27,7 +27,7 @@ namespace HypaCore.EditorTools
         const string PhoneId = "ai.hypa.stories.hybrid";
         const AndroidSdkVersions PhoneMinSdk = AndroidSdkVersions.AndroidApiLevel29; // ML Kit's minimum
 
-        public enum Target { Quest, Android, IOS, Web }
+        public enum Target { Quest, Android, IOS, IOSSim, Web }
 
         /// <summary>True while a flat build runs; read by the scene and manifest processors below.</summary>
         public static bool Flat { get; private set; }
@@ -35,16 +35,17 @@ namespace HypaCore.EditorTools
         [MenuItem("Hypa/Build/Quest")] static void BuildQuest() => Build(Target.Quest);
         [MenuItem("Hypa/Build/Android Phone")] static void BuildAndroid() => Build(Target.Android);
         [MenuItem("Hypa/Build/iOS (Xcode project)")] static void BuildIos() => Build(Target.IOS);
+        [MenuItem("Hypa/Build/iOS Simulator (Xcode project, development)")] static void BuildIosSim() => Build(Target.IOSSim);
         [MenuItem("Hypa/Build/Web")] static void BuildWeb() => Build(Target.Web);
 
-        /// <summary>Unity -batchmode -executeMethod HypaCore.EditorTools.HypaBuild.FromCommandLine -hypaTarget quest|android|ios|web</summary>
+        /// <summary>Unity -batchmode -executeMethod HypaCore.EditorTools.HypaBuild.FromCommandLine -hypaTarget quest|android|ios|ios-sim|web</summary>
         public static void FromCommandLine()
         {
             var args = Environment.GetCommandLineArgs();
             var i = Array.IndexOf(args, "-hypaTarget");
-            if (i < 0 || i + 1 >= args.Length || !Enum.TryParse(args[i + 1], true, out Target target))
+            if (i < 0 || i + 1 >= args.Length || !Enum.TryParse(args[i + 1].Replace("-", ""), true, out Target target))
             {
-                Debug.LogError("Hypa: pass -hypaTarget quest|android|ios|web");
+                Debug.LogError("Hypa: pass -hypaTarget quest|android|ios|ios-sim|web");
                 EditorApplication.Exit(2);
                 return;
             }
@@ -71,7 +72,7 @@ namespace HypaCore.EditorTools
         {
             var buildTarget = target switch
             {
-                Target.IOS => BuildTarget.iOS,
+                Target.IOS or Target.IOSSim => BuildTarget.iOS,
                 Target.Web => BuildTarget.WebGL,
                 _ => BuildTarget.Android,
             };
@@ -93,6 +94,8 @@ namespace HypaCore.EditorTools
                 targetGroup = group,
                 locationPathName = buildTarget == BuildTarget.Android ? Path.Combine(output, "HypaStories.apk") : output,
                 extraScriptingDefines = target == Target.Quest ? null : new[] { FlatDefine },
+                // The simulator build is for testing, and HYPA_DEV=1 asks for one: a development build (logs, the on-device check).
+                options = target == Target.IOSSim || Environment.GetEnvironmentVariable("HYPA_DEV") == "1" ? BuildOptions.Development : BuildOptions.None,
             };
 
             var manager = XRGeneralSettingsPerBuildTarget.XRGeneralSettingsForBuildTarget(group)?.Manager;
@@ -101,6 +104,7 @@ namespace HypaCore.EditorTools
             var androidMinSdk = PlayerSettings.Android.minSdkVersion;
             var androidGraphics = PlayerSettings.GetGraphicsAPIs(BuildTarget.Android);
             var phone = target == Target.Android;
+            var iosSdk = PlayerSettings.iOS.sdkVersion;
             Flat = target != Target.Quest;
             try
             {
@@ -112,6 +116,7 @@ namespace HypaCore.EditorTools
                     // Quest is Vulkan only; phones without Vulkan (and the emulator) fall back to OpenGL ES 3
                     PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.Vulkan, GraphicsDeviceType.OpenGLES3 });
                 }
+                if (target == Target.IOSSim) PlayerSettings.iOS.sdkVersion = iOSSdkVersion.SimulatorSDK;
                 var summary = BuildPipeline.BuildPlayer(options).summary;
                 Debug.Log($"Hypa: {target} build {summary.result}: {summary.outputPath} ({summary.totalErrors} errors, {summary.totalTime:mm\\:ss})");
                 return summary.result == BuildResult.Succeeded;
@@ -125,6 +130,7 @@ namespace HypaCore.EditorTools
                     PlayerSettings.Android.minSdkVersion = androidMinSdk;
                     PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, androidGraphics);
                 }
+                PlayerSettings.iOS.sdkVersion = iosSdk;
                 Flat = false;
                 AssetDatabase.SaveAssets(); // write the restored settings now: batch-mode Unity can abort on exit before saving
             }

@@ -62,7 +62,8 @@ Each session starts with short instructions: a family-friendly storyteller, shor
 
 ## Testing on devices
 
-0. On a Mac first (no iPhone, no Unity): `tools/apple-model/check.sh` runs the Swift plugin on macOS 26 with Apple Intelligence on, which uses the same on-device model. It prints the status, one answer, one stream in pieces, and one cancelled request.
-1. iPhone 15 Pro or newer, iOS 26, Apple Intelligence on, and the model downloaded (Settings → Apple Intelligence & Siri). Turn on **airplane mode**, ask an English question, and the answer arrives with the chip "On device".
-2. An older iPhone, or Apple Intelligence off: the status is `unavailable` and the answer comes from the cloud.
-3. EditMode tests: `Assets/HypaFirebase/Tests/Editor/AppleFoundationModelTests.cs` (status, answers, errors, streaming, cancelling, the factory).
+0. Without Unity or an iPhone: `tools/apple-model/check.sh` runs the Swift plugin on this Mac (macOS 26, Apple Intelligence on), and `tools/apple-model/check.sh simulator` runs it inside the iOS Simulator, which uses the Mac's model. Each prints the status, one answer, one stream in pieces, and one cancelled request. The first simulator run after a boot can time out while the model loads; run it again.
+1. The Unity app in the iOS Simulator: `tools/build.sh ios-sim` (Unity closed) makes a development Xcode project for the simulator in `Builds/IOSSim`. Open `Unity-iPhone.xcodeproj`, pick an iPhone simulator, press Run (no signing needed). At start-up, development builds run `AppleModelCheck`, which logs a `HYPA ON-DEVICE CHECK` report to the Xcode console: the status, one answer and one stream, or why this device uses the cloud. Release builds never run it.
+2. iPhone 15 Pro or newer, iOS 26, Apple Intelligence on, and the model downloaded (Settings → Apple Intelligence & Siri). Build a development app for it (`HYPA_DEV=1 tools/build.sh ios`), sign it in Xcode, and run it with **airplane mode** on: the report says "answered on this device". Once G05's router is in, an English question shows the chip "On device".
+3. An older iPhone, or Apple Intelligence off: the status is `unavailable` and the answer comes from the cloud.
+4. EditMode tests: `Assets/HypaFirebase/Tests/Editor/AppleFoundationModelTests.cs` (status, answers, errors, streaming, cancelling, the factory).
