@@ -106,9 +106,9 @@ namespace HypaStories
                     catch (Exception e)
                     {
                         if (NetworkStatus.IsNetworkError(e)) { _unreachable(); ctx.Online = false; }
-                        var next = Next(route, ctx, e);
+                        var next = Next(route, ctx, e, lang.Name, tried);
                         Debug.LogWarning($"Hypa Stories: {route.Chip()} couldn't answer ({e.Message}); {(next == null ? "no other way to answer" : "trying " + next.Chip())}.");
-                        if (next == null || tried.Contains(Key(next)))
+                        if (next == null)
                         {
                             Log(svc, route, lang, from, false, started);
                             throw;
@@ -120,26 +120,33 @@ namespace HypaStories
             }
         }
 
-        static string Key(RouteDecision d) => d.Route + "/" + d.Model;
+        static string Key(RouteDecision d) => OnTheDevice(d) ? "device" : d.Route + "/" + d.Model;
         static bool OnTheDevice(RouteDecision d) => d.Route == Route.OnDevice || (d.Route == Route.Offline && d.Model == HybridRouter.OnDevice);
 
-        public static RouteDecision Next(RouteDecision failed, RouteContext ctx, Exception error)
+        public static RouteDecision Next(RouteDecision failed, RouteContext ctx, Exception error, string languageName = null, ICollection<string> tried = null)
         {
-            var cloud = ctx.Online && ctx.Mode != AiMode.OnDeviceOnly;
+            var online = ctx.Online && ctx.Mode != AiMode.OnDeviceOnly;
             var device = ctx.Mode != AiMode.CloudOnly && ctx.OnDeviceReady;
+            var cloud = online ? new RouteDecision(Route.CloudGemini, HybridRouter.Cloud,
+                failed.Route == Route.Hypa ? "Hypa couldn't answer, so Gemini did"
+                : error is WrongLanguageException ? "The device answered in the wrong language"
+                : "The device's model couldn't answer", 0) : null;
+            var hypa = online ? new RouteDecision(Route.Hypa, languageName ?? "Hypa",
+                failed.Route == Route.CloudGemini ? "Gemini couldn't answer, so Hypa did" : "Neither the device nor Gemini could answer, so Hypa did", 0) : null;
+            var onDevice = !device ? null
+                : ctx.Online ? new RouteDecision(Route.OnDevice, ctx.OnDeviceName, "Gemini couldn't answer, so the device did", 0)
+                : new RouteDecision(Route.Offline, HybridRouter.OnDevice, "Offline, so the model on this device answers", 0);
             var saved = new RouteDecision(Route.Offline, HybridRouter.SavedAnswers, ctx.Online ? "Nothing else could answer" : "Offline, and no model on this device", 0);
-            if (failed.Route == Route.Hypa)
-                return cloud ? new RouteDecision(Route.CloudGemini, HybridRouter.Cloud, "Hypa couldn't answer, so Gemini did", 0)
-                    : device ? new RouteDecision(Route.Offline, HybridRouter.OnDevice, "Offline, so the model on this device answers", 0) : saved;
-            if (OnTheDevice(failed))
-                return cloud && failed.Route == Route.OnDevice
-                    ? new RouteDecision(Route.CloudGemini, HybridRouter.Cloud, error is WrongLanguageException ? "The device answered in the wrong language" : "The device's model couldn't answer", 0)
-                    : saved;
-            if (failed.Route == Route.CloudGemini)
-                return device
-                    ? ctx.Online ? new RouteDecision(Route.OnDevice, ctx.OnDeviceName, "Gemini couldn't answer, so the device did", 0)
-                        : new RouteDecision(Route.Offline, HybridRouter.OnDevice, "Offline, so the model on this device answers", 0)
-                    : saved;
+
+            RouteDecision[] order;
+            if (failed.Route == Route.Hypa) order = new[] { cloud, onDevice, saved };
+            else if (OnTheDevice(failed)) order = new[] { cloud, hypa, saved };
+            else if (failed.Route == Route.CloudGemini) order = new[] { onDevice, hypa, saved };
+            else return null;
+            tried ??= new HashSet<string> { Key(failed) };
+            foreach (var next in order)
+                if (next != null && !tried.Contains(Key(next)))
+                    return next;
             return null;
         }
 

@@ -42,6 +42,32 @@ namespace HypaCore.Hybrid
         public Task<ChatResponse> ChatAsync(ChatRequest body, CancellationToken ct) => PostAsync<ChatResponse>(ProxyApi.Chat, body, ct);
         public Task<TranslateResponse> TranslateAsync(TranslateRequest body, CancellationToken ct) => PostAsync<TranslateResponse>(ProxyApi.Translate, body, ct);
 
+        public async Task<string> TranscribeAsync(byte[] wav, string language, CancellationToken ct)
+        {
+            AsrResponse r;
+            var request = new AsrRequest { audio = Convert.ToBase64String(wav ?? new byte[0]), sourceLang = string.IsNullOrEmpty(language) ? null : language };
+            try { r = await AsrAsync(request, ct).ConfigureAwait(false); }
+            catch (HypaProxyException e) { throw e.ToHypaException(); }
+            return r?.transcript?.Trim() ?? "";
+        }
+
+        public async Task<HypaSpeech> SpeechAsync(string text, string language, string voice, string model, CancellationToken ct)
+        {
+            TtsResponse r;
+            var request = new TtsRequest
+            {
+                text = text, language = language, voice = string.IsNullOrEmpty(voice) ? null : voice, model = string.IsNullOrEmpty(model) ? null : model,
+                inline = _inBrowser ? true : (bool?)null,
+            };
+            try { r = await TtsAsync(request, ct).ConfigureAwait(false); }
+            catch (HypaProxyException e) { throw e.ToHypaException(); }
+            return new HypaSpeech
+            {
+                AudioUrl = r?.audioUrl, AudioBase64 = r?.audioBase64, Mime = r?.mime, SampleRate = r?.sampleRate ?? 0,
+                Voice = r?.route?.voice, Provider = r?.route?.provider, Model = r?.route?.model,
+            };
+        }
+
         async Task<T> PostAsync<T>(string path, object body, CancellationToken ct)
         {
             string idToken, appCheck;
@@ -127,5 +153,23 @@ namespace HypaCore.Hybrid
 
         /// <summary>Seconds to wait before trying again (quota), or null.</summary>
         public int? RetryAfterSeconds => Details?.retryAfterSeconds;
+
+        public HypaException ToHypaException()
+        {
+            HypaErrorKind kind;
+            switch (Code)
+            {
+                case ProxyApi.ErrorUnauthenticated:
+                case ProxyApi.ErrorAppCheck: kind = HypaErrorKind.Unauthorized; break;
+                case ProxyApi.ErrorQuota: kind = HypaErrorKind.RateLimited; break;
+                case ProxyApi.ErrorBadRequest:
+                case ProxyApi.ErrorTooLarge:
+                case ProxyApi.ErrorNotFound:
+                case ProxyApi.ErrorMethodNotAllowed: kind = HypaErrorKind.BadRequest; break;
+                case ProxyApi.ErrorUpstream: kind = Status == 0 ? HypaErrorKind.Offline : HypaErrorKind.Server; break;
+                default: kind = HypaErrorKind.Server; break;
+            }
+            return new HypaException(kind, Message, Status, Code, this);
+        }
     }
 }

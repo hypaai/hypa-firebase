@@ -5,8 +5,8 @@ using HypaCore.Hybrid;
 namespace HypaFirebase.Rest
 {
     /// <summary>
-    /// The services for Quest when the Firebase SDK does not run there: auth, App Check and progress over REST.
-    /// Everything else (flags, room sync, models) stays on the Fakes until its own implementation exists.
+    /// The services for Quest when the Firebase SDK does not run there: auth, App Check, progress, cloud Gemini (Firebase AI Logic)
+    /// and route stats over REST. Flags and room sync stay on the Fakes until their own implementation exists.
     /// Use it with <see cref="HybridServices.UpgradeAsync"/>:
     /// <c>_ = HybridServices.UpgradeAsync(() =&gt; QuestRestServices.CreateAsync(config));</c>
     /// Call it from the main thread, so the local storage can be set up there.
@@ -20,7 +20,13 @@ namespace HypaFirebase.Rest
             var appCheck = new RestAppCheck(config.ApiKey, config.ProjectId, config.AppId, config.AppCheckDebugToken, handler);
             var auth = new RestHypaAuth(session, appCheck);
             await auth.SignInAnonymouslyAsync();
-            return new HybridServices { Auth = auth, Progress = new RestProgressStore(config, auth, store, handler), RouteLog = new RestRouteLog(config, auth, handler) };
+            return new HybridServices
+            {
+                Auth = auth,
+                Progress = new RestProgressStore(config, auth, store, handler),
+                Cloud = new RestCloudModel(config, auth, () => HybridServices.Current.Flags.Get(RemoteConfigKeys.CloudModel, null), handler),
+                RouteLog = new RestRouteLog(config, auth, handler),
+            };
         }
     }
 }

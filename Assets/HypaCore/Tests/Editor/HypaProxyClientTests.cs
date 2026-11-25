@@ -102,5 +102,63 @@ namespace HypaCore.Tests
 
         [Test] public void AMissingProxyUrl_FailsLoudly()
             => Assert.Throws<System.ArgumentException>(() => new HypaProxyClient("", new FakeAuth()));
+
+        [Test] public void Speech_GoesThroughHypaTts_AndComesBackAsHypaSpeech()
+        {
+            var (client, stub, _) = Make();
+            stub.Reply = "{\"audioBase64\":\"UklGRg==\",\"mime\":\"audio/wav\",\"sampleRate\":24000,\"route\":{\"provider\":\"hypaai\",\"model\":\"tts-1\",\"voice\":\"Ade\"}}";
+
+            var speech = Run(client.SpeechAsync("Ẹ káàárọ̀", "Yoruba", "Ade", "", CancellationToken.None));
+
+            Assert.AreEqual("https://proxy.example/hypa/tts", stub.Request.RequestUri.ToString());
+            var body = JObject.Parse(stub.Body);
+            Assert.AreEqual("Yoruba", (string)body["language"]);
+            Assert.AreEqual("Ade", (string)body["voice"]);
+            Assert.IsNull(body["model"], "an empty model is left out");
+            Assert.IsNull(body["inline"], "only the browser asks for inline audio");
+            Assert.AreEqual("UklGRg==", speech.AudioBase64);
+            Assert.AreEqual(24000, speech.SampleRate);
+            Assert.AreEqual("tts-1", speech.Model);
+            Assert.AreEqual("Ade", speech.Voice);
+        }
+
+        [Test] public void Transcribe_SendsTheWavToHypaAsr_AndReturnsTheTranscript()
+        {
+            var (client, stub, _) = Make();
+            stub.Reply = "{\"transcript\":\" Ta ni Dodo? \",\"language\":\"yo\",\"audioSeconds\":2.1}";
+            var wav = new byte[] { 82, 73, 70, 70, 1, 2, 3 };
+
+            var text = Run(client.TranscribeAsync(wav, "Yoruba", CancellationToken.None));
+
+            Assert.AreEqual("Ta ni Dodo?", text);
+            Assert.AreEqual("https://proxy.example/hypa/asr", stub.Request.RequestUri.ToString());
+            var body = JObject.Parse(stub.Body);
+            Assert.AreEqual(System.Convert.ToBase64String(wav), (string)body["audio"]);
+            Assert.AreEqual("Yoruba", (string)body["sourceLang"]);
+        }
+
+        [Test] public void Transcribe_ATooLongRecording_IsABadRequest()
+        {
+            var (client, stub, _) = Make();
+            stub.Status = (HttpStatusCode)413;
+            stub.Reply = "{\"error\":{\"code\":\"too_large\",\"message\":\"The recording is too long (max 30 seconds).\"}}";
+            var e = Assert.Throws<HypaException>(() => Run(client.TranscribeAsync(new byte[] { 1 }, "English", CancellationToken.None)));
+            Assert.AreEqual(HypaErrorKind.BadRequest, e.Kind);
+        }
+
+        [Test] public void ProxyErrors_BecomeTheAppsErrorKinds()
+        {
+            Assert.AreEqual(HypaErrorKind.Unauthorized, new HypaProxyException(ProxyApi.ErrorAppCheck, "x", 401).ToHypaException().Kind);
+            Assert.AreEqual(HypaErrorKind.RateLimited, new HypaProxyException(ProxyApi.ErrorQuota, "x", 429).ToHypaException().Kind);
+            Assert.AreEqual(HypaErrorKind.BadRequest, new HypaProxyException(ProxyApi.ErrorTooLarge, "x", 413).ToHypaException().Kind);
+            Assert.AreEqual(HypaErrorKind.Offline, new HypaProxyException(ProxyApi.ErrorUpstream, "x", 0).ToHypaException().Kind);
+            Assert.AreEqual(HypaErrorKind.Server, new HypaProxyException(ProxyApi.ErrorUpstream, "x", 502).ToHypaException().Kind);
+
+            var (client, stub, _) = Make();
+            stub.Status = HttpStatusCode.TooManyRequests;
+            stub.Reply = "{\"error\":{\"code\":\"quota\",\"message\":\"Daily limit reached\"}}";
+            var e = Assert.Throws<HypaException>(() => Run(client.SpeechAsync("Hi", "English", null, null, CancellationToken.None)));
+            Assert.AreEqual(HypaErrorKind.RateLimited, e.Kind);
+        }
     }
 }

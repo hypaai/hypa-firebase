@@ -144,6 +144,58 @@ namespace HypaStories.Tests
             Assert.AreEqual("The device answered in the wrong language", route.Reason);
         }
 
+        [Test] public void English_WhenTheDeviceAndGeminiFail_HypaAnswers()
+        {
+            _device.Available = true; _device.Status = "available";
+            _device.Reply = "Dodo est une créature que toute la ville craint. Personne ne la défie.";
+            _cloud.Error = new InvalidOperationException("Gemini is down");
+            _proxy.Answer = (p, b) => (HttpStatusCode.OK, new JObject { ["content"] = "Dodo is a creature. Everyone fears it." }.ToString());
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("On device .* couldn't answer"));
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Cloud · Gemini couldn't answer.*trying Hypa"));
+
+            var (said, route) = Run(Qa(), Ask("en"));
+
+            Assert.AreEqual(Route.Hypa, route.Route);
+            Assert.AreEqual("Dodo is a creature.", said[0].text);
+            Assert.AreEqual("/hypa/chat", _proxy.Calls.Single().path);
+            StringAssert.Contains("Answer in English", (string)_proxy.Calls.Single().body["messages"][1]["content"]);
+        }
+
+        [Test] public void English_WhenGeminiAndHypaFail_TheSavedAnswersSpeak()
+        {
+            _device.Available = false;
+            _cloud.Error = new InvalidOperationException("Gemini is down");
+            _proxy.Answer = (p, b) => ((HttpStatusCode)502, "{\"error\":{\"code\":\"upstream\",\"message\":\"Hypa had a problem\"}}");
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Cloud · Gemini couldn't answer.*trying Hypa"));
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Hypa · English couldn't answer.*trying Offline"));
+
+            var (said, route) = Run(Qa(), Ask("en"));
+
+            Assert.AreEqual(Route.Offline, route.Route);
+            Assert.AreEqual(HybridRouter.SavedAnswers, route.Model);
+            Assert.IsNotEmpty(said);
+            Assert.IsFalse(said.Any(s => s.text == StoryLanguages.Lines("en").BackOnline), "online: no 'back online' line");
+        }
+
+        [Test] public void Fallbacks_NeverRepeatARoute_AndEndInTheSavedAnswers()
+        {
+            var ctx = new RouteContext { Online = true, OnDeviceStatus = "available" };
+            var device = new RouteDecision(Route.OnDevice, "Gemini Nano", "", 0);
+            var tried = new HashSet<string> { "device" };
+            var a = HybridStoryQa.Next(device, ctx, new Exception(), "English", tried);
+            Assert.AreEqual(Route.CloudGemini, a.Route); tried.Add("CloudGemini/" + a.Model);
+            var b = HybridStoryQa.Next(a, ctx, new Exception(), "English", tried);
+            Assert.AreEqual(Route.Hypa, b.Route); tried.Add("Hypa/" + b.Model);
+            var c = HybridStoryQa.Next(b, ctx, new Exception(), "English", tried);
+            Assert.AreEqual(HybridRouter.SavedAnswers, c.Model); tried.Add("Offline/" + c.Model);
+            Assert.IsNull(HybridStoryQa.Next(c, ctx, new Exception(), "English", tried));
+
+            ctx.Online = false;
+            Assert.AreEqual(HybridRouter.SavedAnswers, HybridStoryQa.Next(device, ctx, new Exception(), "English").Model, "offline: no Gemini, no Hypa");
+            ctx.Online = true; ctx.Mode = AiMode.OnDeviceOnly;
+            Assert.AreEqual(HybridRouter.SavedAnswers, HybridStoryQa.Next(device, ctx, new Exception(), "English").Model, "on device only: nothing goes out");
+        }
+
         [Test] public void Offline_TheDeviceAnswers_AndSaysItIsOffline()
         {
             _online = false;
