@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace HypaCore.Hybrid
 {
@@ -18,6 +21,39 @@ namespace HypaCore.Hybrid
             var chip = string.IsNullOrEmpty(Model) ? label : label + " · " + Model;
             return LatencyMs > 0 ? chip + " · " + (LatencyMs / 1000f).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " s" : chip;
         }
+    }
+
+    public enum AiMode { Hybrid, CloudOnly, OnDeviceOnly }
+
+    public sealed class CloudTool
+    {
+        public string Name, Description;
+        public IReadOnlyDictionary<string, string> Parameters;
+        public Func<IReadOnlyDictionary<string, string>, CancellationToken, Task<string>> Run;
+    }
+
+    [Serializable]
+    public sealed class RouteEvent
+    {
+        public string kind;
+        public string route;
+        public string model;
+        public string language;
+        public int latencyMs;
+        public bool ok;
+        public string fallbackFrom;
+        public string device;
+        public long at;
+    }
+
+    public static class RouteNames
+    {
+        public const string Answer = "answer", Translate = "translate";
+
+        public static string Of(Route route) => route switch
+        {
+            Route.OnDevice => "onDevice", Route.CloudGemini => "cloud", Route.Hypa => "hypa", _ => "offline",
+        };
     }
 
     /// <summary>Firestore <c>users/{uid}/progress/current</c> (docs/contracts.md, section 3).</summary>
@@ -63,6 +99,7 @@ namespace HypaCore.Hybrid
         public static string Progress(string uid) => "users/" + uid + "/progress/current";
         public static string Story(string uid, string storyId) => "users/" + uid + "/stories/" + storyId;
         public static string Word(string uid, string wordId) => "users/" + uid + "/words/" + wordId;
+        public static string RouteEvent(string uid, string eventId) => "routes/" + uid + "/events/" + eventId;
     }
 
     /// <summary>Remote Config keys and their defaults (docs/contracts.md, section 5).</summary>

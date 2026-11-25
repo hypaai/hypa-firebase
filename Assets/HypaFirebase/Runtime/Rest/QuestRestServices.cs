@@ -20,7 +20,7 @@ namespace HypaFirebase.Rest
             var appCheck = new RestAppCheck(config.ApiKey, config.ProjectId, config.AppId, config.AppCheckDebugToken, handler);
             var auth = new RestHypaAuth(session, appCheck);
             await auth.SignInAnonymouslyAsync();
-            return new HybridServices { Auth = auth, Progress = new RestProgressStore(config, auth, store, handler) };
+            return new HybridServices { Auth = auth, Progress = new RestProgressStore(config, auth, store, handler), RouteLog = new RestRouteLog(config, auth, handler) };
         }
     }
 }

@@ -22,6 +22,7 @@ namespace HypaCore.Hybrid
         public IRoomSync Rooms { get; set; } = new FakeRoomSync();
         public IOnDeviceModel OnDevice { get; set; } = new NoOnDeviceModel();
         public ICloudModel Cloud { get; set; } = new FakeCloudModel();
+        public IRouteLog RouteLog { get; set; } = new FakeRouteLog();
 
         /// <summary>Set by the Native implementation (G02). Returns null if Firebase cannot start on this device.</summary>
         public static Func<HybridServices> NativeFactory { get; set; }
@@ -67,6 +68,7 @@ namespace HypaCore.Hybrid
                 local.Rooms = real.Rooms;
                 local.OnDevice = real.OnDevice;
                 local.Cloud = real.Cloud;
+                local.RouteLog = real.RouteLog;
 
                 // The player may have saved to the Fakes while the server was being read. Send that too.
                 var late = await fakeProgress.LoadAsync();

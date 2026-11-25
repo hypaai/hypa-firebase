@@ -57,14 +57,14 @@ namespace HypaCore
         {
             switch (Kind)
             {
-                case HypaErrorKind.MissingConfiguration: return "The Hypa proxy is not configured. See the project README.";
-                case HypaErrorKind.Unauthorized: return "Authentication was rejected. Sign in again.";
-                case HypaErrorKind.InsufficientBalance: return "The Hypa account is out of credit.";
+                case HypaErrorKind.MissingConfiguration: return "Hypa isn't available right now. Try again later.";
+                case HypaErrorKind.Unauthorized: return "Couldn't sign you in. Try again.";
+                case HypaErrorKind.InsufficientBalance: return "Hypa isn't available right now. Try again later.";
                 case HypaErrorKind.RateLimited: return "Too many requests. Wait a moment and try again.";
                 case HypaErrorKind.Unavailable: return "Hypa is busy right now. Try again shortly.";
                 case HypaErrorKind.Offline: return "You're offline. Reconnect and try again.";
                 case HypaErrorKind.Timeout: return "Hypa took too long to answer. Try again.";
-                default: return "Hypa couldn't do that: " + Message;
+                default: return "Something went wrong. Try again.";
             }
         }
     }

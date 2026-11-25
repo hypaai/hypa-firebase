@@ -87,6 +87,27 @@ describe("firestore.rules", () => {
   });
 });
 
+describe("firestore.rules: route statistics", () => {
+  const event = { kind: "answer", route: "onDevice", model: "Gemini Nano", language: "en", latencyMs: 420, ok: true, device: "web", at: 1 };
+
+  it("lets a user add their own route events, and nothing more", async () => {
+    const db = env.authenticatedContext("alice").firestore();
+    await assertSucceeds(setDoc(doc(db, "routes/alice/events/e1"), event));
+    await assertSucceeds(setDoc(doc(db, "routes/alice/events/e2"), { ...event, route: "cloud", fallbackFrom: "onDevice" }));
+    await assertFails(setDoc(doc(db, "routes/alice/events/e1"), { ...event, ok: false }));
+    await assertFails(getDoc(doc(db, "routes/alice/events/e1")));
+    await assertFails(setDoc(doc(db, "routes/bob/events/e1"), event));
+  });
+
+  it("checks the event's shape: no question or answer text", async () => {
+    const db = env.authenticatedContext("alice").firestore();
+    await assertFails(setDoc(doc(db, "routes/alice/events/e3"), { ...event, question: "what does ìyá mean?" }));
+    await assertFails(setDoc(doc(db, "routes/alice/events/e4"), { ...event, route: "somewhere" }));
+    await assertFails(setDoc(doc(db, "routes/alice/events/e5"), { ...event, kind: "chat" }));
+    await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), "routes/alice/events/e6"), event));
+  });
+});
+
 describe("database.rules.json", () => {
   const code = "BCDFG";
   const room = (host) => ({ host, storyId: "s1", language: "yo", state: "lobby", createdAt: 1 });

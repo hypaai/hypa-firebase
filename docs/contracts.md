@@ -25,7 +25,8 @@ outside development: debug tokens skip the check.
 
 ## 1. Platform services
 
-`IHypaAuth`, `IProgressStore`, `IProfileStore`, `IRemoteFlags`, `IRoomSync`, `IOnDeviceModel`, `ICloudModel` (`Interfaces.cs`).
+`IHypaAuth`, `IProgressStore`, `IProfileStore`, `IRemoteFlags`, `IRoomSync`, `IOnDeviceModel`, `ICloudModel`, `IRouteLog`
+(`Interfaces.cs`).
 
 - Three real implementations: **Native** (Firebase Unity SDK; Android, iOS, and Quest if the spike passes; G02), **Rest**
   (Firebase REST APIs; Quest if the SDK fails there; G02, in `Assets/HypaFirebase/Runtime/Rest`) and **Web** (`.jslib` + Firebase JS SDK; G03). **Fake** (in-memory) for the editor and tests
@@ -37,6 +38,12 @@ outside development: debug tokens skip the check.
   Fakes meanwhile are sent if they are newer. Always read services through `HybridServices.Current`.
 - `IOnDeviceModel` implementations: `ChromeNanoModel` (G03), `AndroidNanoModel` (G06), `AppleFoundationModel` (G07),
   `NoOnDeviceModel` (Quest, editor).
+- `ICloudModel.GenerateAsync(prompt, tools, ct)` is Firebase AI Logic function calling: the implementation declares each `CloudTool`
+  (name, description, string parameters), runs the model's calls with `CloudTool.Run`, sends the results back and returns the final
+  text. G05 passes Hypa's `translate(text, to)` and `define(word, language)`.
+- `IRouteLog.Log(RouteEvent)` writes anonymous route statistics to `routes/{uid}/events` (section 3). Fire and forget.
+  `RestRouteLog` (`QuestRestServices`) does it over Firestore REST: events wait in memory (at most 50) while the network is down
+  and go out with the next one; an event Firestore refuses is dropped.
 - Tokens are fetched per call and never stored or logged by gameplay code.
 
 ## 2. Hybrid route decision (G05 owns the logic, everyone reads it)
@@ -47,7 +54,22 @@ public sealed record RouteDecision(Route Route, string Model, string Reason, int
 ```
 
 `decision.Chip()` is the UI chip: "On device · Gemini Nano · 0.4 s", "Cloud · Gemini · 1.2 s", "Hypa · Yorùbá · 2.1 s",
-"Offline · on device". `Model` is what the chip names (the language for Hypa); `Reason` is for logs and the debug panel.
+"Offline · on device". `Model` is what the chip names (the language for Hypa); `Reason` is the short "why" shown when the chip is tapped.
+
+`HybridRouter.Decide(RouteAsk, RouteContext)` (`HybridRouter.cs`, pure) decides, for an answer:
+
+1. Offline (no network, or a call failed to reach a server in the last 30 s, `NetworkStatus`): the device's model if it is ready,
+   else the saved answers (`Model` "saved answers").
+2. A language in `route_hypa_langs`: Hypa (`/hypa/chat`).
+3. A language in `route_on_device_langs`, the model `available`, the prompt within `route_max_on_device_tokens` and no tools needed:
+   on device.
+4. Otherwise cloud Gemini. A model still downloading shows "On-device model downloading (first time only)" in the
+   story's language (`QaLines.Preparing`).
+
+Settings (`HypaSettings.AiMode`): Hybrid (default), Cloud only (never the device), On device only (never the network). For a
+translation: English, French and Spanish pairs on device, everything else (and auto-detect) through Hypa (`/hypa/translate`).
+Stories' `HybridStoryQa` and `HybridTryApi` run the decision and fall back when a path fails: Hypa → cloud; device or a reply in
+the wrong language → cloud; cloud → device → saved answers.
 
 ## 3. Firestore (progress and profile, G08)
 
@@ -56,6 +78,8 @@ users/{uid}                      { username?, displayName?, language, appearance
 users/{uid}/progress/current     { storyId, lineId, lineIndex, language, place: "camp"|"hut"|"village", updatedAt, device }
 users/{uid}/stories/{storyId}    { finished, bestGameScore, gamePlays, lastLineId, updatedAt }
 users/{uid}/words/{wordId}       { text, translation, language, storyId, savedAt }
+routes/{uid}/events/{eventId}    { kind: "answer"|"translate", route: "onDevice"|"cloud"|"hypa"|"offline", model, language,
+                                   latencyMs, ok, fallbackFrom?, device, at }
 ```
 
 - Types: `UserProfile`, `Progress` and paths `FirestorePaths` (`Models.cs`); `StoryResult` and `SavedWord` come with G08
@@ -64,8 +88,11 @@ users/{uid}/words/{wordId}       { text, translation, language, storyId, savedAt
   `displayName` (≤ 24) and `appearance`: the app's own JSON for the character (≤ 4000 characters), versioned by
   `appearanceVersion`. Stories maps its `StoryProfile` to it, so a character made on one device follows the player; the platform
   layer never needs to know the character model. `IProfileStore` loads and saves it.
+- `routes/{uid}/events` (`RouteEvent`, G05) is anonymous: no question, answer or text. Written unless the player turns
+  "Anonymous route stats" off; G14 reads it with the Admin SDK ("62% of answers ran on device").
 - Rules (`firebase/firestore.rules`): a user reads and writes only `users/{their uid}` and the three collections above, and only
-  the listed fields with the listed types. Everything else is closed, including other documents under `users/{uid}`.
+  the listed fields with the listed types; they may only add `routes/{their uid}/events`, never read or change them. Everything
+  else is closed, including other documents under `users/{uid}`.
 
 **Provisional (G08, waiting for Timi's OK):** `stories/*` and `words/*` go through `IUserDataStore` (`GetStoryAsync`, `SaveStoryAsync`, `ListWordsAsync`, `SaveWordAsync`) with `StoryResult` and `SavedWord`, in `UserData.cs`. Results merge: finished stays finished, `bestGameScore` and `gamePlays` take the higher, `lastLineId` comes from the later update. A word's id is built from its text and language, so the same word saved on two devices is one document.
 

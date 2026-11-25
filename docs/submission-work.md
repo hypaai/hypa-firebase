@@ -76,3 +76,17 @@ Written against G01's interfaces, so it runs on the Fakes. The screens and devic
 - `functions/`: TypeScript, Node 22, Cloud Functions v2 (`us-central1`). `hypa` function with `/hypa/tts`, `/hypa/asr`, `/hypa/chat`, `/hypa/translate`; Firebase ID token and App Check verification; per-user and global daily quotas in Firestore with Remote Config limits; Hypa error mapping; key via Secret Manager only. `cleanupRooms` scheduled function. Unit tests with Vitest and `firebase-functions-test`.
 - `firebase.json`: `functions` block, `/hypa/**` Hosting rewrite, Functions emulator, Hosting emulator on 5002.
 - `docs/hypa-proxy.md`: contract, limits, secrets, runbook.
+
+## G05 (HYP-200): Hybrid router for the storyteller
+
+Every storyteller answer and Try Hypa translation picks where it runs, says where it ran, and keeps working offline.
+
+- `HybridRouter.Decide` (`Assets/HypaCore/Runtime/Firebase/HybridRouter.cs`): offline → Hypa languages → on device → cloud Gemini, with the thresholds from Remote Config and `HypaSettings.AiMode` (Hybrid by default; Cloud only and On device only for testing, no UI). `NetworkStatus` treats a failed connection as offline for 30 s.
+- `HybridStoryQa`, the only answer path: one single-turn prompt with the story trimmed to fit, sentences streamed as they come, fallbacks when a path fails (including an on-device reply in the wrong language), the saved answers offline with "I'll tell you more when we're back online", the 12 s deadline.
+- Cloud Gemini calls Hypa's `translate` and `define` through function calling (`CloudTool`) for "what does … mean" questions.
+- `HybridTryApi`: Try Hypa's translation through the same router.
+- Players never see which model answered; each answer's route is written to the log (`Hypa Stories answered: Cloud · Gemini · 1.2 s (why)`). While the device's model is still downloading, the Q&A says "On-device model downloading (first time only)" in the story's language (`QaLines.Preparing`).
+- Anonymous route statistics to Firestore `routes/{uid}/events`, with rules; `RestRouteLog` writes them over REST (in `QuestRestServices`).
+- `HypaProxyClient` uses `UnityWebRequest` in a web build (`HttpClient` does not work in the browser), so Hypa answers work on the web.
+- Tests: `HybridRouterTests` (every combination of network, language, model status, prompt size, tools, setting and preference), `HybridStoryQaTests`, 2 more rules tests.
+- Not yet tested on a device or a web build, nor against real Firebase or Hypa: the on-device and cloud models are G03, G06 and G07's, and the "back online" and "getting ready" lines in Hausa, Igbo, Naija, Kiswahili and Yorùbá need a native speaker's check.

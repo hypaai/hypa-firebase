@@ -66,7 +66,7 @@ namespace HypaLens
                     return "Couldn't read the text in that capture. " + (Message != Kind.ToString() ? Message : "Try again with better light.");
                 default:
                     if (Hypa != null) return Hypa.UserMessage();
-                    return string.IsNullOrEmpty(Message) ? "Something went wrong. Try again." : "Something went wrong: " + Message;
+                    return "Something went wrong. Try again.";
             }
         }
     }
