@@ -154,6 +154,23 @@ namespace HypaCore.Tests
             Assert.IsTrue((bool)config["emulators"]);
         }
 
+        [Test] public void Start_InitsFirebase_ThenSignsIn()
+        {
+            var js = new FakeJs { Reply = (m, a) => new[] { Ok(m == "signIn" ? "uid-1" : null) } };
+            var auth = new WebAuth();
+            Run(WebServices.StartAsync(WebServices.EmulatorConfig(), auth));
+            Assert.AreEqual(new[] { "init", "signIn" }, js.Calls.ConvertAll(c => c.method));
+            Assert.AreEqual("uid-1", auth.Uid);
+        }
+
+        [Test] public void Start_FirebaseFails_KeepsPlaying_AndDoesNotSignIn()
+        {
+            var js = new FakeJs { Reply = (m, a) => new[] { Err("app/no-options") } };
+            UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Warning, "Hypa: Firebase did not start (app/no-options). Playing on local data.");
+            Run(WebServices.StartAsync(WebServices.EmulatorConfig(), new WebAuth()));
+            Assert.AreEqual(new[] { "init" }, js.Calls.ConvertAll(c => c.method));
+        }
+
         [Test] public void Auth_FollowsTheUidFromJs_AndRaisesOncePerChange()
         {
             var js = new FakeJs { Reply = (m, a) => new[] { Ok("uid-1") } };

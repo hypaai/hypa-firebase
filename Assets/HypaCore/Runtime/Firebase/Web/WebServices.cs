@@ -25,6 +25,15 @@ namespace HypaCore.Hybrid.Web
 #endif
         }
 
+        /// <summary>Starts Firebase and sign-in as the game loads, not when a screen first reads the services.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        static void StartEarly()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            _ = HybridServices.Current;
+#endif
+        }
+
         /// <summary>The emulator project. A "demo-" id never reaches a real Firebase project and needs no login.</summary>
         public const string EmulatorProject = "demo-hypa";
 
@@ -47,12 +56,13 @@ namespace HypaCore.Hybrid.Web
                 return null;
             }
             WebBridge.Install();
-            // Firebase starts in the background. Calls made before it is ready wait in JS; the story never waits on it.
-            _ = Init(config);
+            var auth = new WebAuth();
+            // Firebase starts and signs in in the background. Calls made before it is ready wait in JS; the story never waits on it.
+            _ = StartAsync(config, auth);
             var flags = new WebRemoteFlags();
             return new HybridServices
             {
-                Auth = new WebAuth(),
+                Auth = auth,
                 Progress = new WebProgressStore(),
                 Flags = flags,
                 OnDevice = new ChromeNanoModel(),
@@ -60,9 +70,17 @@ namespace HypaCore.Hybrid.Web
             };
         }
 
-        static async Task Init(JObject config)
+        /// <summary>
+        /// Starts Firebase, then signs in: the returning player's account (kept in IndexedDB), or a new anonymous one on first
+        /// launch. Offline, sign-in fails and the game keeps playing; saves wait in the bridge until a later sign-in.
+        /// </summary>
+        public static async Task StartAsync(JObject config, IHypaAuth auth)
         {
-            try { await WebBridge.CallAsync("init", config); }
+            try
+            {
+                await WebBridge.CallAsync("init", config);
+                await auth.SignInAnonymouslyAsync();
+            }
             catch (WebBridgeException e) { Debug.LogWarning($"Hypa: Firebase did not start ({e.Code}). Playing on local data."); }
         }
 
