@@ -37,7 +37,7 @@
     ],
     "headers": [
       {
-        "regex": "\\.br$",
+        "source": "**/*.br",
         "headers": [
           {
             "key": "Content-Encoding",
@@ -46,7 +46,7 @@
         ]
       },
       {
-        "regex": "\\.wasm\\.br$",
+        "source": "**/*.wasm.br",
         "headers": [
           {
             "key": "Content-Type",
@@ -55,7 +55,7 @@
         ]
       },
       {
-        "regex": "\\.js\\.br$",
+        "source": "**/*.js.br",
         "headers": [
           {
             "key": "Content-Type",
@@ -64,7 +64,7 @@
         ]
       },
       {
-        "regex": "\\.data\\.br$",
+        "source": "**/*.data.br",
         "headers": [
           {
             "key": "Content-Type",
