@@ -13,7 +13,7 @@ import {
 import {
   getRemoteConfig, ensureInitialized, fetchAndActivate, getAll,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-remote-config.js";
-import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js";
+import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode, InferenceSource } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js";
 
 /** Thrown to C# as { code, message }. */
 class BridgeError extends Error {
@@ -183,7 +183,7 @@ async function readyNano() {
 }
 
 function checkOnDevice(response) {
-  if (response.inferenceSource !== "on_device") throw new BridgeError("not_on_device", "The answer did not come from the device.");
+  if (response.inferenceSource !== InferenceSource.ON_DEVICE) throw new BridgeError("not_on_device", "The answer did not come from the device.");
 }
 
 async function generate({ side, model, prompt }, { signal }) {
