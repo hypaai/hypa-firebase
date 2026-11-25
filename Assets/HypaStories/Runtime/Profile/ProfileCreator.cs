@@ -434,7 +434,8 @@ namespace HypaStories
         {
             if (_field == field) return;
             EndInput(); _field = field;
-            if (TouchScreenKeyboard.isSupported && !UnityEngine.XR.XRSettings.isDeviceActive)
+            // Phones and tablets only: a desktop browser also reports support, but no keyboard appears, so typing would end at once.
+            if (TouchScreenKeyboard.isSupported && Application.isMobilePlatform && !UnityEngine.XR.XRSettings.isDeviceActive)
                 _nativeKeyboard = TouchScreenKeyboard.Open(Value, TouchScreenKeyboardType.Default, false, false, false, false,
                     field == 0 ? "Username" : "Display name", field == 0 ? 20 : 24);
             else Keyboard();
