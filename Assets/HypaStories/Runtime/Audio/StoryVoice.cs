@@ -215,8 +215,7 @@ namespace HypaStories
             {
                 while (token == _playToken && !_skip && Time.realtimeSinceStartup < end && (line.Clip == null || _speech.isPlaying))
                 {
-                    ct.ThrowIfCancellationRequested();
-                    await Task.Yield();
+                    await HypaAsync.NextFrame(ct);
                 }
             }
             finally

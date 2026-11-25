@@ -27,11 +27,13 @@
       <div id="error"></div>
     </div>
     <script>
-      // Suppress Firestore WebChannel AbortError rejections on listener teardown before Unity's loader treats them as fatal.
+      // Suppress non-fatal Firebase/reCAPTCHA rejections before Unity's loader turns them into a fatal alert dialog.
       window.addEventListener("unhandledrejection", function (e) {
         var r = e && e.reason;
-        var s = r && (r.stack || String(r)) || "";
-        if (r && r.name === "AbortError" && s.indexOf("firebase-firestore") !== -1) {
+        var s = r && (r.stack || r.message || String(r)) || "";
+        if ((r && r.name === "AbortError" && s.indexOf("firebase-firestore") !== -1)
+            || s.indexOf("reCAPTCHA") !== -1 || s.indexOf("recaptcha") !== -1) {
+          console.warn("Hypa: ignored non-fatal browser rejection:", r);
           e.preventDefault();
           e.stopImmediatePropagation();
         }

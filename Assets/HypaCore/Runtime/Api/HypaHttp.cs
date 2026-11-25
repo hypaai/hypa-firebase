@@ -67,15 +67,14 @@ namespace HypaCore
                 req.SetRequestHeader(ProxyApi.AuthorizationHeader, "Bearer " + idToken);
                 if (!string.IsNullOrEmpty(appCheck)) req.SetRequestHeader(ProxyApi.AppCheckHeader, appCheck);
                 var op = req.SendWebRequest();
-                while (!op.isDone)
+                if (!op.isDone)
                 {
-                    if (ct.IsCancellationRequested)
-                    {
-                        req.Abort();
-                        ct.ThrowIfCancellationRequested();
-                    }
-                    await Task.Yield();
+                    var done = new TaskCompletionSource<bool>();
+                    op.completed += _ => done.TrySetResult(true);
+                    using (ct.Register(() => { req.Abort(); done.TrySetCanceled(ct); }))
+                        await done.Task;
                 }
+                ct.ThrowIfCancellationRequested();
                 var body = req.downloadHandler.text;
                 if (req.result == UnityWebRequest.Result.ConnectionError)
                     throw new HypaException(HypaErrorKind.Offline, req.error);

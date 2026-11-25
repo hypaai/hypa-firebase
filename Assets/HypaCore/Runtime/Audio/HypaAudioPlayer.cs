@@ -162,8 +162,7 @@ namespace HypaCore
             {
                 while (HypaAudio_Status(id) == 0)
                 {
-                    ct.ThrowIfCancellationRequested();
-                    await Task.Yield();
+                    await HypaAsync.NextFrame(ct);
                 }
                 if (HypaAudio_Status(id) != 1)
                     throw new HypaException(HypaErrorKind.InvalidResponse, "Could not decode the Hypa audio.");
@@ -191,15 +190,14 @@ namespace HypaCore
             using (var req = UnityWebRequestMultimedia.GetAudioClip(url, type))
             {
                 var op = req.SendWebRequest();
-                while (!op.isDone)
+                if (!op.isDone)
                 {
-                    if (ct.IsCancellationRequested)
-                    {
-                        req.Abort();
-                        ct.ThrowIfCancellationRequested();
-                    }
-                    await Task.Yield();
+                    var done = new TaskCompletionSource<bool>();
+                    op.completed += _ => done.TrySetResult(true);
+                    using (ct.Register(() => { req.Abort(); done.TrySetCanceled(ct); }))
+                        await done.Task;
                 }
+                ct.ThrowIfCancellationRequested();
                 if (req.result != UnityWebRequest.Result.Success)
                     throw new HypaException(HypaErrorKind.InvalidResponse, "Could not decode the Hypa audio.");
                 return DownloadHandlerAudioClip.GetContent(req);
