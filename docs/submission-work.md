@@ -90,3 +90,15 @@ Every storyteller answer and Try Hypa translation picks where it runs, says wher
 - `HypaProxyClient` uses `UnityWebRequest` in a web build (`HttpClient` does not work in the browser), so Hypa answers work on the web.
 - Tests: `HybridRouterTests` (every combination of network, language, model status, prompt size, tools, setting and preference), `HybridStoryQaTests`, 2 more rules tests.
 - Not yet tested on a device or a web build, nor against real Firebase or Hypa: the on-device and cloud models are G03, G06 and G07's, and the "back online" and "getting ready" lines in Hausa, Igbo, Naija, Kiswahili and Yorùbá need a native speaker's check.
+
+## G07 (HYP-202): iOS on-device model (Apple Foundation Models)
+
+On an iPhone with Apple Intelligence, answers come from Apple's on-device model; on any other iPhone the status is `unavailable` and the router uses the cloud. How it works: `docs/ios-on-device.md`.
+
+- `Assets/Plugins/iOS/HypaFoundationModels.swift`: Apple's Foundation Models framework behind four C functions (`@_cdecl`): status, start (answer or stream), cancel, and the reply callback. No Objective-C shim. Each session starts with family-friendly instructions for Apple's acceptable-use requirements.
+- `AppleFoundationModel : IOnDeviceModel` (`Assets/HypaFirebase/Runtime/Native/`): status (`available`, `downloading`, `unavailable` with a reason), answers and streams by request id, errors as `OnDeviceModelException` codes, and cancelling. A model that is not ready fails at once, never waits.
+- `HybridServices.OnDeviceFactory`: the platform's on-device model for every service set, so it works before and without the native Firebase services.
+- `HypaIosBuild`: weak-links FoundationModels (the app still opens on iOS 15 to 18), pins the Swift version, and makes sure the microphone prompt is in Info.plist.
+- Firebase's iOS hybrid API (`HybridModel`, `SystemLanguageModel`, 12.13 to 12.19) was removed in Firebase iOS 13.0.0, and the Firebase Unity SDK 14.2.0 ships 13.2.0. Firebase now points to Apple's Foundation Models framework directly for on-device, which is what this uses.
+- Tests: `Assets/HypaFirebase/Tests/Editor/AppleFoundationModelTests.cs`. The Swift plugin type-checks against the iOS 26.2 SDK (Xcode 26.3), and `tools/apple-model/check.sh` ran it on a Mac (macOS 26.3, Apple Intelligence): available, an answer, a Spanish stream in pieces, and a cancel.
+- Not yet run on an iPhone, and no iOS build yet (the iOS Build Support module is not installed on the build machine).

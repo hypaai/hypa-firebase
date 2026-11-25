@@ -56,6 +56,8 @@ outside development: debug tokens skip the check.
   fetches the model with progress for the settings screen. Limits set by Google: text in, text out, one question at a time,
   the prompt under about 4,000 tokens, and only while the app is in the foreground. Tests: `AndroidNanoModelTests` (a fake
   bridge, so they run anywhere) and the `Android on-device bridge` workflow (compiles the Java against the real library).
+  A platform's model registers `HybridServices.OnDeviceFactory`, and every service set (the Fakes too) uses it, so on-device
+  answers do not wait for Firebase. iOS: `docs/ios-on-device.md`.
 - Tokens are fetched per call and never stored or logged by gameplay code.
 
 ## 2. Hybrid route decision (G05 owns the logic, everyone reads it)
