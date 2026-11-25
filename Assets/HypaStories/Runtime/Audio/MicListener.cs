@@ -179,7 +179,7 @@ namespace HypaStories
                 var words = phrase.Split(' ');
                 for (var i = 1; i <= words.Length && !_stopped; i++)
                 {
-                    await Task.Delay(450);
+                    await HypaAsync.Delay(450);
                     if (_stopped) break;
                     partial?.Invoke(string.Join(" ", words, 0, i));
                 }
@@ -306,7 +306,7 @@ namespace HypaStories
                     {
                         _live.Finish();
                         var until = Time.realtimeSinceStartup + 6f;
-                        while (!_live.Done && !_live.Failed && Time.realtimeSinceStartup < until && !_ct.IsCancellationRequested) await Task.Delay(60);
+                        while (!_live.Done && !_live.Failed && Time.realtimeSinceStartup < until && !_ct.IsCancellationRequested) await HypaAsync.Delay(60);
                         var heard = _live.Text;
                         _live.Dispose(); _live = null;
                         if (!string.IsNullOrWhiteSpace(heard))

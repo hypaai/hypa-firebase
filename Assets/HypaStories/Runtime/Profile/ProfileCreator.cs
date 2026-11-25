@@ -165,7 +165,7 @@ namespace HypaStories
             else
             {
                 float visibleHeight = 2 * 1.9f * Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                _card.localScale = Vector3.one * Mathf.Min(visibleHeight * 0.9f / _size.y, visibleHeight * _camera.aspect * 0.94f / _size.x);
+                _card.localScale = Vector3.one * Mathf.Min(visibleHeight * 0.72f / _size.y, visibleHeight * _camera.aspect * 0.82f / _size.x);
             }
             float top = _size.y * 0.5f, left = -_size.x * 0.5f, right = -left;
             Kit.Panel(_card, "Card", new Vector3(0, 0, 0.05f), _size, 0.05f,
@@ -447,7 +447,7 @@ namespace HypaStories
         {
             if (_card == null) return;
             _keyboard = new GameObject("Profile keyboard").transform; _keyboard.SetParent(_card, false);
-            _keyboard.localPosition = new Vector3(_portrait ? 0f : 0.3f, -_size.y * 0.5f + 0.2f, -0.15f);
+            _keyboard.localPosition = new Vector3(_portrait ? 0f : 0.3f, -_size.y * 0.5f + 0.26f, -0.04f);
             var order = Kit.OrderBoost; Kit.OrderBoost = 20;
             try
             {

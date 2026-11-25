@@ -177,7 +177,7 @@ namespace HypaStories
                 // pause, since an instant retry of a busy or rate-limited service fails the same way
                 try
                 {
-                    await Task.Delay(RetryMs, ct);
+                    await HypaAsync.Delay(RetryMs, ct);
                     var clip = await WithCancellation(Fetch(text, language), ct);
                     if (clip != null) return new SpeechLine { Text = text, Clip = clip, Seconds = clip.length };
                 }

@@ -246,7 +246,7 @@ namespace HypaStories
 
             async Task SecondFiller() // still nothing after ~2 s → another "let me think"
             {
-                try { await Task.Delay(TimeSpan.FromSeconds(SecondFillerSeconds), timer.Token); }
+                try { await HypaAsync.Delay((int)(SecondFillerSeconds * 1000f), timer.Token); }
                 catch (OperationCanceledException) { return; }
                 if (answered || s.Cancelled) return;
                 entry.Filler2 = true;

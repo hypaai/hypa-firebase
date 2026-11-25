@@ -26,6 +26,17 @@
       <div id="bar"><div id="fill"></div></div>
       <div id="error"></div>
     </div>
+    <script>
+      // Suppress Firestore WebChannel AbortError rejections on listener teardown before Unity's loader treats them as fatal.
+      window.addEventListener("unhandledrejection", function (e) {
+        var r = e && e.reason;
+        var s = r && (r.stack || String(r)) || "";
+        if (r && r.name === "AbortError" && s.indexOf("firebase-firestore") !== -1) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
     <script src="Build/{{{ LOADER_FILENAME }}}"></script>
     <script>
       // Firebase JS SDK bridge (Assets/Plugins/WebGL/HypaFirebase.jslib). Loads alongside the game and never delays it; if it
