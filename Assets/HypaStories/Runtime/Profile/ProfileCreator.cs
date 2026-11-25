@@ -165,7 +165,7 @@ namespace HypaStories
             else
             {
                 float visibleHeight = 2 * 1.9f * Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                _card.localScale = Vector3.one * Mathf.Min(1f, visibleHeight * 0.9f / _size.y, visibleHeight * _camera.aspect * 0.94f / _size.x);
+                _card.localScale = Vector3.one * Mathf.Min(visibleHeight * 0.9f / _size.y, visibleHeight * _camera.aspect * 0.94f / _size.x);
             }
             float top = _size.y * 0.5f, left = -_size.x * 0.5f, right = -left;
             Kit.Panel(_card, "Card", new Vector3(0, 0, 0.05f), _size, 0.05f,
@@ -434,7 +434,7 @@ namespace HypaStories
         {
             if (_field == field) return;
             EndInput(); _field = field;
-            if (TouchScreenKeyboard.isSupported && !UnityEngine.XR.XRSettings.isDeviceActive)
+            if (Application.isMobilePlatform && TouchScreenKeyboard.isSupported && !UnityEngine.XR.XRSettings.isDeviceActive)
                 _nativeKeyboard = TouchScreenKeyboard.Open(Value, TouchScreenKeyboardType.Default, false, false, false, false,
                     field == 0 ? "Username" : "Display name", field == 0 ? 20 : 24);
             else Keyboard();
