@@ -102,3 +102,11 @@ On an iPhone with Apple Intelligence, answers come from Apple's on-device model;
 - Firebase's iOS hybrid API (`HybridModel`, `SystemLanguageModel`, 12.13 to 12.19) was removed in Firebase iOS 13.0.0, and the Firebase Unity SDK 14.2.0 ships 13.2.0. Firebase now points to Apple's Foundation Models framework directly for on-device, which is what this uses.
 - Tests: `Assets/HypaFirebase/Tests/Editor/AppleFoundationModelTests.cs`. The Swift plugin type-checks against the iOS 26.2 SDK (Xcode 26.3), and `tools/apple-model/check.sh` ran it on a Mac (macOS 26.3, Apple Intelligence): available, an answer, a Spanish stream in pieces, and a cancel.
 - Not yet run on an iPhone, and no iOS build yet (the iOS Build Support module is not installed on the build machine).
+
+## G03 (HYP-198): Firebase web bridge and Gemini Nano in Chrome
+
+- A WebGL bridge to the Firebase JS SDK: `HypaFirebase.jslib`, `firebase-bridge.js` and `WebBridge`.
+- Web implementations of the G01 services: `WebAuth`, `WebProgressStore`, `WebRemoteFlags`, `WebCloudModel` and `ChromeNanoModel` (Gemini Nano through Firebase AI Logic).
+- A browser microphone at 16 kHz for `MicListener`.
+- On the web, the on-device model status is shown on Home, and the help card has a section on on-device AI.
+- Details: [web-bridge.md](web-bridge.md).

@@ -28,6 +28,10 @@
     </div>
     <script src="Build/{{{ LOADER_FILENAME }}}"></script>
     <script>
+      // Firebase JS SDK bridge (Assets/Plugins/WebGL/HypaFirebase.jslib). Loads alongside the game and never delays it; if it
+      // fails (offline, blocked CDN) the game keeps playing on local data.
+      window.hypaFirebase = import("./firebase-bridge.js");
+      window.hypaFirebase.catch(function () { console.warn("Hypa: Firebase bridge did not load; playing on local data."); });
       var canvas = document.querySelector("#unity-canvas");
       var loading = document.querySelector("#loading");
       createUnityInstance(canvas, {
