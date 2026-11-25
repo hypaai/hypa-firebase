@@ -14,12 +14,19 @@ import type { Deps } from "./api/types";
 import { DEFAULT_LIMITS, emulatorSettings, FUNCTION_TIMEOUT_SECONDS, MIN_INSTANCES, RC_KEYS, REGION } from "./config";
 import { RemoteConfigLimits, type LimitsProvider } from "./services/limits";
 import { FirestoreQuotaStore } from "./services/quota";
+import {
+  FirestoreQuestChallenges,
+  handleQuestAppCheck,
+  questPolicy,
+  verifyMetaAttestation,
+} from "./services/questAttestation";
 import { deleteStaleRooms } from "./services/rooms";
 
 initializeApp();
 
 /** The Hypa key lives only in Secret Manager: `firebase functions:secrets:set HYPA_API_KEY`. */
 const HYPA_API_KEY = defineSecret("HYPA_API_KEY");
+const META_QUEST_APP_ACCESS_TOKEN = defineSecret("META_QUEST_APP_ACCESS_TOKEN");
 
 const emulator = emulatorSettings();
 
@@ -89,6 +96,32 @@ export const hypa = onRequest(
       .set({ "cache-control": "no-store", ...out.headers })
       .status(out.status)
       .json(out.body);
+  },
+);
+
+/** Native Quest clients authenticate with Firebase Auth, then exchange a one-time Meta attestation for App Check. */
+export const questAppCheck = onRequest(
+  {
+    region: REGION,
+    secrets: [META_QUEST_APP_ACCESS_TOKEN],
+    timeoutSeconds: 20,
+    invoker: "public",
+    cors: false,
+  },
+  async (req, res) => {
+    const out = await handleQuestAppCheck(
+      { method: req.method, path: req.path, header: (name) => req.header(name), body: req.body },
+      {
+        get policy() {
+          return questPolicy();
+        },
+        challenges: new FirestoreQuestChallenges(getFirestore()),
+        verifyIdToken: (token) => getAuth().verifyIdToken(token),
+        verifyMeta: (token) => verifyMetaAttestation(token, META_QUEST_APP_ACCESS_TOKEN.value()),
+        mint: (appId) => getAppCheck().createToken(appId),
+      },
+    );
+    res.set("cache-control", "no-store").status(out.status).json(out.body);
   },
 );
 

@@ -68,6 +68,7 @@ describe("error mapping", () => {
   it("maps an exhausted Hypa balance to `quota`, not `upstream`", () => {
     const e = mapHttpError(402, "");
     expect([e.code, e.status, e.extras.scope]).toEqual(["quota", 429, "provider_balance"]);
+    expect(e.extras.retryAfterSeconds).toBe(300);
     expect(() =>
       parseToolResult(
         sse({ result: { isError: true, structuredContent: { code: "INSUFFICIENT_BALANCE", error: "x" } } }),
@@ -121,7 +122,7 @@ describe("calls", () => {
           }),
         ),
     );
-    const out = await c.hypa.tts({ text: "Bawo", language: "Yoruba" });
+    const out = await c.hypa.tts({ text: "Bawo", language: "Yoruba", inline: true });
     const sent = c.seen[0];
     expect(sent.url).toBe("https://hypa.test/v2/mcp");
     expect((sent.init.headers as Record<string, string>)["x-api-key"]).toBe("KEY-123456");
@@ -131,6 +132,15 @@ describe("calls", () => {
       arguments: { text: "Bawo", language: "Yoruba", model: "auto", format: "base64" },
     });
     expect(out.route).toEqual({ provider: "hypaai", model: "hypa/auto", voice: "Ife" });
+  });
+
+  it("leaves the format unset and passes through the signed URL by default", async () => {
+    const audioUrl = "https://hypa.test/signed-audio";
+    const c = client(() => new Response(toolOk({ audioUrl, mime: "audio/mpeg", voice: "Ife", model: "model-1" })));
+    const out = await c.hypa.tts({ text: "Hello", language: "English" });
+    expect(JSON.parse(String(c.seen[0].init.body)).params.arguments).not.toHaveProperty("format");
+    expect(out.audioUrl).toBe(audioUrl);
+    expect(out.audioBase64).toBeUndefined();
   });
 
   it("resolves a voice-only request and forwards the selected voice and model", async () => {
@@ -144,7 +154,7 @@ describe("calls", () => {
         ),
       );
     });
-    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "ife" });
+    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "ife", inline: true });
     expect(JSON.parse(String(c.seen[0].init.body)).params).toEqual({
       name: "list_voices",
       arguments: { language: "Yoruba" },
@@ -171,7 +181,7 @@ describe("calls", () => {
           }),
         ),
     );
-    const out = await c.hypa.tts({ text: "a", language: "Yoruba", model: "hypa/model-1" });
+    const out = await c.hypa.tts({ text: "a", language: "Yoruba", model: "hypa/model-1", inline: true });
     expect(JSON.parse(String(c.seen[0].init.body)).params.arguments).toMatchObject({
       model: "hypa/model-1",
       format: "base64",
@@ -199,7 +209,7 @@ describe("calls", () => {
 
 describe("model selection through the proxy", () => {
   const chatRequest = { messages: [{ role: "user", content: "Báwo ni?" }], language: "Yoruba" };
-  const speech = { audioBase64: "YXVkaW8=", mime: "audio/mpeg", voice: "Ife" };
+  const speech = { audioUrl: "https://hypa.test/signed-audio", mime: "audio/mpeg", voice: "Ife" };
   const recording = { audioBase64: wav(1).toString("base64"), mime: "audio/wav", language: "Yoruba" };
 
   it.each([

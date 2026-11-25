@@ -21,7 +21,7 @@ export async function handleRequest(req: ProxyRequest, deps: Deps): Promise<Prox
     uid = caller.uid;
     if (typeof req.body !== "object" || req.body === null || Array.isArray(req.body))
       throw badRequest("Send a JSON object.");
-    const { cost, run } = route(req.body as Record<string, unknown>, deps.hypa);
+    const { cost, run } = await route(req.body as Record<string, unknown>, deps.hypa);
 
     const at = now();
     const limits = await deps.limits.get();

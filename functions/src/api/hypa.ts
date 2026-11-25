@@ -29,7 +29,8 @@ export interface HypaApi {
     language: string;
     voice?: string;
     model?: string;
-  }): Promise<{ audioBase64: string; mime: string; sampleRate?: number; route: Route }>;
+    inline?: boolean;
+  }): Promise<{ audioUrl?: string; audioBase64?: string; mime: string; sampleRate?: number; route: Route }>;
 
   asr(i: {
     audioBase64: string;
@@ -157,20 +158,22 @@ export class HypaHttpClient implements HypaApi {
 
     const out = await this.tool(
       "text_to_speech",
-      { text: i.text, language: i.language, model, voice, format: "base64" },
+      { text: i.text, language: i.language, model, voice, format: i.inline ? "base64" : undefined },
       signal,
     );
-    const audioBase64 = str(out.audioBase64);
+    const audioUrl = i.inline ? undefined : str(out.audioUrl);
+    const audioBase64 = i.inline ? str(out.audioBase64) : undefined;
     const mime = str(out.mime);
     const spokenVoice = str(out.voice) ?? voice;
     const spokenModel = str(out.model);
-    if (!audioBase64 || !mime || !spokenVoice || !spokenModel) {
+    if ((i.inline ? !audioBase64 : !audioUrl?.startsWith("https://")) || !mime || !spokenVoice || !spokenModel) {
       throw upstream("Hypa returned incomplete audio.", 502, "invalid_response", true);
     }
-    if (Buffer.byteLength(audioBase64, "base64") > MAX_INLINE_AUDIO_BYTES) {
+    if (audioBase64 && Buffer.byteLength(audioBase64, "base64") > MAX_INLINE_AUDIO_BYTES) {
       throw upstream("Hypa returned audio that was too large.", 502, "invalid_response", false);
     }
     return {
+      audioUrl,
       audioBase64,
       mime,
       sampleRate: typeof out.sampleRate === "number" ? out.sampleRate : undefined,

@@ -34,7 +34,16 @@ namespace HypaCore.Hybrid
         /// <summary>The proxy from the app's configuration (<see cref="HypaConfig.BaseUrl"/>) and the current account.</summary>
         public static HypaProxyClient FromConfig() => new HypaProxyClient(HypaConfig.Current.BaseUrl, HybridServices.Current.Auth);
 
-        public Task<TtsResponse> TtsAsync(TtsRequest body, CancellationToken ct) => PostAsync<TtsResponse>(ProxyApi.Tts, body, ct);
+        public Task<TtsResponse> TtsAsync(TtsRequest body, CancellationToken ct)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            var inlineBody = JObject.FromObject(body, JsonSerializer.Create(Json));
+            inlineBody["inline"] = true;
+            return PostAsync<TtsResponse>(ProxyApi.Tts, inlineBody, ct);
+#else
+            return PostAsync<TtsResponse>(ProxyApi.Tts, body, ct);
+#endif
+        }
         public Task<AsrResponse> AsrAsync(AsrRequest body, CancellationToken ct) => PostAsync<AsrResponse>(ProxyApi.Asr, body, ct);
         public Task<ChatResponse> ChatAsync(ChatRequest body, CancellationToken ct) => PostAsync<ChatResponse>(ProxyApi.Chat, body, ct);
         public Task<TranslateResponse> TranslateAsync(TranslateRequest body, CancellationToken ct) => PostAsync<TranslateResponse>(ProxyApi.Translate, body, ct);

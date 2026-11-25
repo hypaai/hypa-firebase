@@ -52,10 +52,10 @@ export function fakeHypa(overrides: Partial<HypaApi> = {}): HypaApi & { calls: s
   const calls: string[] = [];
   return {
     calls,
-    tts: async () => {
+    tts: async ({ inline }) => {
       calls.push("tts");
       return {
-        audioBase64: "YXVkaW8=",
+        ...(inline ? { audioBase64: "YXVkaW8=" } : { audioUrl: "https://hypa.test/signed-audio" }),
         mime: "audio/mpeg",
         route: { provider: "hypaai", model: "auto-1", voice: "Ife" },
       };

@@ -5,7 +5,7 @@ import { audioSeconds } from "../utils/audio";
 import { optional, required } from "../utils/validate";
 
 /** Speech to text. Up to 30 s / 1 MiB of base64 audio; charged by the recording's length. */
-export const asr: Route = (body, hypa) => {
+export const asr: Route = async (body, hypa) => {
   const audio = required(body, body.audio === undefined ? "audioBase64" : "audio", MAX_ASR_BASE64_CHARS);
   const mime = optional(body, "mime", 128);
   if (mime && !/^audio\//i.test(mime)) throw badRequest("'mime' must be an audio MIME type.");
@@ -20,7 +20,8 @@ export const asr: Route = (body, hypa) => {
   if (buf.length === 0 || buf.toString("base64") !== audio)
     throw badRequest("'audioBase64' is not valid base64 audio.");
   if (buf.length > MAX_ASR_BYTES) throw tooLarge("The recording is too large (max about 30 seconds).");
-  const seconds = audioSeconds(buf, declared as number | undefined);
+  if (typeof declared === "number" && declared > MAX_ASR_SECONDS) throw tooLarge("The declared recording is too long.");
+  const seconds = await audioSeconds(buf);
   if (seconds > MAX_ASR_SECONDS) throw tooLarge(`The recording is too long (max ${MAX_ASR_SECONDS} seconds).`);
   return {
     cost: { requests: 1, seconds },

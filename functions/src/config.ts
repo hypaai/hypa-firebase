@@ -14,7 +14,6 @@ export const FUNCTION_TIMEOUT_SECONDS = 60;
 export const MAX_ASR_SECONDS = 30;
 export const MAX_ASR_BYTES = 1024 * 1024;
 export const MAX_ASR_BASE64_CHARS = Math.ceil(MAX_ASR_BYTES / 3) * 4;
-export const ASSUMED_AUDIO_BYTES_PER_SECOND = 32_000;
 
 export const MAX_TTS_CHARS = 1_000;
 export const MAX_TRANSLATE_CHARS = 2_000;

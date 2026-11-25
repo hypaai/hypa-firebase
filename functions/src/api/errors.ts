@@ -49,8 +49,9 @@ export const upstream = (
 export const timeoutError = () => upstream("Hypa took too long to answer. Try again.", 504, "timeout", true);
 
 export const providerBalanceError = () =>
-  new ProxyError("quota", 429, "The voice and translation service has reached its daily budget. Try again tomorrow.", {
+  new ProxyError("quota", 429, "The Hypa service budget is exhausted. Try again later.", {
     scope: "provider_balance",
+    retryAfterSeconds: 300,
   });
 
 export const isTimeout = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");

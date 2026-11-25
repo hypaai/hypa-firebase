@@ -3,7 +3,7 @@ import { MAX_ASR_BASE64_CHARS } from "../src/config";
 import { ProxyError } from "../src/api/errors";
 import { handleRequest } from "../src/api/handler";
 import { routePath } from "../src/routes";
-import { audioSeconds, wavSeconds } from "../src/utils/audio";
+import { execFileSync } from "node:child_process";
 import { deps, fakeHypa, LIMITS, request, wav } from "./helpers";
 
 const err = (r: { body: any }) => r.body.error;
@@ -45,7 +45,7 @@ describe("routing", () => {
 describe("/hypa/tts", () => {
   it("speaks, returns which model and voice answered, and the caller's usage", async () => {
     const d = deps();
-    const r = await handleRequest(request("/hypa/tts", { text: "Bawo ni", language: "Yoruba" }), d);
+    const r = await handleRequest(request("/hypa/tts", { text: "Bawo ni", language: "Yoruba", inline: true }), d);
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({
       audioBase64: "YXVkaW8=",
@@ -61,6 +61,14 @@ describe("/hypa/tts", () => {
         resetsAt: "2026-11-25T00:00:00.000Z",
       },
     });
+  });
+
+  it("returns a link by default and rejects a non-boolean inline flag", async () => {
+    const d = deps();
+    const body = { text: "Hello", language: "English" };
+    const result = await handleRequest(request("/hypa/tts", body), d);
+    expect(result.body).toMatchObject({ audioUrl: "https://hypa.test/signed-audio" });
+    expect((await handleRequest(request("/hypa/tts", { ...body, inline: "true" }), d)).status).toBe(400);
   });
 
   it("charges audio seconds by text length (15 chars/s, rounded up)", async () => {
@@ -140,7 +148,6 @@ describe("/hypa/asr", () => {
     ).then((r) => ({ r, d }));
 
   it("reads the WAV duration and charges whole seconds", async () => {
-    expect(wavSeconds(wav(2.5))).toBeCloseTo(2.5, 2);
     const { r, d } = await send(wav(2.5));
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ text: "bawo ni", model: "asr-1" });
@@ -154,7 +161,7 @@ describe("/hypa/asr", () => {
   });
 
   it("does not let a caller under-report a long recording, nor over-claim past the cap", async () => {
-    expect(audioSeconds(wav(20), 1)).toBe(20);
+    expect((await send(wav(31), { durationSeconds: 1 })).r.status).toBe(413);
     expect((await send(wav(1), { durationSeconds: 45 })).r.status).toBe(413);
     expect((await send(wav(1), { durationSeconds: "x" })).r.status).toBe(400);
   });
@@ -166,8 +173,25 @@ describe("/hypa/asr", () => {
     expect(r.status).toBe(413);
   });
 
-  it("prices non-WAV audio by size when it has no readable duration", () => {
-    expect(audioSeconds(Buffer.alloc(64_000))).toBe(2);
+  it("measures compressed audio and rejects unreadable files", async () => {
+    const mp3 = execFileSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "anullsrc=r=16000:cl=mono",
+      "-t",
+      "31",
+      "-b:a",
+      "16k",
+      "-f",
+      "mp3",
+      "pipe:1",
+    ]);
+    expect(mp3.length).toBeLessThan(MAX_ASR_BASE64_CHARS / 10);
+    expect((await send(mp3, { mime: "audio/mpeg" })).r.status).toBe(413);
+    expect((await send(Buffer.from("not a recording"))).r.status).toBe(400);
   });
 });
 

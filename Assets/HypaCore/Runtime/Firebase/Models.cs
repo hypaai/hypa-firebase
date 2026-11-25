@@ -130,7 +130,7 @@ namespace HypaCore.Hybrid
 
     /// <summary><see cref="voice"/> works only with the <see cref="model"/> that owns it. <see cref="inline"/>: return base64, not a link.</summary>
     [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; public string model; public bool? inline; }
-    /// <summary>The proxy returns <see cref="audioBase64"/> and its MIME type.</summary>
+    /// <summary>Returns <see cref="audioUrl"/> by default or <see cref="audioBase64"/> when inline is requested.</summary>
     [Serializable] public sealed class TtsResponse { public string audioUrl; public string audioBase64; public string mime; public int sampleRate; public ProxyRoute route; public ProxyUsage usage; }
     /// <summary>Base64 audio, at most 1 MiB and 30 s.</summary>
     [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public double? durationSeconds; public string model; }

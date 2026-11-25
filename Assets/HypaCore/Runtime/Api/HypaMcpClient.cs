@@ -213,10 +213,13 @@ namespace HypaCore
         public static string ModelForVoice(List<KeyValuePair<string, List<string>>> options, string voice)
             => options?.FirstOrDefault(x => x.Value.Contains(voice, System.StringComparer.OrdinalIgnoreCase)).Key;
 
-        /// <summary>The Firebase proxy returns inline audio and the selected model and voice.</summary>
+        /// <summary>The Firebase proxy returns a signed audio link or inline audio on the web.</summary>
         public async Task<HypaSpeech> TextToSpeechAsync(string text, string language, CancellationToken ct, string voice = null, string model = null)
         {
             var body = new JObject { ["text"] = text, ["language"] = language };
+#if UNITY_WEBGL && !UNITY_EDITOR
+            body["inline"] = true;
+#endif
             if (!string.IsNullOrEmpty(voice)) body["voice"] = voice;
             if (!string.IsNullOrEmpty(model)) body["model"] = model;
             var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Tts, body.ToString(Formatting.None), ct).ConfigureAwait(false);

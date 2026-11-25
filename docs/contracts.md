@@ -122,7 +122,7 @@ the web build calls same-origin paths. These are the shapes G04's function imple
 
 | Path | Body | Returns (plus `usage`) |
 | -- | -- | -- |
-| `/hypa/tts` | `{ text (≤ 1000), language, voice?, model?, inline? }` | `{ audioBase64, mime, sampleRate, route }` |
+| `/hypa/tts` | `{ text (≤ 1000), language, voice?, model?, inline? }` | `{ audioUrl \| audioBase64, mime, sampleRate, route }` |
 | `/hypa/asr` | `{ audio (base64, ≤ 1 MiB, ≤ 30 s), sourceLang?, durationSeconds?, model? }` | `{ transcript, language, audioSeconds, route }` |
 | `/hypa/chat` | `{ messages (≤ 20, ≤ 8000 characters, roles system / user / assistant), model?, maxTokens? (≤ 1024) }` | `{ content, route }` |
 | `/hypa/translate` | `{ text (≤ 2000), targetLang, sourceLang?, model? }` | `{ translation, language, route }` |
@@ -130,7 +130,7 @@ the web build calls same-origin paths. These are the shapes G04's function imple
 
 - `route` is `{ provider, model, voice }` as Hypa reported them, for the route chip. `usage` is `{ secondsUsed, secondsLimit,
   requestsUsed, requestsLimit, resetsAt }`.
-- TTS: named voices are matched to a model when no model is supplied. The proxy always returns inline audio.
+- TTS: named voices are matched to a model when no model is supplied. The default response contains a signed audio link. WebGL sends inline: true to receive Base64 audio.
 - Chat: the system prompt can be the first message with role system. Auto tries the ordered VR models with one 20-second deadline. An explicitly pinned model is tried on its own.
 - The existing story client can also use the fields in [the proxy runbook](hypa-proxy.md).
 - `/gemini/generate` is built only if G02's Quest spike finds the Firebase AI Logic SDK does not run on Quest (G04). It calls Gemini
@@ -160,7 +160,7 @@ paths. No Hypa key is ever in the app.
 | -- | -- | -- |
 | `hypa` (`/hypa/tts`, `asr`, `chat`, `translate`) | HTTPS | The proxy above. |
 | `hypa` (`/gemini/generate`, optional) | HTTPS | Gemini for Quest, only if the Firebase AI Logic SDK does not run there (above). |
-| `questAppCheck` (not built yet) | HTTPS | Exchanges a Meta Platform Integrity attestation for an App Check token (Admin SDK `createToken`), so Quest passes App Check. |
+| `questAppCheck` | HTTPS | Exchanges a Meta Platform Integrity attestation for an App Check token (Admin SDK `createToken`), so Quest passes App Check. |
 | `cleanupRooms` | Scheduled, every 30 minutes | Deletes `rooms/{code}` older than 2 hours (indexed on `createdAt`). |
 
 ## 7. Shared rules

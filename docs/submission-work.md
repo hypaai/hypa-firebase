@@ -60,6 +60,10 @@ A profile card for Stories with a realistic character the player shapes. Code in
 - Tests: `Assets/HypaStories/Tests/Editor/StoryProfileTests.cs`.
 - Not yet synced through Firebase.
 
+## G03: Firebase web bridge (HYP-198)
+
+- Integrated the Firebase browser bridge, browser microphone and Chrome Nano from G03. The localhost bridge returns no App Check token for the emulator. Hosted builds still request a real token.
+
 ## G04: Hypa proxy and hosting (HYP-199)
 
 - `functions/`: TypeScript, Node 22, Cloud Functions v2 (`us-central1`). `hypa` function with `/hypa/tts`, `/hypa/asr`, `/hypa/chat`, `/hypa/translate`; Firebase ID token and App Check verification; per-user and global daily quotas in Firestore with Remote Config limits; Hypa error mapping; key via Secret Manager only. `cleanupRooms` scheduled function. Unit tests with Vitest and `firebase-functions-test`.
@@ -67,6 +71,8 @@ A profile card for Stories with a realistic character the player shapes. Code in
 - `docs/hypa-proxy.md`: contract, limits, secrets, runbook.
 
 - Follow-up: aligned the four proxy routes with G01, moved the VR chat fallback order into the proxy and supported explicit model selection on all four routes, fixed quota refunds and room expiration, and wired the Unity calls and editor sign-in to the local proxy. The Unity WebGL build uses Brotli to match the Hosting headers.
+- TTS now returns a signed URL by default and requests inline audio in WebGL. ASR checks the decoded duration for compressed and uncompressed recordings. Hypa balance errors include a retry delay.
+- Added the Quest App Check HTTPS exchange and tests with simulated Meta responses. Quest client integration and the physical headset check remain pending.
 
 ## G08 (HYP-203): progress sync, logic only
 
