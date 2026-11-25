@@ -2,6 +2,7 @@ name: Unity validation
 on: [pull_request, workflow_dispatch]
 permissions:
   contents: read
+  checks: write # unity-test-runner posts the test results as a check run
 jobs:
   editmode:
     runs-on: ubuntu-latest
@@ -16,6 +17,7 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           testMode: EditMode
+          cliVersion: v0.1.77 # 'latest' asks the GitHub API each run and can get a 403
           artifactsPath: TestResults
       - uses: actions/upload-artifact@v4
         if: always()

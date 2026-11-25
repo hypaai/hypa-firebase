@@ -210,7 +210,7 @@ namespace HypaCore.Tests
             var flags = new WebRemoteFlags();
             Run(flags.FetchAsync());
             Assert.AreEqual("gemini-x", flags.Get(RemoteConfigKeys.CloudModel, "fallback"));
-            Assert.AreEqual("900", flags.Get(RemoteConfigKeys.ProxyDailySecondsPerUser, "fallback"));
+            Assert.AreEqual(RemoteConfigKeys.Default(RemoteConfigKeys.ProxyDailySecondsPerUser), flags.Get(RemoteConfigKeys.ProxyDailySecondsPerUser, "fallback"));
             Assert.AreEqual("fallback", flags.Get("unknown", "fallback"));
 
             js.Reply = (m, a) => new[] { Err("remoteconfig/fetch-throttle") };

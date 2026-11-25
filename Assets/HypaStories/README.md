@@ -337,3 +337,37 @@ Hand positions come from `StoryInput.Hand` (each tracked hand's palm, else the c
 `Quest/QuestStoryInput`). Sounds: `ProceduralClips.DrumStrokeSamples` (each drum open and slapped, two takes each),
 `OgeneSamples`, `ShakerSamples`. In the editor: pinch (click) a drum, or **B** for the low drum, **N** for the high one, **P** to
 play the beat back for you.
+
+## Local character profile
+
+Stories opens a profile card before constructing the campfire. On the left is a portrait of your character: a head-and-shoulders
+shot rendered into a round photo by its own camera (layer 29, far below the scene). It renders once per change: the character is
+posed and baked, one frame is drawn into a temporary multisampled target and copied to a plain 512 px texture (about 1 MB), and the
+studio is switched off, so nothing runs per frame. A tap only moves the selection highlights; the option buttons are built once (the opening photo is retaken over the
+first two frames, as freshly loaded skinned meshes bake empty, and again when the app regains focus). Your username
+(3–20 ASCII letters, digits or underscores, starting with a letter) and an optional display name are typed under it. On the right are
+five choices: skin tone, hair, hair colour, outfit, and body (feminine, neutral or masculine), plus **Surprise me**. **Done** saves and
+enters the campfire; without a username it asks for one. **Your character** on the campfire splash reopens the card with the saved
+choices; Back leaves them intact. Returning players enter the campfire directly. In a headset the card floats in front of you with your
+room showing around it (the camera keeps its see-through clear colour) and glides back when you turn. The XR session starts a few frames
+after the scene, so the card switches to the headset layout when it comes up. On a screen the card is centred; a phone in portrait
+stacks it. Name fields use native mobile text entry where supported, or an on-screen pointing keyboard; a physical keyboard also works.
+
+The character is a rigged human built from the MakeHuman CC0 system assets with MPFB, in `Resources/HypaAvatar` (`hypa_avatar.glb`,
+`Textures/`, `Thumbs/`). Every part (body, eyes, brows, lashes, each hair style, outfit and shoes) is a skinned mesh on one skeleton
+and carries the body and face blend shapes, so clothes follow the body choice; skin under the outfit is hidden (one bit per garment in
+the body's vertex colour). `ProfileAvatar` lowers the arms from the bind pose; with `Animate` on (off for the photo) it also breathes, shifts its weight and blinks.
+`HypaStories/Avatar` (in Resources) is a wrap-lit skin/hair shader for the built-in pipeline; `HypaStories/Picture` draws the photo
+and option pictures in full colour with rounded corners. To save memory the model carries only the shapes the card uses (frame and
+blink) and textures sized for a 512 px portrait (skin 1024, hair and outfits 512, the rest 256, thumbnails imported at 128): 9 MB in
+all. The profile data still holds the finer face and body values (version 2), at their averages; `SHAPES` and `SIZES` in the build
+script bring them back for a fuller editor.
+
+Rebuild the model after changing an option in `ProfileCatalog` (ids are read from it): install MPFB as a Blender extension, unzip the
+MakeHuman CC0 system asset pack into MPFB's user data folder, then from the repository root run
+`blender -b --python tools/avatar/build_avatar.py -- --preview /tmp/avatar.png` (details in the script's header).
+
+Profiles use a versioned local PlayerPrefs record (`hypa.stories.local-profile.v1`, version 2; version 1 saves are migrated on load)
+with a stable generated ID. There are no passwords, email collection, remote calls, uniqueness guarantees or online accounts. This
+supplies local identity/appearance data for a later multiplayer implementation. Data is per device/browser and may be cleared with
+local app storage.

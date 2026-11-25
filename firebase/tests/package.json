@@ -2,9 +2,10 @@
   "name": "hypa-firebase-rules-tests",
   "private": true,
   "type": "module",
-  "description": "Emulator tests for firebase/firestore.rules and firebase/database.rules.json. Run from the repository root: npx firebase-tools emulators:exec --only firestore,database --project demo-hypa \"node --test firebase/tests/rules.test.mjs\"",
+  "description": "Emulator tests for firebase/firestore.rules and firebase/database.rules.json. The Firebase CLI needs Java 21 or later. From the repository root: npx --prefix firebase/tests firebase emulators:exec --only firestore,database --project demo-hypa \"cd firebase/tests && node --test rules.test.mjs\"",
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",
-    "firebase": "^10.14.1"
+    "firebase": "^10.14.1",
+    "firebase-tools": "^15.0.0"
   }
 }

@@ -136,6 +136,8 @@ namespace HypaStories
         public TextMeshPro Label;
         public KitStyle Style;
         public Action OnPress, OnLong;
+        /// <summary>No glow when hovered or selected (dense option grids); the selected edge still shows. Off by default.</summary>
+        public bool Flat;
         public bool Selected { get => _selected; set { _selected = value; Paint(); } }
         public PinchTarget Target { get; private set; }
         bool _selected, _hover;
@@ -214,7 +216,7 @@ namespace HypaStories
                     break;
             }
             var light = Style == KitStyle.Black || Style == KitStyle.Outline || Style == KitStyle.Soft || Style == KitStyle.Danger;
-            Bg.Glow = light ? KitTheme.Clear : new Color(KitTheme.Ember.r, KitTheme.Ember.g, KitTheme.Ember.b, 0.5f * glow);
+            Bg.Glow = light || Flat ? KitTheme.Clear : new Color(KitTheme.Ember.r, KitTheme.Ember.g, KitTheme.Ember.b, 0.5f * glow);
             Bg.Apply();
             if (Style == KitStyle.Ghost) Ink(_selected ? KitTheme.Ember : KitTheme.Paper);
             else if (Style == KitStyle.Dim) Ink(KitTheme.Faint);

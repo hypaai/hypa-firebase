@@ -1,0 +1,9 @@
+node_modules/
+lib/
+*.log
+# Local dev key for the Functions emulator. NEVER commit.
+.secret.local
+.env
+.env.*
+!.env.example
+coverage/

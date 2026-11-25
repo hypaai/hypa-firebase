@@ -44,8 +44,62 @@ namespace HypaCore.Hybrid
         string Get(string key, string fallback);
     }
 
-    /// <summary>G09 owns this: create or join a room, presence, the story clock and the pose stream. Left empty until then.</summary>
-    public interface IRoomSync { }
+    /// <summary>
+    /// A shared story for two players (Realtime Database <c>rooms/{code}</c>, docs/contracts.md, section 4; G09 implements it).
+    /// The host creates the room and owns its state and story clock; each player owns their own seat, pose and game entries.
+    /// Events are raised on the main thread. One room at a time.
+    /// </summary>
+    public interface IRoomSync
+    {
+        /// <summary>The room this client is in, or null.</summary>
+        string Code { get; }
+        /// <summary>True when this client created the current room.</summary>
+        bool IsHost { get; }
+        /// <summary>The server's clock in Unix ms, estimated from this device's clock (Realtime Database <c>.info/serverTimeOffset</c>).</summary>
+        long ServerTimeMs { get; }
+
+        /// <summary>Creates a room with a new <see cref="RoomCode"/>, seats you in seat 0, and returns the code.</summary>
+        Task<string> CreateAsync(string storyId, string language, RoomPlayer me);
+        /// <summary>Joins a room in the free seat. Throws <see cref="RoomException"/> (NotFound, Full, Expired).</summary>
+        Task<RoomInfo> JoinAsync(string code, RoomPlayer me);
+        /// <summary>Leaves the room. When the host leaves, the room is closed for everyone.</summary>
+        Task LeaveAsync();
+
+        /// <summary>Host only: "lobby", "story" or "game" (<see cref="RoomStates"/>).</summary>
+        Task SetStateAsync(string state);
+        /// <summary>Host only: where the story is, so both players hear the same line at the same time.</summary>
+        Task SetClockAsync(RoomClock clock);
+        /// <summary>Updates your own entry (e.g. a raised hand). Presence (<c>online</c>) is kept by the implementation.</summary>
+        Task UpdateMeAsync(RoomPlayer me);
+        /// <summary>Sends your head and hands. Fire and forget; the implementation sends at most 10 per second and drops the rest.</summary>
+        void SendPose(PoseFrame pose);
+        /// <summary>Records your game result.</summary>
+        Task SubmitGameAsync(GameResult result);
+
+        event Action<RoomInfo> RoomChanged;
+        event Action<RoomClock> ClockChanged;
+        /// <summary>Everyone in the room by uid, you included.</summary>
+        event Action<IReadOnlyDictionary<string, RoomPlayer>> PlayersChanged;
+        /// <summary>Another player's pose (uid, pose). Yours are not echoed back.</summary>
+        event Action<string, PoseFrame> PoseReceived;
+        event Action<string, GameResult> GameResultReceived;
+        /// <summary>The room is gone: the host left, it expired, or you left.</summary>
+        event Action Closed;
+    }
+
+    /// <summary>
+    /// The player's profile in Firestore <c>users/{uid}</c> (docs/contracts.md, section 3): names, language and the character's
+    /// appearance, so a profile made on one device follows the player to another.
+    /// </summary>
+    public interface IProfileStore
+    {
+        /// <summary>The saved profile, or null if this account has none yet.</summary>
+        Task<UserProfile> LoadAsync();
+        /// <summary>Saves the profile. Completes once it is stored locally; it reaches the server when the network allows.</summary>
+        Task SaveAsync(UserProfile profile);
+        /// <summary>Raised when the profile changed on another device.</summary>
+        event Action<UserProfile> ChangedElsewhere;
+    }
 
     public interface IOnDeviceModel
     {
