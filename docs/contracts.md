@@ -37,6 +37,8 @@ outside development: debug tokens skip the check.
   Fakes meanwhile are sent if they are newer. Always read services through `HybridServices.Current`.
 - `IOnDeviceModel` implementations: `ChromeNanoModel` (G03), `AndroidNanoModel` (G06), `AppleFoundationModel` (G07),
   `NoOnDeviceModel` (Quest, editor).
+  A platform's model registers `HybridServices.OnDeviceFactory`, and every service set (the Fakes too) uses it, so on-device
+  answers do not wait for Firebase. iOS: `docs/ios-on-device.md`.
 - Tokens are fetched per call and never stored or logged by gameplay code.
 
 ## 2. Hybrid route decision (G05 owns the logic, everyone reads it)
