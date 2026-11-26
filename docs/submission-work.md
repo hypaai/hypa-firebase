@@ -72,6 +72,7 @@ A profile card for Stories with a realistic character the player shapes. Code in
 
 - Follow-up: aligned the four proxy routes with G01, moved the VR chat fallback order into the proxy and supported explicit model selection on all four routes, fixed quota refunds and room expiration, and wired the Unity calls and editor sign-in to the local proxy. The Unity WebGL build uses Brotli to match the Hosting headers.
 - TTS now returns a signed URL by default and requests inline audio in WebGL. ASR checks the decoded duration for compressed and uncompressed recordings. Hypa balance errors include a retry delay.
+- WebGL TTS, ASR, and story chat resume on Unity's main thread after the proxy responds, so response parsing can continue on a build without managed worker threads.
 - Added the Quest App Check HTTPS exchange and tests with simulated Meta responses. Quest client integration and the physical headset check remain pending.
 
 ## G08 (HYP-203): progress sync, logic only

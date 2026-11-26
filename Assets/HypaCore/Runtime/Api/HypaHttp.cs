@@ -25,6 +25,13 @@ namespace HypaCore
         public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
         public static readonly TimeSpan AudioDownloadTimeout = TimeSpan.FromSeconds(60);
 
+        // An incomplete proxy task must resume on Unity's main thread in WebGL.
+#if UNITY_WEBGL && !UNITY_EDITOR
+        internal const bool CaptureProxyContext = true;
+#else
+        internal const bool CaptureProxyContext = false;
+#endif
+
         /// <summary>POST JSON to the Hypa API. Calls the proxy without a Hypa API key. Returns the raw body (JSON or SSE).</summary>
         public static Task<string> PostAsync(HypaConfig cfg, string path, string json, CancellationToken ct, TimeSpan? timeout = null)
             => PostAsync(cfg, path, json, ct, timeout ?? DefaultTimeout, null, null);

@@ -222,7 +222,7 @@ namespace HypaCore
 #endif
             if (!string.IsNullOrEmpty(voice)) body["voice"] = voice;
             if (!string.IsNullOrEmpty(model)) body["model"] = model;
-            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Tts, body.ToString(Formatting.None), ct).ConfigureAwait(false);
+            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Tts, body.ToString(Formatting.None), ct).ConfigureAwait(HypaHttp.CaptureProxyContext);
             var result = JObject.Parse(raw);
             var speech = ParseSpeech(result);
             speech.Provider = (string)result["route"]?["provider"];
@@ -248,7 +248,7 @@ namespace HypaCore
                 ["audioBase64"] = Convert.ToBase64String(audio), ["mime"] = "audio/wav", ["language"] = sourceLang ?? "auto",
             };
             if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
-            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Asr, body.ToString(Formatting.None), ct).ConfigureAwait(false);
+            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Asr, body.ToString(Formatting.None), ct).ConfigureAwait(HypaHttp.CaptureProxyContext);
             return (string)JObject.Parse(raw)["text"] ?? "";
         }
 

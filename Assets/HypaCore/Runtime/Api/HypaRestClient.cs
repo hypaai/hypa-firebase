@@ -88,7 +88,7 @@ namespace HypaCore
                 first.Remove();
             }
             if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
-            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Chat, body.ToString(Formatting.None), ct).ConfigureAwait(false);
+            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Chat, body.ToString(Formatting.None), ct).ConfigureAwait(HypaHttp.CaptureProxyContext);
             var json = JObject.Parse(raw);
             var reply = json.ToObject<ChatResponse>();
             if (reply != null) reply.content ??= (string)json["text"];
