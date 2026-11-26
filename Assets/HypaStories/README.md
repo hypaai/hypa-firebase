@@ -246,8 +246,8 @@ the translations are matched on.
 - **Chat** (REST `/v2/developer/chat`, `HypaRestClient.ChatAsync`, not streamed): `ChatStoryQa` sends the storyteller persona, the
   story so far up to the interrupted line (in the listener's language) and the question to the story's `model`, which answers in that
   language in 2-3 sentences without spoilers. The reply is spoken sentence by sentence; over 12 s counts as offline. Muse Wonder
-  took 2.6-4.2 s in English and French (it reasons before answering, even with `thinking: false`). StoryApp's `qaMode` switches to
-  the stub (`stub`, `slow`, `offline`).
+  took 2.6-4.2 s in English and French (it reasons before answering, even with `thinking: false`). Answers now go through
+  `HybridStoryQa` (`docs/contracts.md`, section 2).
 - Without a configured proxy, the story still runs: lines are "spoken" silently for about their length (subtitles keep time), and questions
   use the suggestion buttons.
 

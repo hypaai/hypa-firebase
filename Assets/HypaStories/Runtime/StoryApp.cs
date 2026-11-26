@@ -23,8 +23,6 @@ namespace HypaStories
     public sealed class StoryApp : MonoBehaviour
     {
         [SerializeField] StoryAssets assets;
-        [Tooltip("Answers: chat (the story's model through Hypa), or the stand-in: stub, slow (~3 s to answer: exercises the second filler) or offline (every call fails).")]
-        [SerializeField] string qaMode = "chat";
         [Tooltip("Eye height assumed for the scene's own camera when it has no rig (and for eye-level tracking origins).")]
         [SerializeField] float seatedEyeHeight = 1.2f;
         [Tooltip("Walking speed with the left thumbstick (or WASD in the editor), metres per second.")]
@@ -111,6 +109,7 @@ namespace HypaStories
                 enabled = false;
                 return;
             }
+            StoryProfileSync.Start();
             bool editing = AppRouter.Consume(ProfileCreator.EditRoute);
             if (!editing && StoryProfileStore.Load() != null) { BeginStory(); return; }
             _creatingProfile = true;
@@ -162,12 +161,15 @@ namespace HypaStories
             {
                 _debug = new DebugView(_ui, _player, _story, _voice, () => _lang);
             }
-            _tryFlow = new TryHypaFlow(new HypaTryApi(), _mic, HypaSettings.TargetLanguage);
+            _tryFlow = new TryHypaFlow(new HybridTryApi(new HypaTryApi()), _mic, HypaSettings.TargetLanguage);
             // the same recording as Ask (stops when you stop talking), which is the one proven on the headset; the live
             // stream-until-Done mode gave only silence there
             _tryFlow.LiveText = false;
             _try = new TryHypaView(_player.Body, _tryFlow, CloseTry);
-            _ask = new AskFlow(_story, _voice, _mic, qaMode == "chat" ? new ChatStoryQa() : (IStoryQa)new StubStoryQa { Mode = qaMode }, _player, () => _story.Language, OnAsking);
+            var qa = new HybridStoryQa();
+            qa.Routed += r => Debug.Log($"Hypa Stories answered: {r.Chip()} ({r.Reason})");
+            qa.Notice += text => { if (_ask.State == AskState.Thinking) _player.SetState(AskState.Thinking, text); };
+            _ask = new AskFlow(_story, _voice, _mic, qa, _player, () => _story.Language, OnAsking);
             _ask.Logged += e => Debug.Log("Hypa Stories " + e);
 
             var prep = new GameObject("Preparing").transform;
@@ -448,7 +450,7 @@ namespace HypaStories
             _hut = go.AddComponent<HutVisit>();
             try
             {
-                _hut.Init(_camp, assets, _mic, qaMode == "chat" ? new ChatStoryQa() : (IStoryQa)new StubStoryQa { Mode = qaMode }, () => _lang, PickLanguage,
+                _hut.Init(_camp, assets, _mic, new HybridStoryQa(), () => _lang, PickLanguage,
                     () => { if (_story.Live) _story.Pause(); }, ToggleSound);
             }
             catch (Exception e)

@@ -13,7 +13,7 @@ namespace HypaStories
 {
     /// <summary>
     /// Microphone + speech-to-text (the prototype's listen()): records at 16 kHz until the user goes quiet
-    /// (<see cref="SilenceDetector"/>) or <see cref="IListenSession.Stop"/> is called, then sends the WAV to Hypa speech_to_text.
+    /// (<see cref="SilenceDetector"/>) or <see cref="IListenSession.Stop"/> is called, then sends the WAV to the Hypa proxy's /hypa/asr.
     /// If nothing louder than the noise floor was heard, no call is made and the transcript is empty ("could you say that again?").
     /// Records from the system's default input unless that is a virtual device (see <see cref="Device"/>).
     /// </summary>
@@ -30,7 +30,7 @@ namespace HypaStories
         /// <summary>Virtual inputs (loopback, voice changers, meeting apps) give silence unless something is routed into them.</summary>
         static readonly string[] VirtualInputs = { "virtual", "blackhole", "loopback", "soundflower", "aggregate", "zoom", "teams", "altered", "krisp" };
 
-        /// <summary>Speech to text. Default: Hypa's speech_to_text tool with the story language as the source.</summary>
+        /// <summary>Speech to text. Default: the Hypa proxy's /hypa/asr with the story language as the source.</summary>
         public Func<byte[], StoryLanguage, CancellationToken, Task<string>> Transcribe;
 
         readonly CancellationTokenSource _life = new CancellationTokenSource();
@@ -80,14 +80,86 @@ namespace HypaStories
 #endif
             }
 #endif
-            if (Microphone.devices.Length == 0) throw new InvalidOperationException("No microphone.");
             _active?.Cancel();
-            var transcribe = Transcribe ?? ((wav, lang, ct) => new HypaMcpClient().SpeechToTextAsync(wav, lang.HypaLabel, ct));
+            var transcribe = Transcribe ?? ProxyTranscribe;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Unity's Microphone does not work in a browser. The browser asks for the microphone now; until it is allowed
+            // no samples arrive, so the silence timer has not started.
+            WebMicrophone.Start();
+            var source = (ISource)new WebSource();
+#else
+            if (Microphone.devices.Length == 0) throw new InvalidOperationException("No microphone.");
             var device = Device(Microphone.devices);
             var clip = Microphone.Start(device, true, Manual ? ManualSeconds : ClipSeconds, Rate);
             if (clip == null) throw new InvalidOperationException("Microphone could not start.");
-            return _active = new Session(device, clip, language, onLevel, transcribe, _life.Token, _partial, Manual);
+            var source = (ISource)new ClipSource(device, clip);
+#endif
+            return _active = new Session(source, language, onLevel, transcribe, _life.Token, _partial, Manual);
         }
+
+        static Task<string> ProxyTranscribe(byte[] wav, StoryLanguage language, CancellationToken ct)
+        {
+            HypaCore.Hybrid.HypaProxyClient proxy;
+            try { proxy = HypaCore.Hybrid.HypaProxyClient.FromConfig(); }
+            catch (ArgumentException e) { throw new HypaException(HypaErrorKind.MissingConfiguration, e.Message); }
+            return proxy.TranscribeAsync(wav, language.HypaLabel, ct);
+        }
+
+        /// <summary>Where a session's samples come from: a Unity microphone clip, or the browser microphone in WebGL.</summary>
+        interface ISource
+        {
+            string Name { get; }
+            /// <summary>Why recording stopped working (e.g. the microphone was refused), or null.</summary>
+            string Error { get; }
+            /// <summary>The samples recorded since the last call, or null if none.</summary>
+            float[] ReadNew();
+            void End();
+        }
+
+        sealed class ClipSource : ISource
+        {
+            readonly string _device;
+            readonly AudioClip _clip;
+            int _read;
+            public ClipSource(string device, AudioClip clip) { _device = device; _clip = clip; }
+            public string Name => _device ?? "default input";
+            public string Error => null;
+
+            public float[] ReadNew()
+            {
+                var pos = Microphone.GetPosition(_device);
+                if (pos < 0) return null;
+                var n = (pos - _read + _clip.samples) % _clip.samples;
+                if (n == 0) return null;
+                var buf = new float[n]; // GetData reads exactly buf.Length samples
+                _clip.GetData(buf, _read); // wraps around the looping clip
+                _read = pos;
+                return buf;
+            }
+
+            public void End() => Microphone.End(_device);
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        sealed class WebSource : ISource
+        {
+            readonly float[] _buf = new float[Rate];
+            public string Name => "browser microphone";
+            public string Error => WebMicrophone.Current == WebMicrophone.State.Denied ? "Allow the microphone in your browser, then tap the mic again."
+                : WebMicrophone.Current == WebMicrophone.State.Failed ? "The microphone could not start in this browser." : null;
+
+            public float[] ReadNew()
+            {
+                var n = WebMicrophone.Read(_buf);
+                if (n == 0) return null;
+                var samples = new float[n];
+                Array.Copy(_buf, samples, n);
+                return samples;
+            }
+
+            public void End() => WebMicrophone.Stop();
+        }
+#endif
 
         void Update() => _active?.Tick(Time.unscaledDeltaTime);
 
@@ -128,8 +200,7 @@ namespace HypaStories
 
         sealed class Session : IListenSession
         {
-            readonly string _device;
-            readonly AudioClip _clip;
+            readonly ISource _source;
             readonly StoryLanguage _lang;
             readonly Action<float> _onLevel;
             readonly Func<byte[], StoryLanguage, CancellationToken, Task<string>> _transcribe;
@@ -137,17 +208,16 @@ namespace HypaStories
             readonly TaskCompletionSource<ListenResult> _result = new TaskCompletionSource<ListenResult>();
             readonly SilenceDetector _silence = new SilenceDetector();
             readonly List<float> _samples = new List<float>(Rate * 6);
-            int _read;
             float _peak;
             bool _done;
 
             public Task<ListenResult> Result => _result.Task;
 
-            public Session(string device, AudioClip clip, StoryLanguage lang, Action<float> onLevel,
+            public Session(ISource source, StoryLanguage lang, Action<float> onLevel,
                 Func<byte[], StoryLanguage, CancellationToken, Task<string>> transcribe, CancellationToken ct, Action<string> partial, bool manual)
             {
                 if (manual) { _silence.SilenceMs = float.MaxValue; _silence.MaxMs = ManualSeconds * 1000f - 500f; }
-                _device = device; _clip = clip; _lang = lang; _onLevel = onLevel; _transcribe = transcribe; _ct = ct; _partialCb = partial;
+                _source = source; _lang = lang; _onLevel = onLevel; _transcribe = transcribe; _ct = ct; _partialCb = partial;
                 if (manual && partial != null && HypaConfig.Current.HasProxy)
                 {
                     // true streaming: words arrive as they are said (Hypa's live WebSocket). If it can't connect, the
@@ -187,7 +257,7 @@ namespace HypaStories
                 finally { _partialBusy = false; _sincePartial = 0f; }
             }
 
-            string Name => _device ?? "default input";
+            string Name => _source.Name;
 
             static double Now => Time.realtimeSinceStartupAsDouble * 1000.0;
 
@@ -195,13 +265,15 @@ namespace HypaStories
             {
                 Pump();
                 if (_done) return;
-                var pos = Microphone.GetPosition(_device);
-                if (pos < 0) return;
-                var n = (pos - _read + _clip.samples) % _clip.samples;
-                if (n == 0) return;
-                var buf = new float[n]; // GetData reads exactly buf.Length samples
-                _clip.GetData(buf, _read); // wraps around the looping clip
-                _read = pos;
+                if (_source.Error != null)
+                {
+                    Cancel();
+                    _result.TrySetException(new InvalidOperationException(_source.Error));
+                    return;
+                }
+                var buf = _source.ReadNew();
+                if (buf == null) return;
+                var n = buf.Length;
                 var sum = 0f;
                 for (var i = 0; i < n; i++) { _samples.Add(buf[i]); sum += buf[i] * buf[i]; }
                 if (_live != null && !_live.Failed) _live.Send(buf, n);
@@ -218,7 +290,7 @@ namespace HypaStories
                 if (_done) return;
                 _done = true;
                 var tEnd = Now;
-                Microphone.End(_device);
+                _source.End();
                 _onLevel?.Invoke(0f);
                 Debug.Log($"Hypa Stories: mic '{Name}' heard {_samples.Count / (float)Rate:0.0}s, peak level {_peak:0.000} (speech threshold {_silence.Threshold})");
                 // a quiet voice may never cross the speech threshold: still transcribe when something other than silence arrived
@@ -265,7 +337,7 @@ namespace HypaStories
             {
                 if (_done) return;
                 _done = true;
-                Microphone.End(_device);
+                _source.End();
                 _onLevel?.Invoke(0f);
                 _live?.Dispose(); _live = null;
             }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -254,11 +255,17 @@ namespace HypaCore.Hybrid
     {
         public bool Available { get; set; }
         public string Reply = "This is a fake on-device answer.";
+        public string Status;
+        public string LastPrompt;
 
-        public Task<string> StatusAsync() => Task.FromResult(Available ? "available" : "unavailable");
+        public Task<string> StatusAsync() => Task.FromResult(Status ?? (Available ? "available" : "unavailable"));
         public Task<string> GenerateAsync(string prompt, CancellationToken ct)
-            => Available ? Task.FromResult(Reply) : throw new InvalidOperationException("No on-device model.");
-        public IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct) => Words(Reply, Available, ct);
+        {
+            LastPrompt = prompt;
+            return Available ? Task.FromResult(Reply) : throw new InvalidOperationException("No on-device model.");
+        }
+
+        public IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct) { LastPrompt = prompt; return Words(Reply, Available, ct); }
 
         internal static async IAsyncEnumerable<string> Words(string reply, bool available, [EnumeratorCancellation] CancellationToken ct)
         {
@@ -276,8 +283,41 @@ namespace HypaCore.Hybrid
     public sealed class FakeCloudModel : ICloudModel
     {
         public string Reply = "This is a fake cloud answer.";
+        public Exception Error;
+        public string LastPrompt;
+        public string CallTool;
+        public Dictionary<string, string> CallArgs = new Dictionary<string, string>();
+        public Func<string, string> ReplyAfterTool = result => result;
+        public readonly List<string> ToolResults = new List<string>();
 
-        public Task<string> GenerateAsync(string prompt, CancellationToken ct) => Task.FromResult(Reply);
-        public IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct) => FakeOnDeviceModel.Words(Reply, true, ct);
+        public Task<string> GenerateAsync(string prompt, CancellationToken ct)
+        {
+            LastPrompt = prompt;
+            return Error != null ? Task.FromException<string>(Error) : Task.FromResult(Reply);
+        }
+
+        public IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct)
+        {
+            LastPrompt = prompt;
+            if (Error != null) throw Error;
+            return FakeOnDeviceModel.Words(Reply, true, ct);
+        }
+
+        public async Task<string> GenerateAsync(string prompt, IReadOnlyList<CloudTool> tools, CancellationToken ct)
+        {
+            LastPrompt = prompt;
+            if (Error != null) throw Error;
+            var tool = CallTool == null ? null : tools?.FirstOrDefault(t => t.Name == CallTool);
+            if (tool == null) return Reply;
+            var result = await tool.Run(CallArgs, ct).ConfigureAwait(false);
+            ToolResults.Add(result);
+            return ReplyAfterTool(result);
+        }
+    }
+
+    public sealed class FakeRouteLog : IRouteLog
+    {
+        public readonly List<RouteEvent> Events = new List<RouteEvent>();
+        public void Log(RouteEvent e) => Events.Add(e);
     }
 }

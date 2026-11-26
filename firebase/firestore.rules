@@ -45,6 +45,18 @@ service cloud.firestore {
       }
     }
 
+    // Anonymous route statistics (G05): a user only adds events of their own, never reads, changes or deletes them. G14 reads
+    // them with the Admin SDK.
+    match /routes/{uid}/events/{eventId} {
+      allow create: if signedInAs(uid) && eventId.size() <= 64
+        && onlyKeys(['kind', 'route', 'model', 'language', 'latencyMs', 'ok', 'fallbackFrom', 'device', 'at'])
+        && data().kind in ['answer', 'translate']
+        && data().route in ['onDevice', 'cloud', 'hypa', 'offline']
+        && str('model', 64) && str('language', 16) && num('latencyMs') && flag('ok')
+        && (!('fallbackFrom' in data()) || data().fallbackFrom in ['onDevice', 'cloud', 'hypa', 'offline'])
+        && str('device', 32) && time('at');
+    }
+
     // Everything else stays closed, including other documents under users/{uid}.
     match /{document=**} { allow read, write: if false; }
   }

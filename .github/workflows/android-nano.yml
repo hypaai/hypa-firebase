@@ -1,0 +1,45 @@
+name: Android on-device bridge
+# Compiles Assets/HypaCore/Plugins/Android/HypaNano.androidlib (Java) against the real Google ML Kit GenAI Prompt library, so a renamed
+# or removed API fails here and not in a player build. The Unity build compiles the same plug-in with the pinned version in its build.gradle.
+on:
+  pull_request:
+    paths:
+      - "Assets/HypaCore/Plugins/Android/HypaNano.androidlib/**"
+      - ".github/workflows/android-nano.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Download the pinned libraries
+        run: |
+          set -euo pipefail
+          mkdir -p libs && cd libs
+          M=https://dl.google.com/dl/android/maven2/com/google/mlkit
+          curl -fsSL -o prompt.aar "$M/genai-prompt/1.0.0-beta5/genai-prompt-1.0.0-beta5.aar"
+          curl -fsSL -o common.aar "$M/genai-common/1.0.0-beta5/genai-common-1.0.0-beta5.aar"
+          curl -fsSL -o listenablefuture.jar https://repo1.maven.org/maven2/com/google/guava/listenablefuture/1.0/listenablefuture-1.0.jar
+          curl -fsSL -o kotlin-stdlib.jar https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.1.20/kotlin-stdlib-2.1.20.jar
+          sha256sum -c - <<'SUMS'
+          6ce6511bfd9212be1e8d08bf88ed83c41a535b8ce63d38110d49d8bf379292ff  prompt.aar
+          cefcd33b43fb3078f7d10da169316ae146c0a67b28aa6bf5008f10571d646a4c  common.aar
+          e4ad7607e5c0477c6f890ef26a49cb8d1bb4dffb650bab4502afee64644e3069  listenablefuture.jar
+          1bcc74e8ce84e2c25eaafde10f1248349cce3062b6e36978cbeec610db1e930a  kotlin-stdlib.jar
+          SUMS
+          unzip -q prompt.aar classes.jar -d prompt && unzip -q common.aar classes.jar -d common
+      - name: The plug-in's pinned version matches
+        run: grep -q "com.google.mlkit:genai-prompt:1.0.0-beta5" Assets/HypaCore/Plugins/Android/HypaNano.androidlib/build.gradle
+      - name: Compile the bridge
+        run: |
+          mkdir -p out
+          javac --release 8 -Xlint:all -Xlint:-options -Werror \
+            -cp "libs/prompt/classes.jar:libs/common/classes.jar:libs/listenablefuture.jar:libs/kotlin-stdlib.jar" \
+            -d out Assets/HypaCore/Plugins/Android/HypaNano.androidlib/src/main/java/ai/hypa/nano/HypaNano.java
+          ls out/ai/hypa/nano

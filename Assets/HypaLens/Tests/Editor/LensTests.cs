@@ -463,7 +463,7 @@ namespace HypaLens.Tests
             var ex = Assert.Throws<AggregateException>(() => c.ResolveAsync(LensController.SelectWord(w), CancellationToken.None).Wait(5000));
             var le = (LensException)ex.InnerException;
             Assert.AreEqual(LensErrorKind.Api, le.Kind);
-            StringAssert.Contains("Hypa proxy is not configured", le.UserMessage());
+            StringAssert.Contains("isn't available right now", le.UserMessage());
         }
 
         [Test] public void Resolve_CachesResults_AndPairChecks()

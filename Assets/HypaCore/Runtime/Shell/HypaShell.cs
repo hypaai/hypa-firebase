@@ -1,3 +1,7 @@
+#if UNITY_WEBGL
+using HypaCore.Hybrid;
+using HypaCore.Hybrid.Web;
+#endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -210,6 +214,9 @@ namespace HypaCore
             Ui.Button("Lens (beta)", _menu, new Vector3(0, 0.005f, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => OpenOrResume(HypaScenes.Lens));
 #endif
             Ui.Button("How it works", _menu, new Vector3(0, -0.065f, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => ShowHelp(true));
+#if UNITY_WEBGL
+            BuildOnDeviceRow();
+#endif
             _status = Ui.Text(_menu, "", 0.015f, new Vector3(0, -0.18f, 0), Color.white);
             _menu.gameObject.SetActive(false);
 
@@ -249,13 +256,55 @@ namespace HypaCore
             }
             Section("languages", "Stories",
                 "Choose a story by the campfire. The storyteller tells it in your language, and the words light up with the voice. Raise a hand to ask a question. At the end, Try Hypa translates a few words. In your room, the door leads to the hut, the village, or the fire. Step through, then step back to come home.");
+#if UNITY_WEBGL
+            // Lens is not on the web; this space explains on-device AI instead (G03).
+            Section("languages", "On-device AI",
+                "Desktop Chrome 139 or newer can answer with Gemini Nano on your computer, even offline. In chrome://flags, enable \"Prompt API for Gemini Nano\", restart Chrome, then download the model once from Home. Other browsers use Gemini in the cloud.");
+#else
             Section("camera", "Lens (beta)",
                 "Look at a sign, menu or book and pinch Capture. The text and its translation open in a popup: hear it, or save it to practise later. Caption reads the whole view at once.");
+#endif
             Ui.Text(_help, Ui.Wrap("Return to the campfire, then select Back to go Home. In Lens, select X.", chars), bodyH,
                 new Vector3(left, y, 0), body, TextAnchor.UpperLeft);
             // Ui.IconButton("chevron-left", _help, new Vector3(0f, -h / 2f + pad + 0.03f, -0.001f), 0.028f, () => ShowHelp(false)); // back to Home (Stories' chevron)
             _help.gameObject.SetActive(false);
         }
+
+#if UNITY_WEBGL
+        PinchTarget _onDevice;
+        bool _downloading;
+
+        /// <summary>On-device model status on Home (web): ready, downloadable (select to download), downloading, or not here.</summary>
+        void BuildOnDeviceRow()
+        {
+            _onDevice = Ui.Button("On-device AI", _menu, new Vector3(0, -0.125f, 0), new Vector2(0.26f, 0.04f), Ui.Muted, OnDevicePressed);
+            if (HybridServices.Current.OnDevice is ChromeNanoModel nano) nano.Changed += ShowOnDeviceStatus;
+            ShowOnDeviceStatus();
+        }
+
+        async void ShowOnDeviceStatus()
+        {
+            var model = HybridServices.Current.OnDevice;
+            var status = model is ChromeNanoModel nano ? nano.Status : await model.StatusAsync();
+            if (_onDevice == null) return;
+            Ui.SetLabel(_onDevice, status == ChromeNanoModel.StatusAvailable ? "On-device AI: ready"
+                : status == ChromeNanoModel.StatusDownloadable ? "Get on-device AI (one-time download)"
+                : status == ChromeNanoModel.StatusDownloading ? (_downloading ? $"Downloading on-device AI {Mathf.RoundToInt(((ChromeNanoModel)model).DownloadProgress * 100)}%" : "On-device AI is downloading")
+                : "On-device AI: cloud in this browser");
+        }
+
+        async void OnDevicePressed()
+        {
+            var nano = HybridServices.Current.OnDevice as ChromeNanoModel;
+            if (nano == null || nano.Status == ChromeNanoModel.StatusAvailable || nano.Status == ChromeNanoModel.StatusUnavailable) { ShowHelp(true); return; }
+            if (_downloading) return;
+            _downloading = true;
+            // Called from the press itself: Chrome only starts a model download after a user gesture.
+            try { await nano.DownloadAsync(); }
+            catch (System.Exception e) { Debug.LogWarning($"Hypa: on-device model download did not finish ({(e as WebBridgeException)?.Code ?? e.GetType().Name})."); }
+            finally { _downloading = false; ShowOnDeviceStatus(); }
+        }
+#endif
 
         /// <summary>Opens/closes Home. Modes call this from their X.</summary>
         public void ToggleMenu() { if (_menu != null) ShowMenu(!_menu.gameObject.activeSelf); }

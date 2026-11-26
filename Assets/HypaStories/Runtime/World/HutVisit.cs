@@ -141,7 +141,12 @@ namespace HypaStories
             _ask = new AskFlow(_story, _voice, mic, qa, _panel, () => _story.Language, asking => { if (asking) CancelRemarks(); });
             _ask.Logged += e => Debug.Log("Hypa Stories hut " + e);
             // its own translate, in this panel: the same recording as Ask (proven on the headset), not the live stream
-            _tryFlow = new TryHypaFlow(new HypaTryApi(), mic, HypaSettings.TargetLanguage) { LiveText = false };
+            if (qa is HybridStoryQa hybrid)
+            {
+                hybrid.Routed += r => Debug.Log($"Hypa Stories hut answered: {r.Chip()} ({r.Reason})");
+                hybrid.Notice += text => { if (_ask.State == AskState.Thinking) _panel.SetState(AskState.Thinking, text); };
+            }
+            _tryFlow = new TryHypaFlow(new HybridTryApi(new HypaTryApi()), mic, HypaSettings.TargetLanguage) { LiveText = false };
             _try = new TryHypaView(_panel.Body, _tryFlow, CloseTry);
             _try.Root.gameObject.SetActive(false);
             _panel.Root.gameObject.SetActive(false);

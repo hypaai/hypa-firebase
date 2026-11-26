@@ -1,0 +1,24 @@
+{
+  "parameters": {
+    "proxy_daily_seconds_per_user": {
+      "defaultValue": { "value": "1800" },
+      "description": "Hypa audio seconds (speech and microphone) one player may use per UTC day.",
+      "valueType": "NUMBER"
+    },
+    "proxy_daily_requests_per_user": {
+      "defaultValue": { "value": "1000" },
+      "description": "Hypa requests one player may make per UTC day.",
+      "valueType": "NUMBER"
+    },
+    "proxy_global_daily_seconds": {
+      "defaultValue": { "value": "1000000000" },
+      "description": "No app-wide audio limit.",
+      "valueType": "NUMBER"
+    },
+    "proxy_global_daily_requests": {
+      "defaultValue": { "value": "1000000000" },
+      "description": "No app-wide request limit.",
+      "valueType": "NUMBER"
+    }
+  }
+}

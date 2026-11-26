@@ -15,6 +15,8 @@ Quest has no Google Play services, so the Firebase Unity SDK may not run there. 
 
 ## A. Test the REST path (no SDK needed)
 
+With the config file below in place, the app itself also starts the REST services at launch (`FirebaseStartup`): sign-in, App Check, progress, cloud Gemini through Firebase AI Logic (`RestCloudModel`) and route stats. Without the file it plays on local data. The editor does the same, with the file in the editor's data folder.
+
 1. Get the Firebase web API key, project id, app id and database URL from the Firebase console (project settings), and register a **debug token** for App Check (App Check, Apps, Manage debug tokens).
 2. Create `hypa.firebase.local.json` and push it to the app's data folder. This file is never committed.
 

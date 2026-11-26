@@ -28,8 +28,7 @@ namespace HypaStories
 
     /// <summary>
     /// Stand-in for <see cref="ChatStoryQa"/> (canned, spoiler-guarded answers with simulated latency), ported from the prototype's
-    /// qa.js: tests the interaction loop without the network. Pick it with StoryApp's qaMode: "stub", "slow" (about 3 s to the first
-    /// sentence: exercises the second filler) or "offline" (every call fails).
+    /// qa.js. Its answers are the saved answers used offline.
     /// </summary>
     public sealed class StubStoryQa : IStoryQa
     {

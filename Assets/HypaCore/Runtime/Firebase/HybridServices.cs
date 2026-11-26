@@ -6,22 +6,26 @@ namespace HypaCore.Hybrid
 {
     /// <summary>
     /// The set of services the app uses, picked once at start-up (docs/contracts.md, section 1):
-    /// WebGL build: Web. Android, iOS and Quest: Native. Editor: Fake, unless "Use real Firebase" is ticked.
+    /// WebGL build: Web. Android, iOS, Quest and the editor: Native.
     /// G02 registers <see cref="NativeFactory"/> and G03 registers <see cref="WebFactory"/>. Until a factory is registered
     /// the Fakes are used, so the app always runs.
     /// </summary>
     public sealed class HybridServices
     {
-        /// <summary>Editor menu setting. Ignored in builds.</summary>
-        public const string UseRealFirebaseKey = "hypa.useRealFirebase";
-
         public IHypaAuth Auth { get; set; } = new FakeAuth();
         public IProgressStore Progress { get; set; } = new FakeProgressStore();
         public IProfileStore Profiles { get; set; } = new FakeProfileStore();
         public IRemoteFlags Flags { get; set; } = new FakeRemoteFlags();
         public IRoomSync Rooms { get; set; } = new FakeRoomSync();
-        public IOnDeviceModel OnDevice { get; set; } = new NoOnDeviceModel();
-        public ICloudModel Cloud { get; set; } = new FakeCloudModel();
+        public IOnDeviceModel OnDevice { get; set; } = OnDeviceFactory?.Invoke() ?? new NoOnDeviceModel();
+        public ICloudModel Cloud { get; set; } = new NoCloudModel();
+        public IRouteLog RouteLog { get; set; } = new FakeRouteLog();
+
+        /// <summary>
+        /// Set by a platform that has an on-device model (<c>AndroidNano</c> on Android phones). Read each time services are created, so
+        /// the real services built by <see cref="NativeFactory"/> and the Fakes both get it. Without it, <see cref="NoOnDeviceModel"/>.
+        /// </summary>
+        public static Func<IOnDeviceModel> OnDeviceFactory { get; set; }
 
         /// <summary>Set by the Native implementation (G02). Returns null if Firebase cannot start on this device.</summary>
         public static Func<HybridServices> NativeFactory { get; set; }
@@ -67,6 +71,7 @@ namespace HypaCore.Hybrid
                 local.Rooms = real.Rooms;
                 local.OnDevice = real.OnDevice;
                 local.Cloud = real.Cloud;
+                local.RouteLog = real.RouteLog;
 
                 // The player may have saved to the Fakes while the server was being read. Send that too.
                 var late = await fakeProgress.LoadAsync();
@@ -85,8 +90,6 @@ namespace HypaCore.Hybrid
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
             return WebFactory?.Invoke() ?? new HybridServices();
-#elif UNITY_EDITOR
-            return PlayerPrefs.GetInt(UseRealFirebaseKey, 0) == 1 ? (NativeFactory?.Invoke() ?? new HybridServices()) : new HybridServices();
 #else
             return NativeFactory?.Invoke() ?? new HybridServices();
 #endif
