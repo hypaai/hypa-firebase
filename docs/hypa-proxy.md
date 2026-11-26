@@ -68,7 +68,7 @@ Usage documents carry `expireAt` (35 days). Create a Firestore TTL policy on `ex
 
 ## Secrets and configuration
 
-- **Production key:** a Hypa developer key created for this entry (its own spending cap in Hypa), stored only in Secret Manager: `firebase functions:secrets:set HYPA_API_KEY`. It is read through `defineSecret`, sent only in `x-api-key` to Hypa, and never logged or returned (no Hypa response body is logged either). Never put it in the repo, the Unity project, the form or the test instructions.
+- **Production key:** a Hypa developer key created for this entry (its own spending cap in Hypa), stored only in Secret Manager: `firebase functions:secrets:set HYPA_API_KEY -P hypa-firebase`. It is read through `defineSecret`, sent only in `x-api-key` to Hypa, and never logged or returned (no Hypa response body is logged either). Never put it in the repo, the Unity project, the form or the test instructions.
 - **Local key:** copy `functions/secret.local.example` to `functions/.secret.local` (git-ignored) and put a **dev** key in it.
 - **Other local settings:** copy `functions/.env.example` to `functions/.env.local` (git-ignored). `HYPA_SKIP_APP_CHECK=true` skips App Check (there is no App Check emulator; sign-in is still required) and `HYPA_API_BASE` points at a fake Hypa. Both are read in one place, `emulatorSettings()` in `functions/src/config.ts`, and only take effect inside the emulator, so a deployed function cannot skip App Check or send the key anywhere but the real API.
 
@@ -107,9 +107,12 @@ The Functions tests use simulated Meta responses. Connecting the production Ques
 
 ## Deploy (needs the owner's go-ahead)
 
+Always the `hypa-firebase` project, never `hypaall-v1` (production) or `hypa-webapp-bbe81`. Name it on every command, so a
+different local `firebase use` or `gcloud` default cannot send the deploy or the key elsewhere (`gcloud` commands: `--project hypa-firebase`).
+
 ```sh
-firebase functions:secrets:set HYPA_API_KEY      # once, paste the entry-scoped key
-firebase deploy --project hypa-firebase --only functions:hypa,hosting
+firebase functions:secrets:set HYPA_API_KEY -P hypa-firebase   # once, paste the entry-scoped key
+firebase deploy --only functions:hypa,hosting -P hypa-firebase
 ```
 
 Enable and verify the target platform's Firebase Auth and App Check integration before testing the deployed build. The web deployment above targets the Hypa proxy and Hosting. Deploy questAppCheck separately once its Meta settings are configured.

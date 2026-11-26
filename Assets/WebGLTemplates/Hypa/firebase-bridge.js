@@ -9,11 +9,12 @@ import {
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app-check.js";
 import {
   initializeFirestore, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromCache, setDoc, onSnapshot,
+  collection, addDoc,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 import {
   getRemoteConfig, ensureInitialized, fetchAndActivate, getAll,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-remote-config.js";
-import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js";
+import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode, InferenceSource } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js";
 
 /** Thrown to C# as { code, message }. */
 class BridgeError extends Error {
@@ -149,6 +150,22 @@ async function saveProgress(p) {
   return null;
 }
 
+const profileRef = (u) => doc(db, "users", u.uid);
+
+async function loadProfile() {
+  let u;
+  try { u = await user(); } catch { return null; }
+  let snap;
+  try { snap = await getDoc(profileRef(u)); } catch { snap = await getDocFromCache(profileRef(u)).catch(() => null); }
+  return snap && snap.exists() ? snap.data() : null;
+}
+
+async function saveProfile(p) {
+  const u = await user();
+  setDoc(profileRef(u), p).catch((e) => console.warn("Hypa: profile not saved (" + e.code + ")."));
+  return null;
+}
+
 async function fetchFlags() {
   await ready;
   await ensureInitialized(rc);
@@ -186,7 +203,7 @@ async function readyNano() {
 }
 
 function checkOnDevice(response) {
-  if (response.inferenceSource !== "on_device") throw new BridgeError("not_on_device", "The answer did not come from the device.");
+  if (response.inferenceSource !== InferenceSource.ON_DEVICE) throw new BridgeError("not_on_device", "The answer did not come from the device.");
 }
 
 async function generate({ side, model, prompt }, { signal }) {
@@ -208,6 +225,21 @@ async function stream({ side, model, prompt }, { emit, signal }) {
   return null;
 }
 
+async function generateTurn({ model, contents, tools }, { signal }) {
+  const params = { model };
+  if (tools && tools.length) params.tools = [{ functionDeclarations: tools }];
+  const response = (await getGenerativeModel(ai, params).generateContent({ contents }, { signal })).response;
+  const calls = (response.functionCalls && response.functionCalls()) || [];
+  const content = (response.candidates && response.candidates[0] && response.candidates[0].content) || { role: "model", parts: [] };
+  return { content, calls, text: calls.length ? "" : response.text() };
+}
+
+async function logRoute(event) {
+  const u = await user();
+  addDoc(collection(db, "routes", u.uid, "events"), event).catch((e) => console.warn("Hypa: route event not saved (" + e.code + ")."));
+  return null;
+}
+
 async function nanoDownload(args, { emit }) {
   // Needs a recent user gesture (Chrome's rule for starting a download); C# calls it from a button press.
   await (await nanoModel()).initializeDeviceModel((fraction) => emit(fraction));
@@ -216,7 +248,7 @@ async function nanoDownload(args, { emit }) {
 
 const methods = {
   init, signIn, link, idToken: async () => (await user()).getIdToken(), appCheckToken,
-  loadProgress, saveProgress, fetchFlags, generate, stream, nanoStatus, nanoDownload,
+  loadProgress, saveProgress, loadProfile, saveProfile, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
 };
 
 /** Runs a method. ctx: { emit(chunk), event(name, value), signal }. */

@@ -41,7 +41,9 @@ The same targets appear under **Hypa > Build**. Flat targets use `HYPA_FLAT`, ex
 
 ## Firebase and hybrid inference
 
-The intended flow is local inference through the supported Firebase AI Logic platform API, with cloud fallback and Remote Config routing. This is not implemented yet. Auth identifies users, App Check attests clients, and a server proxy owns the Hypa credential. WebGL requires browser bridges for supported Firebase APIs and browser-compatible networking. A Quest-only submission does not satisfy the listed phone/web platform requirement.
+The intended flow is local inference through the supported Firebase AI Logic platform API, with cloud fallback and Remote Config routing. On the web, the Firebase JS SDK bridge and Gemini Nano in Chrome are in place ([web bridge](docs/web-bridge.md)); the router (G05) is not built yet.
+
+**On-device AI on the web:** use desktop Chrome 139 or newer. Enable `chrome://flags/#prompt-api-for-gemini-nano-multimodal-input`, restart Chrome, then select **Get on-device AI** on Home to download the model once. Safari, Firefox and phones use Gemini in the cloud. Auth identifies users, App Check attests clients, and a server proxy owns the Hypa credential. WebGL requires browser bridges for supported Firebase APIs and browser-compatible networking. A Quest-only submission does not satisfy the listed phone/web platform requirement.
 
 Firebase CLI config targets the isolated `hypa-firebase` project from the supplied notes. No Firebase login, cloud change, deploy or hosting preview was performed. Database rules deny all access. See [setup and remaining work](docs/firebase-setup.md).
 
@@ -57,7 +59,9 @@ bash tools/scan-secrets.sh
 PR workflows are prepared for GameCI EditMode tests, WebGL build and gitleaks. Configure Unity activation secrets before relying on CI. Organization use of the gitleaks action may require `GITLEAKS_LICENSE`. CI has not run remotely.
 
 ## What we built during the submission period
---- 
+
+See [submission work](docs/submission-work.md).
+
 
 ## Pre-existing code disclosure
 

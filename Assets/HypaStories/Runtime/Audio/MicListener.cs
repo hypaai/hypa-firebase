@@ -13,7 +13,7 @@ namespace HypaStories
 {
     /// <summary>
     /// Microphone + speech-to-text (the prototype's listen()): records at 16 kHz until the user goes quiet
-    /// (<see cref="SilenceDetector"/>) or <see cref="IListenSession.Stop"/> is called, then sends the WAV to Hypa speech_to_text.
+    /// (<see cref="SilenceDetector"/>) or <see cref="IListenSession.Stop"/> is called, then sends the WAV to the Hypa proxy's /hypa/asr.
     /// If nothing louder than the noise floor was heard, no call is made and the transcript is empty ("could you say that again?").
     /// Records from the system's default input unless that is a virtual device (see <see cref="Device"/>).
     /// </summary>
@@ -30,7 +30,7 @@ namespace HypaStories
         /// <summary>Virtual inputs (loopback, voice changers, meeting apps) give silence unless something is routed into them.</summary>
         static readonly string[] VirtualInputs = { "virtual", "blackhole", "loopback", "soundflower", "aggregate", "zoom", "teams", "altered", "krisp" };
 
-        /// <summary>Speech to text. Default: Hypa's speech_to_text tool with the story language as the source.</summary>
+        /// <summary>Speech to text. Default: the Hypa proxy's /hypa/asr with the story language as the source.</summary>
         public Func<byte[], StoryLanguage, CancellationToken, Task<string>> Transcribe;
 
         readonly CancellationTokenSource _life = new CancellationTokenSource();
@@ -81,7 +81,7 @@ namespace HypaStories
             }
 #endif
             _active?.Cancel();
-            var transcribe = Transcribe ?? ((wav, lang, ct) => new HypaMcpClient().SpeechToTextAsync(wav, lang.HypaLabel, ct));
+            var transcribe = Transcribe ?? ProxyTranscribe;
 #if UNITY_WEBGL && !UNITY_EDITOR
             // Unity's Microphone does not work in a browser. The browser asks for the microphone now; until it is allowed
             // no samples arrive, so the silence timer has not started.
@@ -95,6 +95,14 @@ namespace HypaStories
             var source = (ISource)new ClipSource(device, clip);
 #endif
             return _active = new Session(source, language, onLevel, transcribe, _life.Token, _partial, Manual);
+        }
+
+        static Task<string> ProxyTranscribe(byte[] wav, StoryLanguage language, CancellationToken ct)
+        {
+            HypaCore.Hybrid.HypaProxyClient proxy;
+            try { proxy = HypaCore.Hybrid.HypaProxyClient.FromConfig(); }
+            catch (ArgumentException e) { throw new HypaException(HypaErrorKind.MissingConfiguration, e.Message); }
+            return proxy.TranscribeAsync(wav, language.HypaLabel, ct);
         }
 
         /// <summary>Where a session's samples come from: a Unity microphone clip, or the browser microphone in WebGL.</summary>
@@ -179,7 +187,7 @@ namespace HypaStories
                 var words = phrase.Split(' ');
                 for (var i = 1; i <= words.Length && !_stopped; i++)
                 {
-                    await HypaAsync.Delay(450);
+                    await Task.Delay(450);
                     if (_stopped) break;
                     partial?.Invoke(string.Join(" ", words, 0, i));
                 }
@@ -306,7 +314,7 @@ namespace HypaStories
                     {
                         _live.Finish();
                         var until = Time.realtimeSinceStartup + 6f;
-                        while (!_live.Done && !_live.Failed && Time.realtimeSinceStartup < until && !_ct.IsCancellationRequested) await HypaAsync.Delay(60);
+                        while (!_live.Done && !_live.Failed && Time.realtimeSinceStartup < until && !_ct.IsCancellationRequested) await Task.Delay(60);
                         var heard = _live.Text;
                         _live.Dispose(); _live = null;
                         if (!string.IsNullOrWhiteSpace(heard))

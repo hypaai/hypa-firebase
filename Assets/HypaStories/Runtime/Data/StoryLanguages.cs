@@ -17,6 +17,7 @@ namespace HypaStories
     public sealed class QaLines
     {
         public string Listening, Thinking, Again, Offline, You;
+        public string BackOnline, Preparing;
         /// <summary>Said at once, and again if the answer is still coming. One is picked at random.</summary>
         public string[] Filler;
         /// <summary>Said when the story starts again. One is picked at random.</summary>
@@ -62,6 +63,8 @@ namespace HypaStories
             Again = "Sorry, could you say that again?", Offline = "Let's keep going with the story.",
             Resume = new[] { "Now, where was I…", "Right. Where was I…", "So, back to the story…", "Now, what was I saying…" },
             You = "You asked",
+            BackOnline = "I'll tell you more when we're back online.",
+            Preparing = "On-device model downloading (first time only)",
         };
 
         static readonly QaLines Fr = new QaLines
@@ -71,6 +74,8 @@ namespace HypaStories
             Again = "Désolé, peux-tu répéter ?", Offline = "Continuons l’histoire.",
             Resume = new[] { "Alors, où en étais-je…", "Bon. Où en étais-je…", "Revenons à l’histoire…", "Alors, que disais-je…" },
             You = "Tu as demandé",
+            BackOnline = "Je t’en dirai plus quand nous serons de nouveau en ligne.",
+            Preparing = "Téléchargement du modèle sur l’appareil (première fois seulement)",
         };
 
         static readonly QaLines Es = new QaLines
@@ -80,6 +85,8 @@ namespace HypaStories
             Again = "Perdona, ¿puedes repetirlo?", Offline = "Sigamos con la historia.",
             Resume = new[] { "A ver, ¿por dónde iba…", "Bien. ¿Por dónde iba…", "Volvamos a la historia…", "A ver, qué estaba diciendo…" },
             You = "Preguntaste",
+            BackOnline = "Te contaré más cuando volvamos a estar en línea.",
+            Preparing = "Descargando el modelo en el dispositivo (solo la primera vez)",
         };
 
         static readonly QaLines Ha = new QaLines
@@ -89,6 +96,8 @@ namespace HypaStories
             Again = "Yi haƙuri, za ka iya sake faɗa mini?", Offline = "Mu ci gaba da labarin.",
             Resume = new[] { "To, ina na tsaya ne…", "To, mu ci gaba…", "Mu koma labarin…", "To, me nake faɗa ne…" },
             You = "Ka tambaya",
+            BackOnline = "Zan ƙara gaya maka idan intanet ta dawo.",
+            Preparing = "Ana sauke samfurin na'ura (sau ɗaya kawai)",
         };
 
         static readonly QaLines Ig = new QaLines
@@ -98,6 +107,8 @@ namespace HypaStories
             Again = "Ndo, ị nwere ike ikwu nke ahụ ọzọ?", Offline = "Ka anyị gaa n’ihu n’akụkọ ahụ.",
             Resume = new[] { "Ugbu a, olee ebe m kwụsịrị…", "Ọ dị mma. Olee ebe m kwụsịrị…", "Ka anyị laghachi n’akụkọ…", "Ugbu a, gịnị ka m na-ekwu…" },
             You = "Ị jụrụ",
+            BackOnline = "Aga m agwakwu gị ihe ọzọ mgbe ịntanetị lọghachiri.",
+            Preparing = "A na-ebudata ụdị dị na ngwaọrụ (naanị oge mbụ)",
         };
 
         static readonly QaLines Pcm = new QaLines
@@ -107,6 +118,8 @@ namespace HypaStories
             Again = "Abeg, you fit talk am again?", Offline = "Make we continue the tori.",
             Resume = new[] { "Ehen, where I stop sef…", "Okay. Where I stop…", "Make we go back to the tori…", "Ehen, wetin I dey talk…" },
             You = "You ask",
+            BackOnline = "I go tell you more when network come back.",
+            Preparing = "On-device model dey download (na only first time)",
         };
 
         static readonly QaLines Sw = new QaLines
@@ -116,6 +129,8 @@ namespace HypaStories
             Again = "Samahani, unaweza kusema tena?", Offline = "Tuendelee na hadithi.",
             Resume = new[] { "Sasa, nilikuwa wapi…", "Sawa. Nilikuwa wapi…", "Turudi kwenye hadithi…", "Sasa, nilikuwa nasema nini…" },
             You = "Uliuliza",
+            BackOnline = "Nitakueleza zaidi tutakaporudi mtandaoni.",
+            Preparing = "Modeli ya kifaa inapakuliwa (mara ya kwanza tu)",
         };
 
         static readonly QaLines Yo = new QaLines
@@ -125,6 +140,8 @@ namespace HypaStories
             Again = "Má bínú, ṣé o lè tún un sọ?", Offline = "Ẹ jẹ́ ká máa bá ìtàn wa lọ.",
             Resume = new[] { "Ó dáa, níbo ni mo dé nínú ìtàn náà…", "Ó dáa. Níbo ni mo wà…", "Ẹ jẹ́ ká padà sí ìtàn…", "Ó dáa, kí ni mo ń sọ…" },
             You = "O béèrè",
+            BackOnline = "Màá sọ púpọ̀ sí i fún ọ nígbà tí íntánẹ́ẹ̀tì bá padà dé.",
+            Preparing = "À ń ṣe ìgbàsílẹ̀ àwòṣe orí ẹ̀rọ (ìgbà àkọ́kọ́ nìkan)",
         };
 
         static readonly System.Collections.Generic.Dictionary<string, QaLines> ByCode = new System.Collections.Generic.Dictionary<string, QaLines>

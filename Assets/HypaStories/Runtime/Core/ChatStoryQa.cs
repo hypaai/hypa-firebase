@@ -14,7 +14,8 @@ namespace HypaStories
     public sealed class ChatStoryQa : IStoryQa
     {
         /// <summary>Reasoning models think before answering, and max_tokens covers that too.</summary>
-        const int MaxTokens = 1200, MaxSentences = 4;
+        const int MaxTokens = 1200;
+        public const int MaxSentences = 4;
         // The proxy has a 20-second budget. Leave room for sign-in, quota checks, and the response.
         public int DeadlineMs = 25000;
 
@@ -83,10 +84,12 @@ namespace HypaStories
         static readonly Regex Markup = new Regex(@"[*_#`]+|^\s*[-•]\s*", RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
         /// <summary>A reply as spoken sentences: markdown stripped, at most <see cref="MaxSentences"/>. Pure.</summary>
-        public static List<string> Sentences(string reply)
+        public static List<string> Sentences(string reply) => Split(reply).Take(MaxSentences).ToList();
+
+        public static List<string> Split(string reply)
         {
             var text = Markup.Replace(Thinking.Replace(reply ?? "", ""), "").Trim();
-            return SentenceEnd.Split(text).Select(s => s.Trim()).Where(s => s.Length > 0).Take(MaxSentences).ToList();
+            return SentenceEnd.Split(text).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
         }
     }
 }

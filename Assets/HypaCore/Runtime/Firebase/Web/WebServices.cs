@@ -10,7 +10,7 @@ namespace HypaCore.Hybrid.Web
 {
     /// <summary>
     /// The Web implementation of the G01 services (WebGL builds), on the Firebase JS SDK through <see cref="WebBridge"/>.
-    /// The web config comes from <c>firebaseWeb</c> in <c>hypa_client_config.json</c> (public values, not secrets). While it
+    /// The web config comes from <c>firebaseWeb</c> in <c>hypa_client_config_local.json</c>, else <c>hypa_client_config.json</c> (<see cref="HypaConfig.ClientConfig"/>). While it
     /// is blank the factory returns null and the app plays on the Fakes. Rooms stay on the Fake until G09 defines them.
     /// On localhost the build uses the Firebase Emulator Suite instead (project <see cref="EmulatorProject"/>); add
     /// <c>?firebase=live</c> to the URL to use the real project there.
@@ -36,11 +36,7 @@ namespace HypaCore.Hybrid.Web
                 Debug.Log($"Hypa: using the Firebase emulators ({EmulatorProject}). Add ?firebase=live to the URL for the real project.");
                 config = EmulatorConfig();
             }
-            else
-            {
-                var resource = Resources.Load<TextAsset>("hypa_client_config");
-                config = Config(resource != null ? JObject.Parse(resource.text) : null);
-            }
+            else config = Config(HypaConfig.ClientConfig());
             if (config == null)
             {
                 Debug.Log("Hypa: the Firebase web config is blank; playing on local data.");
@@ -54,9 +50,11 @@ namespace HypaCore.Hybrid.Web
             {
                 Auth = new WebAuth(),
                 Progress = new WebProgressStore(),
+                Profiles = new WebProfileStore(),
                 Flags = flags,
                 OnDevice = new ChromeNanoModel(),
                 Cloud = new WebCloudModel(flags),
+                RouteLog = new WebRouteLog(),
             };
         }
 
@@ -146,6 +144,18 @@ namespace HypaCore.Hybrid.Web
         public Task SaveAsync(Progress p) => WebBridge.CallAsync("saveProgress", JObject.FromObject(p));
     }
 
+    public sealed class WebProfileStore : IProfileStore
+    {
+        public event Action<UserProfile> ChangedElsewhere { add { } remove { } }
+
+        public async Task<UserProfile> LoadAsync() => (await WebBridge.CallAsync("loadProfile") as JObject)?.ToObject<UserProfile>();
+
+        public Task SaveAsync(UserProfile profile) => WebBridge.CallAsync("saveProfile", JObject.FromObject(profile, NoNulls));
+
+        static readonly Newtonsoft.Json.JsonSerializer NoNulls = Newtonsoft.Json.JsonSerializer.Create(
+            new Newtonsoft.Json.JsonSerializerSettings { NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore });
+    }
+
     public sealed class WebRemoteFlags : IRemoteFlags
     {
         readonly Dictionary<string, string> _values = new Dictionary<string, string>();
@@ -175,9 +185,45 @@ namespace HypaCore.Hybrid.Web
 
         public async Task<string> GenerateAsync(string prompt, CancellationToken ct) => (string)await WebBridge.CallAsync("generate", Args(prompt), ct);
 
+        public async Task<string> GenerateAsync(string prompt, IReadOnlyList<CloudTool> tools, CancellationToken ct)
+        {
+            if (tools == null || tools.Count == 0) return await GenerateAsync(prompt, ct);
+            var contents = new JArray { new JObject { ["role"] = "user", ["parts"] = new JArray { new JObject { ["text"] = prompt } } } };
+            var declarations = CloudToolCalls.Declarations(tools);
+            for (var round = 0; ; round++)
+            {
+                var last = round >= CloudToolCalls.MaxRounds;
+                var args = new JObject { ["model"] = _flags.Get(RemoteConfigKeys.CloudModel, null), ["contents"] = contents, ["tools"] = last ? new JArray() : declarations };
+                var reply = await WebBridge.CallAsync("generateTurn", args, ct) as JObject;
+                var calls = reply?["calls"] as JArray;
+                if (last || calls == null || calls.Count == 0) return (string)reply?["text"] ?? "";
+                contents.Add(reply["content"]);
+                var answers = new JArray();
+                foreach (var call in calls) answers.Add(await CloudToolCalls.RunAsync(tools, call as JObject, ct));
+                contents.Add(new JObject { ["role"] = "function", ["parts"] = answers });
+            }
+        }
+
         public async IAsyncEnumerable<string> StreamAsync(string prompt, [EnumeratorCancellation] CancellationToken ct)
         {
             await foreach (var chunk in WebBridge.StreamAsync("stream", Args(prompt), ct)) yield return (string)chunk;
+        }
+    }
+
+    public sealed class WebRouteLog : IRouteLog
+    {
+        static readonly Newtonsoft.Json.JsonSerializer NoNulls = Newtonsoft.Json.JsonSerializer.Create(
+            new Newtonsoft.Json.JsonSerializerSettings { NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore });
+
+        public void Log(RouteEvent e)
+        {
+            if (e != null) _ = Send(JObject.FromObject(e, NoNulls));
+        }
+
+        static async Task Send(JObject e)
+        {
+            try { await WebBridge.CallAsync("logRoute", e); }
+            catch (WebBridgeException x) { Debug.LogWarning($"Hypa: route event not saved ({x.Code})."); }
         }
     }
 

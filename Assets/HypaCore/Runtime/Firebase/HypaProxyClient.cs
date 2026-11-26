@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using UnityEngine.Networking;
 
 namespace HypaCore.Hybrid
 {
@@ -21,6 +22,7 @@ namespace HypaCore.Hybrid
         readonly string _baseUrl;
         readonly IHypaAuth _auth;
         readonly HttpClient _http;
+        readonly bool _inBrowser;
 
         /// <param name="baseUrl">The functions' origin, e.g. https://REGION-PROJECT.cloudfunctions.net or the Hosting rewrite origin.</param>
         public HypaProxyClient(string baseUrl, IHypaAuth auth, HttpMessageHandler handler = null)
@@ -29,6 +31,7 @@ namespace HypaCore.Hybrid
             _baseUrl = baseUrl.TrimEnd('/');
             _auth = auth ?? throw new ArgumentNullException(nameof(auth));
             _http = handler != null ? new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) } : SharedHttp;
+            _inBrowser = handler == null && UnityEngine.Application.platform == UnityEngine.RuntimePlatform.WebGLPlayer;
         }
 
         /// <summary>The proxy from the app's configuration (<see cref="HypaConfig.BaseUrl"/>) and the current account.</summary>
@@ -48,6 +51,32 @@ namespace HypaCore.Hybrid
         public Task<ChatResponse> ChatAsync(ChatRequest body, CancellationToken ct) => PostAsync<ChatResponse>(ProxyApi.Chat, body, ct);
         public Task<TranslateResponse> TranslateAsync(TranslateRequest body, CancellationToken ct) => PostAsync<TranslateResponse>(ProxyApi.Translate, body, ct);
 
+        public async Task<string> TranscribeAsync(byte[] wav, string language, CancellationToken ct)
+        {
+            AsrResponse r;
+            var request = new AsrRequest { audio = Convert.ToBase64String(wav ?? new byte[0]), sourceLang = string.IsNullOrEmpty(language) ? null : language };
+            try { r = await AsrAsync(request, ct).ConfigureAwait(false); }
+            catch (HypaProxyException e) { throw e.ToHypaException(); }
+            return r?.transcript?.Trim() ?? "";
+        }
+
+        public async Task<HypaSpeech> SpeechAsync(string text, string language, string voice, string model, CancellationToken ct)
+        {
+            TtsResponse r;
+            var request = new TtsRequest
+            {
+                text = text, language = language, voice = string.IsNullOrEmpty(voice) ? null : voice, model = string.IsNullOrEmpty(model) ? null : model,
+                inline = _inBrowser ? true : (bool?)null,
+            };
+            try { r = await TtsAsync(request, ct).ConfigureAwait(false); }
+            catch (HypaProxyException e) { throw e.ToHypaException(); }
+            return new HypaSpeech
+            {
+                AudioUrl = r?.audioUrl, AudioBase64 = r?.audioBase64, Mime = r?.mime, SampleRate = r?.sampleRate ?? 0,
+                Voice = r?.route?.voice, Provider = r?.route?.provider, Model = r?.route?.model,
+            };
+        }
+
         async Task<T> PostAsync<T>(string path, object body, CancellationToken ct)
         {
             string idToken, appCheck;
@@ -60,21 +89,45 @@ namespace HypaCore.Hybrid
             {
                 throw new HypaProxyException(ProxyApi.ErrorUnauthenticated, "Not signed in: " + e.Message, 0);
             }
-            using (var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + path))
+            var json = JsonConvert.SerializeObject(body, Json);
+            var (status, text) = _inBrowser
+                ? await BrowserPostAsync(_baseUrl + path, json, idToken, appCheck, ct)
+                : await HttpPostAsync(_baseUrl + path, json, idToken, appCheck, ct).ConfigureAwait(false);
+            if (status < 200 || status > 299) throw HypaProxyException.FromResponse(status, text);
+            try { return JsonConvert.DeserializeObject<T>(text); }
+            catch (JsonException) { throw new HypaProxyException(ProxyApi.ErrorUpstream, path + ": the proxy's answer was not JSON.", status); }
+        }
+
+        async Task<(int, string)> HttpPostAsync(string url, string json, string idToken, string appCheck, CancellationToken ct)
+        {
+            using (var req = new HttpRequestMessage(HttpMethod.Post, url))
             {
                 req.Headers.TryAddWithoutValidation(ProxyApi.AuthorizationHeader, "Bearer " + idToken);
                 req.Headers.TryAddWithoutValidation(ProxyApi.AppCheckHeader, appCheck);
-                req.Content = new StringContent(JsonConvert.SerializeObject(body, Json), Encoding.UTF8, "application/json");
+                req.Content = new StringContent(json, Encoding.UTF8, "application/json");
                 HttpResponseMessage res;
                 try { res = await _http.SendAsync(req, ct).ConfigureAwait(false); }
                 catch (HttpRequestException e) { throw new HypaProxyException(ProxyApi.ErrorUpstream, "The proxy could not be reached: " + e.Message, 0); }
-                using (res)
-                {
-                    var text = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    if (!res.IsSuccessStatusCode) throw HypaProxyException.FromResponse((int)res.StatusCode, text);
-                    try { return JsonConvert.DeserializeObject<T>(text); }
-                    catch (JsonException) { throw new HypaProxyException(ProxyApi.ErrorUpstream, path + ": the proxy's answer was not JSON.", (int)res.StatusCode); }
-                }
+                using (res) return ((int)res.StatusCode, await res.Content.ReadAsStringAsync().ConfigureAwait(false));
+            }
+        }
+
+        static async Task<(int, string)> BrowserPostAsync(string url, string json, string idToken, string appCheck, CancellationToken ct)
+        {
+            using (var req = new UnityWebRequest(url, "POST"))
+            {
+                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json)) { contentType = "application/json" };
+                req.downloadHandler = new DownloadHandlerBuffer();
+                req.SetRequestHeader(ProxyApi.AuthorizationHeader, "Bearer " + idToken);
+                req.SetRequestHeader(ProxyApi.AppCheckHeader, appCheck);
+                req.timeout = 60;
+                var done = new TaskCompletionSource<bool>();
+                req.SendWebRequest().completed += _ => done.TrySetResult(true);
+                using (ct.Register(() => { req.Abort(); done.TrySetCanceled(); }))
+                    await done.Task;
+                if (req.result == UnityWebRequest.Result.ConnectionError)
+                    throw new HypaProxyException(ProxyApi.ErrorUpstream, "The proxy could not be reached: " + req.error, 0);
+                return ((int)req.responseCode, req.downloadHandler.text);
             }
         }
     }
@@ -109,5 +162,23 @@ namespace HypaCore.Hybrid
 
         /// <summary>Seconds to wait before trying again (quota), or null.</summary>
         public int? RetryAfterSeconds => Details?.retryAfterSeconds;
+
+        public HypaException ToHypaException()
+        {
+            HypaErrorKind kind;
+            switch (Code)
+            {
+                case ProxyApi.ErrorUnauthenticated:
+                case ProxyApi.ErrorAppCheck: kind = HypaErrorKind.Unauthorized; break;
+                case ProxyApi.ErrorQuota: kind = HypaErrorKind.RateLimited; break;
+                case ProxyApi.ErrorBadRequest:
+                case ProxyApi.ErrorTooLarge:
+                case ProxyApi.ErrorNotFound:
+                case ProxyApi.ErrorMethodNotAllowed: kind = HypaErrorKind.BadRequest; break;
+                case ProxyApi.ErrorUpstream: kind = Status == 0 ? HypaErrorKind.Offline : HypaErrorKind.Server; break;
+                default: kind = HypaErrorKind.Server; break;
+            }
+            return new HypaException(kind, Message, Status, Code, this);
+        }
     }
 }

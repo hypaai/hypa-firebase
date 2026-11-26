@@ -114,5 +114,11 @@ namespace HypaCore.Hybrid
     {
         Task<string> GenerateAsync(string prompt, CancellationToken ct);
         IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken ct);
+        Task<string> GenerateAsync(string prompt, IReadOnlyList<CloudTool> tools, CancellationToken ct);
+    }
+
+    public interface IRouteLog
+    {
+        void Log(RouteEvent e);
     }
 }

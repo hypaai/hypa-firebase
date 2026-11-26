@@ -9,7 +9,7 @@ The shared interfaces, data shapes and wire formats, so G02–G12 can build in p
 - Interfaces in `Assets/HypaCore/Runtime/Firebase/` (namespace `HypaCore.Hybrid`): `IHypaAuth`, `IProgressStore`, `IRemoteFlags`, `IRoomSync` (empty until G09), `IOnDeviceModel`, `ICloudModel`.
 - Types: `Route` / `RouteDecision`, `Progress`, `RemoteConfigKeys` with defaults, `ProxyApi` and the proxy request and response classes.
 - The proxy wire format now matches the Cloud Function and the Quest app: `audio` / `audioUrl`, `targetLang`, `messages` plus `maxTokens`, `route`, `usage`, and the error code `app_check`. Daily audio limit default is 600 seconds.
-- Fakes for every interface, and `HybridServices.Current` (WebGL: Web, builds: Native, editor: Fake unless "Use real Firebase" is on).
+- Fakes for every interface, and `HybridServices.Current` (WebGL: Web, builds: Native, editor: real Firebase from the local config file, Fakes until it starts).
 - `firebase/firestore.rules` (each user only their own `users/{uid}/**`) and `firebase/database.rules.json` (rooms: the host controls the room and clock, each player writes only their own entries), with emulator tests in `firebase/tests/`.
 - Tests: EditMode tests in `Assets/HypaCore/Tests/Editor/HybridContractsTests.cs`, 9 rules tests on the Firebase emulators.
 - Merged without the four reviews the ticket asks for.
@@ -86,3 +86,40 @@ Written against G01's interfaces, so it runs on the Fakes. The screens and devic
 - Provisional contract additions: `StoryResult`, `SavedWord`, `IUserDataStore` with a fake (`Assets/HypaCore/Runtime/Firebase/UserData.cs`), waiting for Timi's OK.
 - Tests: `Assets/HypaStories/Tests/Editor/ProgressSyncTests.cs`.
 - Not done: "Sign in to sync", the Continue prompt on screen, Firestore-backed stores, and the device checks.
+
+## G05 (HYP-200): Hybrid router for the storyteller
+
+Every storyteller answer and Try Hypa translation picks where it runs, says where it ran, and keeps working offline.
+
+- `HybridRouter.Decide` (`Assets/HypaCore/Runtime/Firebase/HybridRouter.cs`): offline → Hypa languages → on device → cloud Gemini, with the thresholds from Remote Config and `HypaSettings.AiMode` (Hybrid by default; Cloud only and On device only for testing, no UI). `NetworkStatus` treats a failed connection as offline for 30 s.
+- `HybridStoryQa`, the only answer path: one single-turn prompt with the story trimmed to fit, sentences streamed as they come, fallbacks when a path fails (including an on-device reply in the wrong language), the saved answers offline with "I'll tell you more when we're back online", the 12 s deadline.
+- Cloud Gemini calls Hypa's `translate` and `define` through function calling (`CloudTool`) for "what does … mean" questions.
+- `HybridTryApi`: Try Hypa's translation through the same router.
+- Players never see which model answered; each answer's route is written to the log (`Hypa Stories answered: Cloud · Gemini · 1.2 s (why)`). While the device's model is still downloading, the Q&A says "On-device model downloading (first time only)" in the story's language (`QaLines.Preparing`).
+- Anonymous route statistics to Firestore `routes/{uid}/events`, with rules; `RestRouteLog` writes them over REST (in `QuestRestServices`).
+- Web (with G03): `WebCloudModel` does function calling (`generateTurn` in the bridge, tool calls run in C# via `CloudToolCalls`), and `WebRouteLog` writes route events through the bridge.
+- Integration: `FirebaseStartup` starts the REST services at launch (sign-in, App Check, progress, cloud Gemini, route stats) and fetches Remote Config; `RestCloudModel` is cloud Gemini through Firebase AI Logic over REST, with tool calls. The storyteller's speech (lines and answers) goes through `/hypa/tts` (`HypaProxyClient.SpeechAsync`) instead of MCP.
+- Real services instead of Fakes: `NoCloudModel` is the default cloud model (it fails, so the router falls back and no placeholder is ever spoken); `RestRemoteFlags` (Firebase Installations + Remote Config REST) and `RestProfileStore` join `QuestRestServices`; `WebProfileStore` joins the web services. `StoryProfileSync` syncs the character (newest save wins).
+- `HypaProxyClient` uses `UnityWebRequest` in a web build (`HttpClient` does not work in the browser), so Hypa answers work on the web.
+- Tests: `HybridRouterTests` (every combination of network, language, model status, prompt size, tools, setting and preference), `HybridStoryQaTests`, 2 more rules tests.
+- Not yet tested on a device or a web build, nor against real Firebase or Hypa: the on-device and cloud models are G03, G06 and G07's, and the "back online" and "getting ready" lines in Hausa, Igbo, Naija, Kiswahili and Yorùbá need a native speaker's check.
+
+## G07 (HYP-202): iOS on-device model (Apple Foundation Models)
+
+On an iPhone with Apple Intelligence, answers come from Apple's on-device model; on any other iPhone the status is `unavailable` and the router uses the cloud. How it works: `docs/ios-on-device.md`.
+
+- `Assets/Plugins/iOS/HypaFoundationModels.swift`: Apple's Foundation Models framework behind four C functions (`@_cdecl`): status, start (answer or stream), cancel, and the reply callback. No Objective-C shim. Each session starts with family-friendly instructions for Apple's acceptable-use requirements.
+- `AppleFoundationModel : IOnDeviceModel` (`Assets/HypaFirebase/Runtime/Native/`): status (`available`, `downloading`, `unavailable` with a reason), answers and streams by request id, errors as `OnDeviceModelException` codes, and cancelling. A model that is not ready fails at once, never waits.
+- `HybridServices.OnDeviceFactory`: the platform's on-device model for every service set, so it works before and without the native Firebase services.
+- `HypaIosBuild`: weak-links FoundationModels (the app still opens on iOS 15 to 18), pins the Swift version, and makes sure the microphone prompt is in Info.plist.
+- Firebase's iOS hybrid API (`HybridModel`, `SystemLanguageModel`, 12.13 to 12.19) was removed in Firebase iOS 13.0.0, and the Firebase Unity SDK 14.2.0 ships 13.2.0. Firebase now points to Apple's Foundation Models framework directly for on-device, which is what this uses.
+- Tests: `Assets/HypaFirebase/Tests/Editor/AppleFoundationModelTests.cs`. The Swift plugin type-checks against the iOS 26.2 SDK (Xcode 26.3), and `tools/apple-model/check.sh` ran it on a Mac (macOS 26.3, Apple Intelligence): available, an answer, a Spanish stream in pieces, and a cancel.
+- Not yet run on an iPhone, and no iOS build yet (the iOS Build Support module is not installed on the build machine).
+
+## G03 (HYP-198): Firebase web bridge and Gemini Nano in Chrome
+
+- A WebGL bridge to the Firebase JS SDK: `HypaFirebase.jslib`, `firebase-bridge.js` and `WebBridge`.
+- Web implementations of the G01 services: `WebAuth`, `WebProgressStore`, `WebRemoteFlags`, `WebCloudModel` and `ChromeNanoModel` (Gemini Nano through Firebase AI Logic).
+- A browser microphone at 16 kHz for `MicListener`.
+- On the web, the on-device model status is shown on Home, and the help card has a section on on-device AI.
+- Details: [web-bridge.md](web-bridge.md).

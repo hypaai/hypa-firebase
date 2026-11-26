@@ -27,6 +27,7 @@
 *.aab
 *.obb
 hypa.local.json
+hypa.firebase.local.json
 **/StreamingAssets/*key*
 
 # Local / generated files that should never be committed
@@ -80,3 +81,5 @@ coverage/
 
 # Local dev key for the Functions emulator
 .secret.local
+Assets/HypaFirebase/Resources/hypa_client_config_local.json
+Assets/HypaFirebase/Resources/hypa_client_config_local.json.meta

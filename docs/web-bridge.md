@@ -14,6 +14,9 @@ C# WebBridge.CallAsync / StreamAsync (request id)
 
 Events travel the same way with `id: 0`: `uid` when the signed-in user changes, and `progress` when another device saves newer progress. Cancelling a C# call, or stopping a stream early, tells JS to stop and drops any late answer. WebGL has one thread: await bridged tasks, never `.Result` or `.Wait()`.
 
+G05 adds two methods: `generateTurn` (one turn of cloud Gemini with function calling; `WebCloudModel` runs the tool calls in C#, through the Hypa proxy, and sends the results back, at most four rounds) and `logRoute` (an anonymous route event to `routes/{uid}/events`, `WebRouteLog`).
+
+
 | Interface | Web implementation | Notes |
 | --- | --- | --- |
 | `IHypaAuth` | `WebAuth` | Anonymous on first launch; the user is restored from IndexedDB on later visits. Google and Apple link with a popup, so call them from a button press. Linking an account that already belongs to another player fails with `already_linked` and never swaps the player. |
@@ -27,7 +30,7 @@ App Check uses reCAPTCHA Enterprise. On `localhost` it uses the debug provider: 
 
 ## Configuration
 
-`firebaseWeb` in `Assets/HypaFirebase/Resources/hypa_client_config.json` holds the web app's Firebase config (Firebase console → Project settings → Your apps → Web app) and `recaptchaEnterpriseSiteKey`. These values are public, not secrets. While `apiKey`, `projectId` or `appId` is blank, `HybridServices.Current` stays on the Fakes, so the web build still plays.
+`firebaseWeb` holds the web app's Firebase config (Firebase console → Project settings → Your apps → Web app) and `recaptchaEnterpriseSiteKey`. These values are public, but the repository's secret scan rejects them, so the committed `Assets/HypaFirebase/Resources/hypa_client_config.json` keeps them blank and the real ones go in `hypa_client_config_local.json` next to it (git-ignored). When the local file exists the app reads it instead (`HypaConfig.ClientConfig`), so builds made on that machine carry the values. While `apiKey`, `projectId` or `appId` is blank, `HybridServices.Current` stays on the Fakes, so the web build still plays.
 
 ## Run locally with the Firebase emulators
 

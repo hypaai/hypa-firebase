@@ -34,10 +34,19 @@ namespace HypaCore
         public static string LocalFilePath => Path.Combine(ConfigDir, FileName);
         public static string EnvFilePath => Path.Combine(ConfigDir, EnvFileName);
 
+        public const string ClientConfigResource = "hypa_client_config";
+        public const string LocalClientConfigResource = "hypa_client_config_local";
+
+        public static JObject ClientConfig()
+        {
+            var resource = Resources.Load<TextAsset>(LocalClientConfigResource);
+            if (resource == null) resource = Resources.Load<TextAsset>(ClientConfigResource);
+            return resource != null ? JObject.Parse(resource.text) : new JObject();
+        }
+
         public static HypaConfig Load()
         {
-            var resource = Resources.Load<TextAsset>("hypa_client_config");
-            var config = resource != null ? JObject.Parse(resource.text) : new JObject();
+            var config = ClientConfig();
             string url = (string)config["proxyBaseUrl"];
             string debug = null;
             string authEmulatorUrl = null;
