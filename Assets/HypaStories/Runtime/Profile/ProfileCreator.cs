@@ -434,10 +434,15 @@ namespace HypaStories
         {
             if (_field == field) return;
             EndInput(); _field = field;
-            if (Application.isMobilePlatform && TouchScreenKeyboard.isSupported && !UnityEngine.XR.XRSettings.isDeviceActive)
+            bool web = Application.platform == RuntimePlatform.WebGLPlayer;
+            // Web uses physical typing when available, or the system keyboard on touch devices.
+            bool useSystemKeyboard = TouchScreenKeyboard.isSupported && (web
+                ? !TouchScreenKeyboard.isInPlaceEditingAllowed
+                : Application.isMobilePlatform && !UnityEngine.XR.XRSettings.isDeviceActive);
+            if (useSystemKeyboard)
                 _nativeKeyboard = TouchScreenKeyboard.Open(Value, TouchScreenKeyboardType.Default, false, false, false, false,
                     field == 0 ? "Username" : "Display name", field == 0 ? 20 : 24);
-            else Keyboard();
+            else if (!web) Keyboard();
             UpdateNames();
         }
 

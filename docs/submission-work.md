@@ -57,6 +57,7 @@ A profile card for Stories with a realistic character the player shapes. Code in
 
 - `ProfileCreator`: a simple card with the character as a round portrait, rendered only when something changes, and a mixed-reality panel close to the player on Quest.
 - `ProfileAvatar`, `ProfileCatalog`, `StoryProfile`: the character (MakeHuman CC0, built by `tools/avatar/build_avatar.py`), its choices and the saved profile. The imported assets are listed in `docs/pre-existing-work.md`.
+- Web profile fields use the physical or system keyboard. The in-game keyboard remains available on Quest.
 - Tests: `Assets/HypaStories/Tests/Editor/StoryProfileTests.cs`.
 - Not yet synced through Firebase.
 
