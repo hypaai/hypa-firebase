@@ -1,5 +1,7 @@
-#if UNITY_WEBGL
+#if UNITY_WEBGL || (UNITY_ANDROID && HYPA_FLAT)
 using HypaCore.Hybrid;
+#endif
+#if UNITY_WEBGL
 using HypaCore.Hybrid.Web;
 #endif
 using UnityEngine;
@@ -101,6 +103,9 @@ namespace HypaCore
         void Update()
         {
             if (Application.isEditor && Input.GetKeyDown(KeyCode.M)) ToggleMenu();
+#if UNITY_ANDROID && HYPA_FLAT
+            if (_setupChanged) { _setupChanged = false; if (_phoneOnDevice != null) Ui.SetLabel(_phoneOnDevice, _setup.ShortLabel); }
+#endif
         }
 
         // Sound after a build. Build and Run launches the app while the headset is asleep. Unity opens its sound stream right
@@ -112,7 +117,14 @@ namespace HypaCore
         bool _reopenAudio = true; // the stream opened at launch may be muted: reopen it once the headset is in use
 
         void OnApplicationPause(bool paused) { if (paused) _reopenAudio = true; }
-        void OnApplicationFocus(bool focus) { if (focus) ReopenAudioWhenWorn(); }
+        void OnApplicationFocus(bool focus)
+        {
+            if (!focus) return;
+            ReopenAudioWhenWorn();
+#if UNITY_ANDROID && HYPA_FLAT
+            if (_setup != null) _ = _setup.RefreshAsync();
+#endif
+        }
 
         void ReopenAudioWhenWorn()
         {
@@ -216,6 +228,8 @@ namespace HypaCore
             Ui.Button("How it works", _menu, new Vector3(0, -0.065f, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => ShowHelp(true));
 #if UNITY_WEBGL
             BuildOnDeviceRow();
+#elif UNITY_ANDROID && HYPA_FLAT
+            BuildPhoneOnDeviceRow();
 #endif
             _status = Ui.Text(_menu, "", 0.015f, new Vector3(0, -0.18f, 0), Color.white);
             _menu.gameObject.SetActive(false);
@@ -303,6 +317,31 @@ namespace HypaCore
             try { await nano.DownloadAsync(); }
             catch (System.Exception e) { Debug.LogWarning($"Hypa: on-device model download did not finish ({(e as WebBridgeException)?.Code ?? e.GetType().Name})."); }
             finally { _downloading = false; ShowOnDeviceStatus(); }
+        }
+#endif
+
+#if UNITY_ANDROID && HYPA_FLAT
+        PinchTarget _phoneOnDevice;
+        OnDeviceSetup _setup;
+        volatile bool _setupChanged;
+
+        /// <summary>
+        /// On-device model on Home (phone): ready, downloadable (select to download), downloading with progress, failed (select to retry),
+        /// or not on this phone. A headset build is not flat, so Quest never gets this row. Changes arrive on a worker thread, so the
+        /// label is set from Update.
+        /// </summary>
+        void BuildPhoneOnDeviceRow()
+        {
+            _phoneOnDevice = Ui.Button("On-device AI", _menu, new Vector3(0, -0.125f, 0), new Vector2(0.26f, 0.04f), Ui.Muted, OnPhoneOnDevicePressed);
+            _setup = new OnDeviceSetup(HybridServices.Current.OnDevice);
+            _setup.Changed += () => _setupChanged = true;
+            _setupChanged = true;
+            _ = _setup.RefreshAsync();
+        }
+
+        void OnPhoneOnDevicePressed()
+        {
+            if (_setup != null && _setup.CanDownload) _ = _setup.DownloadAsync();
         }
 #endif
 

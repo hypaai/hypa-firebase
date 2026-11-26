@@ -92,6 +92,7 @@ namespace HypaCore.Hybrid
             else if (!ctx.PreferOnDevice) why = $"{name}, cloud preferred (Remote Config)";
             else if (!deviceLang) why = $"{name} isn't one of the on-device languages";
             else if (ctx.OnDeviceStatus == "downloading") why = Downloading;
+            else if (ctx.OnDeviceStatus == "downloadable") why = $"{name}, the on-device model is not downloaded yet (Home)";
             else if (!ctx.OnDeviceReady) why = $"{name}, no model on this device";
             else why = $"{name}, the story so far is too long for the device";
             return new RouteDecision(Route.CloudGemini, Cloud, why, 0);
@@ -122,7 +123,7 @@ namespace HypaCore.Hybrid
                 return new RouteDecision(Route.OnDevice, ctx.OnDeviceName, "Both languages work on this device", 0);
 
             return new RouteDecision(Route.Hypa, name, devicePair
-                ? ctx.OnDeviceStatus == "downloading" ? Downloading : "No model on this device"
+                ? ctx.OnDeviceStatus == "downloading" ? Downloading : ctx.OnDeviceStatus == "downloadable" ? "The on-device model is not downloaded yet (Home)" : "No model on this device"
                 : "This pair isn't one of the on-device languages", 0);
         }
 
