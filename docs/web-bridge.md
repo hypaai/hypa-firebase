@@ -29,7 +29,7 @@ App Check uses reCAPTCHA Enterprise. On `localhost` it uses the debug provider: 
 
 ## Configuration
 
-`firebaseWeb` in `Assets/HypaFirebase/Resources/hypa_client_config.json` holds the web app's Firebase config (Firebase console → Project settings → Your apps → Web app) and `recaptchaEnterpriseSiteKey`. These values are public, not secrets. While `apiKey`, `projectId` or `appId` is blank, `HybridServices.Current` stays on the Fakes, so the web build still plays.
+`firebaseWeb` holds the web app's Firebase config (Firebase console → Project settings → Your apps → Web app) and `recaptchaEnterpriseSiteKey`. These values are public, but the repository's secret scan rejects them, so the committed `Assets/HypaFirebase/Resources/hypa_client_config.json` keeps them blank and the real ones go in `hypa_client_config_local.json` next to it (git-ignored). When the local file exists the app reads it instead (`HypaConfig.ClientConfig`), so builds made on that machine carry the values. While `apiKey`, `projectId` or `appId` is blank, `HybridServices.Current` stays on the Fakes, so the web build still plays.
 
 ## Run locally with the Firebase emulators
 
