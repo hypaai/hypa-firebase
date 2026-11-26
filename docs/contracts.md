@@ -30,9 +30,9 @@ outside development: debug tokens skip the check.
 
 - Three real implementations: **Native** (Firebase Unity SDK; Android, iOS, and Quest if the spike passes; G02), **Rest**
   (Firebase REST APIs; Quest if the SDK fails there; G02, in `Assets/HypaFirebase/Runtime/Rest`) and **Web** (`.jslib` + Firebase JS SDK; G03). **Fake** (in-memory) for the editor and tests
-  (`Fakes.cs`).
-- `HybridServices.Current` picks one at start-up: WebGL build → Web; Android, iOS, Quest → `NativeFactory` (on Quest G02 registers the SDK or the REST services, whichever the spike picks); editor → Fake unless
-  "Use real Firebase" is ticked (`PlayerPrefs` key `hypa.useRealFirebase`). G02 sets `HybridServices.NativeFactory`, G03 sets
+  (`Fakes.cs`): the stand-in until real services start, and when the config file is missing.
+- `HybridServices.Current` picks one at start-up: WebGL build → Web; Android, iOS, Quest and the editor → `NativeFactory` (on Quest G02 registers the SDK or the REST services, whichever the spike picks;
+  without one, `FirebaseStartup` starts the REST services from the local config file). G02 sets `HybridServices.NativeFactory`, G03 sets
   `WebFactory`. With no factory registered the Fakes are used, so the app always runs.
 - `HybridServices.UpgradeAsync` starts the real services in the background and swaps them in; progress and a profile saved to the
   Fakes meanwhile are sent if they are newer. Always read services through `HybridServices.Current`.
@@ -44,6 +44,11 @@ outside development: debug tokens skip the check.
 - `IRouteLog.Log(RouteEvent)` writes anonymous route statistics to `routes/{uid}/events` (section 3). Fire and forget.
   `RestRouteLog` (`QuestRestServices`) does it over Firestore REST: events wait in memory (at most 50) while the network is down
   and go out with the next one; an event Firestore refuses is dropped.
+- `RestCloudModel` (`QuestRestServices`) is cloud Gemini through Firebase AI Logic over REST, the same request the JS SDK makes
+  (`firebasevertexai.googleapis.com/v1beta/projects/{project}/models/{cloud_model}:generateContent`, Gemini Developer API, with the
+  Firebase ID token and App Check token), including function calling. `FirebaseStartup` starts these services when the app
+  opens on a platform without `NativeFactory` (Quest, and phones until the SDK path from G02 lands), from `hypa.firebase.local.json`
+  in the app's data folder (`docs/quest-path.md`); without that file the app plays on the Fakes. It also fetches Remote Config.
 - `AndroidNanoModel` (G06) is Gemini Nano through Google ML Kit's GenAI Prompt API (AICore), reached by a small Java bridge
   (`Assets/HypaCore/Plugins/Android/HypaNano.androidlib`, pinned `genai-prompt:1.0.0-beta5`, needs API 26). It answers on the device
   only; when it cannot, the router sends the question to the cloud model, so the Hypa proxy stays the one cloud path. The platform
@@ -101,7 +106,9 @@ routes/{uid}/events/{eventId}    { kind: "answer"|"translate", route: "onDevice"
 - `users/{uid}` carries the profile card: `username` (3–20 of `a-z 0-9 _`, starting with a letter; a display handle, not unique),
   `displayName` (≤ 24) and `appearance`: the app's own JSON for the character (≤ 4000 characters), versioned by
   `appearanceVersion`. Stories maps its `StoryProfile` to it, so a character made on one device follows the player; the platform
-  layer never needs to know the character model. `IProfileStore` loads and saves it.
+  layer never needs to know the character model. `IProfileStore` loads and saves it: `RestProfileStore` (Quest, phones; Firestore REST with an offline copy) and
+  `WebProfileStore` (G03's bridge). `StoryProfileSync` sends every save from the character creator, and at launch and when the
+  real services come up takes whichever side was saved last (`lastSeenAt` against the device's `savedAt`).
 - `routes/{uid}/events` (`RouteEvent`, G05) is anonymous: no question, answer or text. Written unless the player turns
   "Anonymous route stats" off; G14 reads it with the Admin SDK ("62% of answers ran on device").
 - Rules (`firebase/firestore.rules`): a user reads and writes only `users/{their uid}` and the three collections above, and only
@@ -145,7 +152,7 @@ rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
 | `route_on_device_langs` | `en,fr,es` | G05 |
 | `route_hypa_langs` | `yo,ha,ig,pcm,sw` | G05 |
 | `route_max_on_device_tokens` | `5000` | G05 |
-| `cloud_model` | `gemini-2.5-flash-lite` | G05 |
+| `cloud_model` | `gemini-3.5-flash-lite` | G05 |
 | `live_model` | (Live API model name from the Firebase docs on Nov 22) | G10 |
 | `live_langs` | `en,fr,es,sw` | G10 |
 | `proxy_daily_seconds_per_user` | `600` | G04 (server) |
