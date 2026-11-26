@@ -167,17 +167,17 @@ namespace HypaCore.Hybrid
 
     /// <summary><see cref="voice"/> works only with the <see cref="model"/> that owns it. <see cref="inline"/>: return base64, not a link.</summary>
     [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; public string model; public bool? inline; }
-    /// <summary>Either <see cref="audioUrl"/> or <see cref="audioBase64"/> (always base64 when the request was <c>inline</c>).</summary>
+    /// <summary>Returns <see cref="audioUrl"/> by default or <see cref="audioBase64"/> when inline is requested.</summary>
     [Serializable] public sealed class TtsResponse { public string audioUrl; public string audioBase64; public string mime; public int sampleRate; public ProxyRoute route; public ProxyUsage usage; }
     /// <summary>Base64 audio, at most 1 MiB and 30 s.</summary>
-    [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public double? durationSeconds; }
+    [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public double? durationSeconds; public string model; }
     [Serializable] public sealed class AsrResponse { public string transcript; public string language; public double audioSeconds; public ProxyRoute route; public ProxyUsage usage; }
     /// <summary><see cref="role"/>: "system", "user" or "assistant".</summary>
     [Serializable] public sealed class ChatMessage { public string role; public string content; }
     /// <summary><see cref="model"/>: "auto" (the default) or "provider/model".</summary>
     [Serializable] public sealed class ChatRequest { public ChatMessage[] messages; public string model; public int? maxTokens; }
     [Serializable] public sealed class ChatResponse { public string content; public ProxyRoute route; public ProxyUsage usage; }
-    [Serializable] public sealed class TranslateRequest { public string text; public string targetLang; public string sourceLang; }
+    [Serializable] public sealed class TranslateRequest { public string text; public string targetLang; public string sourceLang; public string model; }
     [Serializable] public sealed class TranslateResponse { public string translation; public string language; public ProxyRoute route; public ProxyUsage usage; }
     /// <summary><see cref="scope"/> for quota, <see cref="reason"/> and <see cref="retryable"/> for upstream.</summary>
     [Serializable] public sealed class ProxyErrorBody { public string code; public string message; public string scope; public string reason; public bool? retryable; public int? retryAfterSeconds; }

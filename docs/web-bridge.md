@@ -16,6 +16,7 @@ Events travel the same way with `id: 0`: `uid` when the signed-in user changes, 
 
 G05 adds two methods: `generateTurn` (one turn of cloud Gemini with function calling; `WebCloudModel` runs the tool calls in C#, through the Hypa proxy, and sends the results back, at most four rounds) and `logRoute` (an anonymous route event to `routes/{uid}/events`, `WebRouteLog`).
 
+
 | Interface | Web implementation | Notes |
 | --- | --- | --- |
 | `IHypaAuth` | `WebAuth` | Anonymous on first launch; the user is restored from IndexedDB on later visits. Google and Apple link with a popup, so call them from a button press. Linking an account that already belongs to another player fails with `already_linked` and never swaps the player. |
@@ -47,6 +48,8 @@ On `localhost` or `127.0.0.1` the web build uses the Firebase Emulator Suite, pr
 | Remote Config | No emulator, so the contract defaults are used |
 | Cloud Gemini | No emulator, so calls fail. Use `?firebase=live` |
 | Gemini Nano | Works: it runs on the device |
+
+For local Hypa proxy calls, set HYPA_SKIP_APP_CHECK=true in functions/.env.local and set the dev Hypa key in functions/.secret.local. The browser uses the Hosting rewrite on port 5002.
 
 `http://localhost:5002/?firebase=live` uses the real project from `firebaseWeb` instead, with the App Check debug provider.
 

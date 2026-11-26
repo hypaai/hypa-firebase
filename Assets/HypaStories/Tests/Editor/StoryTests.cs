@@ -251,14 +251,14 @@ namespace HypaStories.Tests
             CollectionAssert.AreEqual(StoryLibrary.DefaultModels, none.Models);
         }
 
-        [Test] public void Chat_TriesModelsInOrder_SkippingOnesTheServiceDoesntHave()
+        [Test] public void Chat_UsesServerFallbackExceptForAnExplicitStoryPin()
         {
-            var models = new[] { "meta/spark", "google/flash", "meta/glimmer" };
-            CollectionAssert.AreEqual(models, ChatStoryQa.Order(models, new HashSet<string>()));
-            CollectionAssert.AreEqual(new[] { "google/flash", "meta/glimmer" }, ChatStoryQa.Order(models, new HashSet<string> { "meta/spark" }));
-            CollectionAssert.AreEqual(new[] { "meta/spark" }, ChatStoryQa.Order(models, new HashSet<string>(models)), "all missing: still try the first");
-            Assert.IsTrue(ChatStoryQa.IsMissingModel("chat: Your request could not be processed. Provider details: The requested model was not found. It may not exist"));
-            Assert.IsFalse(ChatStoryQa.IsMissingModel("chat: meta/spark reached its output-token limit before completing the response."), "a one-off failure: still tried next time");
+            const string lines = @" ""lines"": [{ ""id"": ""a"", ""text"": ""one"" }]";
+            var pins = StoryLibrary.Parse("t", "{ \"model\": \"meta/m\", " + lines + " }", new Dictionary<string, string>());
+            Assert.AreEqual("meta/m", ChatStoryQa.RequestedModel(pins));
+            Assert.AreEqual("auto", ChatStoryQa.RequestedModel(null));
+            foreach (var story in StoryLibrary.All)
+                Assert.AreEqual("auto", ChatStoryQa.RequestedModel(story), story.Id);
         }
 
         [Test] public void Chat_NeverSpeaksAModelsThinking()

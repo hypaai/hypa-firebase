@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HypaCore.Hybrid;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -130,11 +131,13 @@ namespace HypaCore
         }
 
         /// <summary>sourceLang null = auto-detect; the detected label comes back in DetectedLanguage (may be null).</summary>
-        public async Task<HypaTranslation> TranslateAsync(string text, string targetLang, string sourceLang, CancellationToken ct)
+        public async Task<HypaTranslation> TranslateAsync(string text, string targetLang, string sourceLang, CancellationToken ct, string model = null)
         {
-            var args = TranslateArgs(text, targetLang, sourceLang);
-            var o = await CallToolAsync("translate_message", args, ct).ConfigureAwait(false);
-            return new HypaTranslation { Text = (string)o["translation"], DetectedLanguage = (string)o["language"], Model = (string)o["model"] };
+            var body = new JObject { ["text"] = text, ["from"] = sourceLang ?? "auto", ["to"] = targetLang };
+            if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
+            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Translate, body.ToString(Formatting.None), ct).ConfigureAwait(false);
+            var o = JObject.Parse(raw);
+            return new HypaTranslation { Text = (string)o["text"], DetectedLanguage = (string)o["language"], Model = (string)o["model"] };
         }
 
         /// <summary>translate_message arguments. Pure, unit tested.</summary>
@@ -210,19 +213,20 @@ namespace HypaCore
         public static string ModelForVoice(List<KeyValuePair<string, List<string>>> options, string voice)
             => options?.FirstOrDefault(x => x.Value.Contains(voice, System.StringComparer.OrdinalIgnoreCase)).Key;
 
-        readonly Dictionary<string, List<KeyValuePair<string, List<string>>>> _voiceOptions = new Dictionary<string, List<KeyValuePair<string, List<string>>>>();
-
-        /// <summary>Audio comes back as a signed URL (default) valid about an hour. No voice = Auto; a voice is sent with its own model.</summary>
+        /// <summary>The Firebase proxy returns a signed audio link or inline audio on the web.</summary>
         public async Task<HypaSpeech> TextToSpeechAsync(string text, string language, CancellationToken ct, string voice = null, string model = null)
         {
-            // a story's voice names its own model; otherwise find the model that owns the voice
-            if (string.IsNullOrEmpty(model) && !string.IsNullOrEmpty(voice))
-            {
-                if (!_voiceOptions.TryGetValue(language, out var opts)) { opts = await ListVoicesAsync(language, ct).ConfigureAwait(false); _voiceOptions[language] = opts; }
-                model = ModelForVoice(opts, voice);
-            }
-            var o = await CallToolAsync("text_to_speech", TtsArgs(text, language, voice, model), ct).ConfigureAwait(false);
-            return ParseSpeech(o);
+            var body = new JObject { ["text"] = text, ["language"] = language };
+#if UNITY_WEBGL && !UNITY_EDITOR
+            body["inline"] = true;
+#endif
+            if (!string.IsNullOrEmpty(voice)) body["voice"] = voice;
+            if (!string.IsNullOrEmpty(model)) body["model"] = model;
+            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Tts, body.ToString(Formatting.None), ct).ConfigureAwait(HypaHttp.CaptureProxyContext);
+            var result = JObject.Parse(raw);
+            var speech = ParseSpeech(result);
+            speech.Provider = (string)result["route"]?["provider"];
+            return speech;
         }
 
         /// <summary>Pure, unit tested.</summary>
@@ -237,12 +241,15 @@ namespace HypaCore
         /// Speech to text. <paramref name="audio"/> is a whole file (e.g. WAV from <see cref="WavEncoder"/>), sent as base64.
         /// sourceLang null = auto-detect. Schema from tools/list (2026-11-13); not yet called with a key.
         /// </summary>
-        public async Task<string> SpeechToTextAsync(byte[] audio, string sourceLang, CancellationToken ct)
+        public async Task<string> SpeechToTextAsync(byte[] audio, string sourceLang, CancellationToken ct, string model = null)
         {
-            var args = new JObject { ["audio"] = System.Convert.ToBase64String(audio), ["audioType"] = "base64" };
-            if (!string.IsNullOrEmpty(sourceLang)) args["sourceLang"] = sourceLang;
-            var o = await CallToolAsync("speech_to_text", args, ct).ConfigureAwait(false);
-            return (string)o["transcript"] ?? "";
+            var body = new JObject
+            {
+                ["audioBase64"] = Convert.ToBase64String(audio), ["mime"] = "audio/wav", ["language"] = sourceLang ?? "auto",
+            };
+            if (!string.IsNullOrWhiteSpace(model)) body["model"] = model;
+            var raw = await HypaHttp.PostProxyAsync(_cfg, ProxyApi.Asr, body.ToString(Formatting.None), ct).ConfigureAwait(HypaHttp.CaptureProxyContext);
+            return (string)JObject.Parse(raw)["text"] ?? "";
         }
 
         /// <summary>word: 1..120 chars. language null = English.</summary>

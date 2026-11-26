@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mapHttpError, ProxyError } from "../src/api/errors";
+import { handleRequest } from "../src/api/handler";
 import { HypaHttpClient, parseToolResult } from "../src/api/hypa";
 import { jsonPayloads } from "../src/utils/sse";
+import { deps, request, wav } from "./helpers";
 
 const sse = (o: unknown) => `event: message\ndata: ${JSON.stringify(o)}\n\n`;
 const toolOk = (structuredContent: unknown) => sse({ jsonrpc: "2.0", id: 1, result: { structuredContent } });
@@ -22,7 +24,14 @@ function client(respond: (url: string, init: RequestInit) => Response | Promise<
     if (r instanceof Error) throw r;
     return r;
   }) as typeof fetch;
-  return { seen, hypa: new HypaHttpClient({ baseUrl: "https://hypa.test/", apiKey: () => key, fetchImpl }) };
+  return {
+    seen,
+    hypa: new HypaHttpClient({
+      baseUrl: "https://hypa.test/",
+      apiKey: () => key,
+      fetchImpl,
+    }),
+  };
 }
 
 describe("parsing", () => {
@@ -59,6 +68,7 @@ describe("error mapping", () => {
   it("maps an exhausted Hypa balance to `quota`, not `upstream`", () => {
     const e = mapHttpError(402, "");
     expect([e.code, e.status, e.extras.scope]).toEqual(["quota", 429, "provider_balance"]);
+    expect(e.extras.retryAfterSeconds).toBe(300);
     expect(() =>
       parseToolResult(
         sse({ result: { isError: true, structuredContent: { code: "INSUFFICIENT_BALANCE", error: "x" } } }),
@@ -104,7 +114,7 @@ describe("calls", () => {
       () =>
         new Response(
           toolOk({
-            audioUrl: "https://a/b.mp3",
+            audioBase64: "YXVkaW8=",
             mime: "audio/mpeg",
             voice: "Ife",
             model: "hypa/auto",
@@ -112,65 +122,209 @@ describe("calls", () => {
           }),
         ),
     );
-    const out = await c.hypa.tts({ text: "Bawo", language: "Yoruba" });
+    const out = await c.hypa.tts({ text: "Bawo", language: "Yoruba", inline: true });
     const sent = c.seen[0];
     expect(sent.url).toBe("https://hypa.test/v2/mcp");
     expect((sent.init.headers as Record<string, string>)["x-api-key"]).toBe("KEY-123456");
     expect(String(sent.init.body)).not.toContain("KEY-123456");
     expect(JSON.parse(String(sent.init.body)).params).toEqual({
       name: "text_to_speech",
-      arguments: { text: "Bawo", language: "Yoruba", model: "auto" },
+      arguments: { text: "Bawo", language: "Yoruba", model: "auto", format: "base64" },
     });
     expect(out.route).toEqual({ provider: "hypaai", model: "hypa/auto", voice: "Ife" });
   });
 
-  it("sends a named voice only with its model", async () => {
-    const c = client(() => new Response(toolOk({ audioUrl: "https://a/b.mp3" })));
-    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "Ife" }); // no model: voice dropped
-    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "Ife", model: "m1" });
-    expect(JSON.parse(String(c.seen[0].init.body)).params.arguments).toEqual({
-      text: "a",
-      language: "Yoruba",
-      model: "auto",
+  it("leaves the format unset and passes through the signed URL by default", async () => {
+    const audioUrl = "https://hypa.test/signed-audio";
+    const c = client(() => new Response(toolOk({ audioUrl, mime: "audio/mpeg", voice: "Ife", model: "model-1" })));
+    const out = await c.hypa.tts({ text: "Hello", language: "English" });
+    expect(JSON.parse(String(c.seen[0].init.body)).params.arguments).not.toHaveProperty("format");
+    expect(out.audioUrl).toBe(audioUrl);
+    expect(out.audioBase64).toBeUndefined();
+  });
+
+  it("resolves a voice-only request and forwards the selected voice and model", async () => {
+    const c = client((_, init) => {
+      const { name } = JSON.parse(String(init.body)).params;
+      return new Response(
+        toolOk(
+          name === "list_voices"
+            ? { options: [{ model: "hypa/model-1", voices: ["Ife"] }] }
+            : { audioBase64: "YXVkaW8=", mime: "audio/mpeg", voice: "Ife", model: "model-1" },
+        ),
+      );
+    });
+    await c.hypa.tts({ text: "a", language: "Yoruba", voice: "ife", inline: true });
+    expect(JSON.parse(String(c.seen[0].init.body)).params).toEqual({
+      name: "list_voices",
+      arguments: { language: "Yoruba" },
     });
     expect(JSON.parse(String(c.seen[1].init.body)).params.arguments).toEqual({
       text: "a",
       language: "Yoruba",
-      model: "m1",
+      model: "hypa/model-1",
       voice: "Ife",
+      format: "base64",
+    });
+    expect(c.seen[0].init.signal).toBe(c.seen[1].init.signal);
+  });
+
+  it("honors a TTS model pin even without a voice", async () => {
+    const c = client(
+      () =>
+        new Response(
+          toolOk({
+            audioBase64: "YXVkaW8=",
+            mime: "audio/mpeg",
+            voice: "Ife",
+            model: "model-1",
+          }),
+        ),
+    );
+    const out = await c.hypa.tts({ text: "a", language: "Yoruba", model: "hypa/model-1", inline: true });
+    expect(JSON.parse(String(c.seen[0].init.body)).params.arguments).toMatchObject({
+      model: "hypa/model-1",
+      format: "base64",
+    });
+    expect(out.audioBase64).toBe("YXVkaW8=");
+  });
+
+  it("rejects a voice shared by multiple models until the caller specifies one", async () => {
+    const c = client(
+      () =>
+        new Response(
+          toolOk({
+            options: [
+              { model: "hypa/one", voices: ["Ife"] },
+              { model: "hypa/two", voices: ["Ife"] },
+            ],
+          }),
+        ),
+    );
+    const err = await failure(c.hypa.tts({ text: "a", language: "Yoruba", voice: "Ife" }));
+    expect(err.code).toBe("bad_request");
+    expect(c.seen).toHaveLength(1);
+  });
+});
+
+describe("model selection through the proxy", () => {
+  const chatRequest = { messages: [{ role: "user", content: "Báwo ni?" }], language: "Yoruba" };
+  const speech = { audioUrl: "https://hypa.test/signed-audio", mime: "audio/mpeg", voice: "Ife" };
+  const recording = { audioBase64: wav(1).toString("base64"), mime: "audio/wav", language: "Yoruba" };
+
+  it.each([
+    ["/hypa/tts", { text: "Hi", language: "English" }, "text_to_speech", speech],
+    ["/hypa/asr", recording, "speech_to_text", { transcript: "hi" }],
+    ["/hypa/translate", { text: "Hi", from: "English", to: "Yoruba" }, "translate_message", { translation: "hi" }],
+  ])("passes omitted, Auto, and pinned models for %s", async (path, body, tool, result) => {
+    for (const model of [undefined, "  ", "AUTO", "meta/team/model"]) {
+      const c = client(() => new Response(toolOk({ ...result, model: "answered-model" })));
+      const response = await handleRequest(request(path, { ...body, model }), deps({ hypa: c.hypa }));
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ model: "answered-model" });
+      expect(c.seen).toHaveLength(1);
+      expect(JSON.parse(String(c.seen[0].init.body)).params).toMatchObject({
+        name: tool,
+        arguments: { model: model === "meta/team/model" ? model : "auto" },
+      });
+    }
+  });
+
+  it.each([undefined, "  ", "auto"])("uses the VR fallback order for chat model %s", async (model) => {
+    const c = client((_, init) => {
+      const { provider, model: selected } = JSON.parse(String(init.body));
+      if (selected.includes("Muse-Spark")) {
+        return new Response("event: message\ndata: The requested model was not found.\n\n");
+      }
+      if (provider === "google")
+        return new Response(sse({ choices: [{ message: { content: "<think>only thinking</think>" } }] }));
+      if (selected.includes("Muse-Glimmer")) return new Response("", { status: 503 });
+      return new Response(sse({ choices: [{ message: { content: "Ẹ n lẹ́" } }], model: "reported-winner" }));
+    });
+    const d = deps({ hypa: c.hypa });
+    const response = await handleRequest(request("/hypa/chat", { ...chatRequest, model }), d);
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ text: "Ẹ n lẹ́", model: "reported-winner", route: { provider: "meta" } });
+    expect(
+      c.seen.map(({ init }) => {
+        const body = JSON.parse(String(init.body));
+        return body.provider + "/" + body.model;
+      }),
+    ).toEqual([
+      "meta/meta-models/Muse-Spark-Open-816B-A42B:baseten",
+      "google/gemini-3.5-flash",
+      "meta/meta-models/Muse-Glimmer-30B:deepinfra",
+      "meta/muse-wonder-1.0",
+    ]);
+    expect(c.seen.every(({ init }) => init.signal === c.seen[0].init.signal)).toBe(true);
+    expect(d.quota.global.requests).toBe(1);
+    expect(d.quota.released).toHaveLength(0);
+  });
+
+  it("stops at the first usable answer", async () => {
+    const c = client(() => new Response(sse({ choices: [{ message: { content: "Done." } }] })));
+    const response = await handleRequest(request("/hypa/chat", chatRequest), deps({ hypa: c.hypa }));
+    expect(response.body).toMatchObject({ model: "meta-models/Muse-Spark-Open-816B-A42B:baseten" });
+    expect(c.seen).toHaveLength(1);
+  });
+
+  it("preserves slashes in a pinned model and makes only one attempt even if it fails", async () => {
+    const c = client(() => new Response("", { status: 503 }));
+    const response = await handleRequest(
+      request("/hypa/chat", { ...chatRequest, model: "meta/team/muse-wonder-1.0" }),
+      deps({ hypa: c.hypa }),
+    );
+    expect(response.status).toBe(502);
+    expect(c.seen).toHaveLength(1);
+    expect(JSON.parse(String(c.seen[0].init.body))).toMatchObject({
+      provider: "meta",
+      model: "team/muse-wonder-1.0",
+      stream: false,
     });
   });
 
-  it("downloads the audio on the server for inline TTS, https only, without the key", async () => {
-    const c = client((url) =>
-      url.endsWith("/v2/mcp")
-        ? new Response(toolOk({ audioUrl: "https://cdn.test/a.mp3", mime: "audio/mpeg" }))
-        : new Response(Buffer.from("AUDIO")),
-    );
-    const out = await c.hypa.tts({ text: "a", language: "Yoruba", inline: true });
-    expect(out.audioBase64).toBe(Buffer.from("AUDIO").toString("base64"));
-    expect(out.audioUrl).toBeUndefined();
-    expect(JSON.stringify(c.seen[1].init ?? {})).not.toContain("KEY-123456");
-    const bad = client(() => new Response(toolOk({ audioUrl: "http://evil.test/a.mp3" })));
-    expect((await failure(bad.hypa.tts({ text: "a", language: "Yoruba", inline: true }))).code).toBe("upstream");
+  it.each([401, 402, 403, 422])("stops immediately for request-wide Hypa HTTP %i", async (status) => {
+    const c = client(() => new Response("credentials or request rejected", { status }));
+    const response = await handleRequest(request("/hypa/chat", chatRequest), deps({ hypa: c.hypa }));
+    expect(response.status).toBe(status === 402 ? 429 : 502);
+    expect(c.seen).toHaveLength(1);
+    expect(JSON.stringify(response.body)).not.toContain("credentials");
   });
 
-  it("chat: auto routes by provider, a pinned model is split like the Unity client", async () => {
-    const reply = () =>
-      new Response(JSON.stringify({ choices: [{ message: { content: "Ẹ n lẹ́" } }], model: "muse", provider: "meta" }));
-    const c = client(reply);
-    const out = await c.hypa.chat({ messages: [{ role: "user", content: "Báwo ni?" }], maxTokens: 100 });
-    expect(c.seen[0].url).toBe("https://hypa.test/v2/developer/chat");
-    expect(JSON.parse(String(c.seen[0].init.body))).toMatchObject({ provider: "auto", stream: false, max_tokens: 100 });
-    expect(out).toEqual({ content: "Ẹ n lẹ́", route: { provider: "meta", model: "muse" } });
-    await c.hypa.chat({ messages: [{ role: "user", content: "x" }], model: "meta/muse-wonder-1.0", maxTokens: 10 });
-    expect(JSON.parse(String(c.seen[1].init.body))).toMatchObject({ provider: "meta", model: "muse-wonder-1.0" });
+  it("stops on a budget error inside a chat event", async () => {
+    const c = client(() => new Response(sse({ error: { code: "INSUFFICIENT_BALANCE" } })));
+    const response = await handleRequest(request("/hypa/chat", chatRequest), deps({ hypa: c.hypa }));
+    expect(response.status).toBe(429);
+    expect(c.seen).toHaveLength(1);
   });
 
-  it("rejects an empty chat answer as `upstream`", async () => {
-    const c = client(() => new Response(JSON.stringify({ choices: [{ message: { content: " " } }] })));
-    expect(
-      (await failure(c.hypa.chat({ messages: [{ role: "user", content: "x" }], maxTokens: 10 }))).extras.reason,
-    ).toBe("invalid_response");
+  it("refunds the single reservation when no chat model can answer", async () => {
+    const c = client(() => new Response("", { status: 503 }));
+    const d = deps({ hypa: c.hypa });
+    const response = await handleRequest(request("/hypa/chat", chatRequest), d);
+    expect(response.status).toBe(502);
+    expect(c.seen).toHaveLength(4);
+    expect(d.quota.global.requests).toBe(0);
+    expect(d.quota.released).toEqual([{ requests: 1, seconds: 0 }]);
+  });
+
+  it("stops after the shared deadline, with one refunded reservation", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    try {
+      const c = client(() => {
+        controller.abort();
+        return new Response("", { status: 503 });
+      });
+      const d = deps({ hypa: c.hypa });
+      const response = await handleRequest(request("/hypa/chat", chatRequest), d);
+      expect(timeout).toHaveBeenCalledExactlyOnceWith(20_000);
+      expect(response.status).toBe(504);
+      expect(c.seen).toHaveLength(1);
+      expect(d.quota.global.requests).toBe(0);
+      expect(d.quota.released).toEqual([{ requests: 1, seconds: 0 }]);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

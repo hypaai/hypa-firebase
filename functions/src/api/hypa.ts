@@ -1,6 +1,16 @@
-import { MAX_INLINE_AUDIO_BYTES, TIMEOUT_MS } from "../config";
+import { CHAT_FALLBACK_MODELS, MAX_INLINE_AUDIO_BYTES, TIMEOUT_MS } from "../config";
 import { jsonPayloads } from "../utils/sse";
-import { isTimeout, mapHttpError, providerBalanceError, ProxyError, timeoutError, upstream } from "./errors";
+import {
+  badRequest,
+  chatPayloadError,
+  isTimeout,
+  mapChatHttpError,
+  mapHttpError,
+  providerBalanceError,
+  ProxyError,
+  timeoutError,
+  upstream,
+} from "./errors";
 
 export interface Route {
   provider?: string;
@@ -20,21 +30,28 @@ export interface HypaApi {
     voice?: string;
     model?: string;
     inline?: boolean;
-  }): Promise<{ audioUrl?: string; audioBase64?: string; mime?: string; sampleRate?: number; route: Route }>;
+  }): Promise<{ audioUrl?: string; audioBase64?: string; mime: string; sampleRate?: number; route: Route }>;
 
   asr(i: {
     audioBase64: string;
     sourceLang?: string;
+    model?: string;
   }): Promise<{ transcript: string; language?: string; route: Route }>;
 
   translate(i: {
     text: string;
     targetLang: string;
     sourceLang?: string;
+    model?: string;
   }): Promise<{ translation: string; language?: string; route: Route }>;
 
   chat(i: { messages: ChatMessage[]; model?: string; maxTokens: number }): Promise<{ content: string; route: Route }>;
 }
+
+const modelOrAuto = (model?: string) => {
+  const selected = model?.trim();
+  return !selected || selected.toLowerCase() === "auto" ? "auto" : selected;
+};
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v ? v : undefined);
 
@@ -79,26 +96,38 @@ export function parseToolResult(body: string, tool: string): Record<string, unkn
 
 /** Calls Hypa's public API. The key is read per call, sent only in `x-api-key`, and never logged or returned. */
 export class HypaHttpClient implements HypaApi {
-  constructor(private readonly opts: { baseUrl: string; apiKey: () => string; fetchImpl?: typeof fetch }) {}
+  constructor(
+    private readonly opts: {
+      baseUrl: string;
+      apiKey: () => string;
+      fetchImpl?: typeof fetch;
+    },
+  ) {}
 
   private get fetch() {
     return this.opts.fetchImpl ?? fetch;
   }
 
-  private async post(path: string, body: unknown, timeoutMs: number): Promise<string> {
+  private async post(
+    path: string,
+    body: unknown,
+    timeout: number | AbortSignal,
+    mapError = mapHttpError,
+  ): Promise<string> {
     try {
       const res = await this.fetch(this.opts.baseUrl.replace(/\/+$/, "") + path, {
         method: "POST",
+        redirect: "error",
         headers: {
           "content-type": "application/json",
           accept: "application/json, text/event-stream",
           "x-api-key": this.opts.apiKey(),
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: typeof timeout === "number" ? AbortSignal.timeout(timeout) : timeout,
       });
       const text = await res.text();
-      if (!res.ok) throw mapHttpError(res.status, text);
+      if (!res.ok) throw mapError(res.status, text);
       return text;
     } catch (e) {
       throw asUpstream(e);
@@ -106,62 +135,84 @@ export class HypaHttpClient implements HypaApi {
   }
 
   /** MCP tools/call (stateless Streamable HTTP). */
-  private async tool(name: string, args: Record<string, unknown>, timeoutMs: number) {
+  private async tool(name: string, args: Record<string, unknown>, timeout: number | AbortSignal) {
     const body = await this.post(
       "/v2/mcp",
       { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } },
-      timeoutMs,
+      timeout,
     );
     return parseToolResult(body, name);
   }
 
   async tts(i: Parameters<HypaApi["tts"]>[0]) {
-    // No voice = Hypa's auto router. A named voice only works with the model that owns it, so it travels with its model.
-    const named = !!i.voice && i.voice.toLowerCase() !== "auto" && !!i.model;
-    const o = await this.tool(
-      "text_to_speech",
-      { text: i.text, language: i.language, model: named ? i.model : "auto", ...(named && { voice: i.voice }) },
-      TIMEOUT_MS.tts,
-    );
-    const out = {
-      audioUrl: str(o.audioUrl),
-      audioBase64: str(o.audioBase64),
-      mime: str(o.mime),
-      sampleRate: typeof o.sampleRate === "number" ? o.sampleRate : undefined,
-      route: { provider: str(o.provider), model: str(o.model), voice: str(o.voice) },
-    };
-    if (!out.audioUrl && !out.audioBase64) throw upstream("Hypa returned no audio.", 502, "invalid_response", true);
-    if (i.inline && !out.audioBase64 && out.audioUrl) {
-      out.audioBase64 = await this.download(out.audioUrl);
-      out.audioUrl = undefined;
+    const signal = AbortSignal.timeout(TIMEOUT_MS.tts);
+    const requestedVoice = i.voice?.trim();
+    let model = modelOrAuto(i.model);
+    let voice = requestedVoice?.toLowerCase() === "auto" ? undefined : requestedVoice;
+
+    if (voice && model === "auto") {
+      const match = await this.resolveVoice(i.language, voice, signal);
+      model = match.model;
+      voice = match.voice;
     }
-    return out;
+
+    const out = await this.tool(
+      "text_to_speech",
+      { text: i.text, language: i.language, model, voice, format: i.inline ? "base64" : undefined },
+      signal,
+    );
+    const audioUrl = i.inline ? undefined : str(out.audioUrl);
+    const audioBase64 = i.inline ? str(out.audioBase64) : undefined;
+    const mime = str(out.mime);
+    const spokenVoice = str(out.voice) ?? voice;
+    const spokenModel = str(out.model);
+    if ((i.inline ? !audioBase64 : !audioUrl?.startsWith("https://")) || !mime || !spokenVoice || !spokenModel) {
+      throw upstream("Hypa returned incomplete audio.", 502, "invalid_response", true);
+    }
+    if (audioBase64 && Buffer.byteLength(audioBase64, "base64") > MAX_INLINE_AUDIO_BYTES) {
+      throw upstream("Hypa returned audio that was too large.", 502, "invalid_response", false);
+    }
+    return {
+      audioUrl,
+      audioBase64,
+      mime,
+      sampleRate: typeof out.sampleRate === "number" ? out.sampleRate : undefined,
+      route: { provider: str(out.provider), model: spokenModel, voice: spokenVoice },
+    };
   }
 
-  /** Fetch Hypa's signed audio link on the server so a browser makes no cross-origin request. https only; no key is sent. */
-  private async download(url: string): Promise<string> {
-    try {
-      const u = new URL(url);
-      if (u.protocol !== "https:") throw upstream("Hypa returned a bad audio link.", 502, "invalid_response", false);
-      const res = await this.fetch(u, { signal: AbortSignal.timeout(TIMEOUT_MS.tts) });
-      if (!res.ok) throw upstream("The audio link did not work.", 502, "unavailable", true);
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length > MAX_INLINE_AUDIO_BYTES)
-        throw upstream("The audio was too large to send inline.", 502, "invalid_response", false);
-      return buf.toString("base64");
-    } catch (e) {
-      throw asUpstream(e);
-    }
+  private async resolveVoice(language: string, voice: string, signal: AbortSignal) {
+    const catalog = await this.tool("list_voices", { language }, signal);
+    const options: unknown[] = Array.isArray(catalog.options) ? catalog.options : [];
+    const matches = options.flatMap((option) => {
+      const entry = obj(option);
+      const model = str(entry?.model);
+      const name = Array.isArray(entry?.voices)
+        ? entry.voices.find((value) => typeof value === "string" && value.toLowerCase() === voice.toLowerCase())
+        : undefined;
+      return model && typeof name === "string" ? [{ model, voice: name }] : [];
+    });
+    const [match, other] = matches;
+    if (!match) throw badRequest("The requested voice is unavailable for that language.");
+    if (other) throw badRequest("The requested voice matches multiple models. Specify its model.");
+    return match;
   }
 
   async asr(i: Parameters<HypaApi["asr"]>[0]) {
     const o = await this.tool(
       "speech_to_text",
-      { audio: i.audioBase64, audioType: "base64", ...(i.sourceLang && { sourceLang: i.sourceLang }) },
+      {
+        audio: i.audioBase64,
+        audioType: "base64",
+        model: modelOrAuto(i.model),
+        ...(i.sourceLang && { sourceLang: i.sourceLang }),
+      },
       TIMEOUT_MS.asr,
     );
+    if (typeof o.transcript !== "string" || !str(o.model))
+      throw upstream("Hypa returned an incomplete transcript.", 502, "invalid_response", true);
     return {
-      transcript: str(o.transcript) ?? "",
+      transcript: o.transcript,
       language: str(o.language),
       route: { provider: str(o.provider), model: str(o.model) },
     };
@@ -170,22 +221,52 @@ export class HypaHttpClient implements HypaApi {
   async translate(i: Parameters<HypaApi["translate"]>[0]) {
     const o = await this.tool(
       "translate_message",
-      { text: i.text, targetLang: i.targetLang, model: "auto", ...(i.sourceLang && { sourceLang: i.sourceLang }) },
+      {
+        text: i.text,
+        targetLang: i.targetLang,
+        model: modelOrAuto(i.model),
+        ...(i.sourceLang && { sourceLang: i.sourceLang }),
+      },
       TIMEOUT_MS.translate,
     );
     const translation = str(o.translation);
-    if (translation === undefined) throw upstream("Hypa returned no translation.", 502, "invalid_response", true);
+    if (translation === undefined || !str(o.model))
+      throw upstream("Hypa returned no translation.", 502, "invalid_response", true);
     return { translation, language: str(o.language), route: { provider: str(o.provider), model: str(o.model) } };
   }
 
-  /**
-   * Chat over REST (POST /v2/developer/chat, not streamed). "auto"/omitted lets Hypa route; "provider/model" pins one (the form the
-   * Unity client verified live). UNVERIFIED: the auto form (provider "auto", no model) mirrors the REST mt call.
-   */
+  /** Auto tries Hypa VR's model order with one deadline for the entire question. */
   async chat(i: Parameters<HypaApi["chat"]>[0]) {
-    const pinned = i.model && i.model.toLowerCase() !== "auto" ? i.model.split("/") : undefined;
-    const provider = pinned ? pinned[0] : "auto";
-    const model = pinned?.[1];
+    const model = modelOrAuto(i.model);
+    const signal = AbortSignal.timeout(TIMEOUT_MS.chat);
+    if (model !== "auto") return this.chatWithModel(i, model, signal);
+
+    let failure: ProxyError | undefined;
+    for (const candidate of CHAT_FALLBACK_MODELS) {
+      if (signal.aborted) throw timeoutError();
+      try {
+        return await this.chatWithModel(i, candidate, signal);
+      } catch (e) {
+        if (signal.aborted) throw timeoutError();
+        if (
+          !(e instanceof ProxyError) ||
+          e.code !== "upstream" ||
+          (!e.extras.retryable && e.extras.reason !== "model_unavailable")
+        )
+          throw e;
+        failure = e;
+      }
+    }
+    throw failure ?? upstream("No Hypa chat model could answer.", 502, "unavailable", true);
+  }
+
+  private async chatWithModel(i: Parameters<HypaApi["chat"]>[0], selected: string, signal: AbortSignal) {
+    const separator = selected.indexOf("/");
+    if (separator < 1 || separator === selected.length - 1 || /\s/.test(selected)) {
+      throw badRequest("Chat requires a model in provider/model format.");
+    }
+    const provider = selected.slice(0, separator);
+    const model = selected.slice(separator + 1);
     const raw = await this.post(
       "/v2/developer/chat",
       {
@@ -194,24 +275,29 @@ export class HypaHttpClient implements HypaApi {
         thinking: false,
         max_tokens: i.maxTokens,
         provider,
-        ...(model && { model }),
+        model,
       },
-      TIMEOUT_MS.chat,
+      signal,
+      mapChatHttpError,
     );
+    if (signal.aborted) throw timeoutError();
+    const payload = jsonPayloads(raw).at(-1) ?? "";
     let res: Record<string, unknown> | undefined;
     try {
-      res = obj(JSON.parse(jsonPayloads(raw).at(-1) ?? ""));
+      res = obj(JSON.parse(payload));
     } catch {
       /* handled below */
     }
-    if (!res) throw upstream("Hypa returned an unreadable answer.", 502, "invalid_response", true);
-    const choices = Array.isArray(res.choices) ? res.choices : [];
+    const choices = Array.isArray(res?.choices) ? res.choices : [];
     const content = obj(obj(choices[0])?.message)?.content;
-    if (typeof content !== "string" || !content.trim())
-      throw upstream("Hypa returned no answer.", 502, "invalid_response", true);
+    if (typeof content !== "string" || !content.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "").trim())
+      throw (
+        chatPayloadError(content === undefined ? payload : "") ??
+        upstream("Hypa returned no usable answer.", 502, "invalid_response", true)
+      );
     return {
       content,
-      route: { provider: str(res.provider) ?? (pinned ? provider : undefined), model: str(res.model) ?? model },
+      route: { provider: str(res?.provider) ?? provider, model: str(res?.model) ?? model },
     };
   }
 }
