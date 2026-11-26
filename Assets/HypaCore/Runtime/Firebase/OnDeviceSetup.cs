@@ -73,6 +73,25 @@ namespace HypaCore.Hybrid
             }
         }
 
+        /// <summary>The same, short enough for a button on Home (the long form can run to two sentences).</summary>
+        public string ShortLabel
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    switch (_state)
+                    {
+                        case OnDeviceSetupState.Downloadable: return "Get on-device AI (one-time download)";
+                        case OnDeviceSetupState.Downloading: return "Downloading on-device AI " + (int)(_progress * 100f) + "%";
+                        case OnDeviceSetupState.Ready: return "On-device AI: ready";
+                        case OnDeviceSetupState.Failed: return "On-device AI: download failed, tap to retry";
+                        default: return "On-device AI: cloud on this phone";
+                    }
+                }
+            }
+        }
+
         /// <summary>For the route chip when the on-device model was not used: why, in a few words. Empty when it is ready.</summary>
         public string RouteReason
         {

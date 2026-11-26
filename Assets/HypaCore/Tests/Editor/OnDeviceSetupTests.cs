@@ -206,6 +206,28 @@ namespace HypaCore.Tests
             Assert.AreEqual(2, raised);
         }
 
+        [Test] public void ShortLabel_FitsAButton_InEveryState()
+        {
+            var model = new FakeDownloadable();
+            var setup = new OnDeviceSetup(model);
+            Run(() => setup.RefreshAsync());
+            Assert.AreEqual("Get on-device AI (one-time download)", setup.ShortLabel);
+
+            model.OnDownload = (progress, ct) => { throw new OnDeviceModelException("no-space"); };
+            Run(() => setup.DownloadAsync());
+            Assert.AreEqual("On-device AI: download failed, tap to retry", setup.ShortLabel);
+
+            var ready = new OnDeviceSetup(new FakeDownloadable { Status = "available" });
+            Run(() => ready.RefreshAsync());
+            Assert.AreEqual("On-device AI: ready", ready.ShortLabel);
+
+            var none = new OnDeviceSetup(new NoOnDeviceModel());
+            Run(() => none.RefreshAsync());
+            Assert.AreEqual("On-device AI: cloud on this phone", none.ShortLabel);
+
+            foreach (var label in new[] { setup.ShortLabel, ready.ShortLabel, none.ShortLabel }) Assert.LessOrEqual(label.Length, 46);
+        }
+
         [Test] public void NullModel_IsRejected()
         {
             Assert.Throws<ArgumentNullException>(() => new OnDeviceSetup(null));

@@ -51,6 +51,19 @@ namespace HypaCore.Tests
             Assert.AreEqual(HybridRouter.Downloading, d.Reason);
         }
 
+        [Test] public void AModelNotYetDownloaded_SaysSo_InsteadOfSayingThereIsNone()
+        {
+            var answer = D(Answer("en"), Ctx(status: "downloadable"));
+            Assert.AreEqual(Route.CloudGemini, answer.Route);
+            StringAssert.Contains("not downloaded yet", answer.Reason);
+            StringAssert.Contains("no model on this device", D(Answer("en"), Ctx(status: "unavailable")).Reason);
+
+            var ctx = Ctx(status: "downloadable");
+            ctx.OnDeviceLangs = RouteContext.Set("en,fr");
+            var translate = D(new RouteAsk { Kind = RouteKind.Translate, SourceLanguage = "en", Language = "fr", PromptTokens = 10 }, ctx);
+            StringAssert.Contains("not downloaded yet", translate.Reason);
+        }
+
         [Test] public void Offline_UsesTheDevice_ElseTheSavedAnswers()
         {
             var d = D(Answer("en"), Ctx(online: false));
