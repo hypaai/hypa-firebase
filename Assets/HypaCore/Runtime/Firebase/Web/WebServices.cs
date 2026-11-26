@@ -54,6 +54,7 @@ namespace HypaCore.Hybrid.Web
             {
                 Auth = new WebAuth(),
                 Progress = new WebProgressStore(),
+                Profiles = new WebProfileStore(),
                 Flags = flags,
                 OnDevice = new ChromeNanoModel(),
                 Cloud = new WebCloudModel(flags),
@@ -145,6 +146,18 @@ namespace HypaCore.Hybrid.Web
         public async Task<Progress> LoadAsync() => (await WebBridge.CallAsync("loadProgress") as JObject)?.ToObject<Progress>();
 
         public Task SaveAsync(Progress p) => WebBridge.CallAsync("saveProgress", JObject.FromObject(p));
+    }
+
+    public sealed class WebProfileStore : IProfileStore
+    {
+        public event Action<UserProfile> ChangedElsewhere { add { } remove { } }
+
+        public async Task<UserProfile> LoadAsync() => (await WebBridge.CallAsync("loadProfile") as JObject)?.ToObject<UserProfile>();
+
+        public Task SaveAsync(UserProfile profile) => WebBridge.CallAsync("saveProfile", JObject.FromObject(profile, NoNulls));
+
+        static readonly Newtonsoft.Json.JsonSerializer NoNulls = Newtonsoft.Json.JsonSerializer.Create(
+            new Newtonsoft.Json.JsonSerializerSettings { NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore });
     }
 
     public sealed class WebRemoteFlags : IRemoteFlags

@@ -15,9 +15,6 @@ namespace HypaFirebase.Rest
 #if UNITY_WEBGL && !UNITY_EDITOR
             _ = FetchFlags();
 #else
-#if UNITY_EDITOR
-            if (PlayerPrefs.GetInt(HybridServices.UseRealFirebaseKey, 0) != 1) return;
-#endif
             if (HybridServices.NativeFactory != null)
             {
                 _ = FetchFlags();

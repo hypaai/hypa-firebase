@@ -126,7 +126,7 @@ namespace HypaCore.Hybrid
                 case RouteOnDeviceLangs: return "en,fr,es";
                 case RouteHypaLangs: return "yo,ha,ig,pcm,sw";
                 case RouteMaxOnDeviceTokens: return "5000";
-                case CloudModel: return "gemini-2.5-flash-lite";
+                case CloudModel: return "gemini-3.5-flash-lite";
                 case LiveLangs: return "en,fr,es,sw";
                 case ProxyDailySecondsPerUser: return "600";
                 case ProxyDailyRequestsPerUser: return "400";

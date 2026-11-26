@@ -147,6 +147,22 @@ async function saveProgress(p) {
   return null;
 }
 
+const profileRef = (u) => doc(db, "users", u.uid);
+
+async function loadProfile() {
+  let u;
+  try { u = await user(); } catch { return null; }
+  let snap;
+  try { snap = await getDoc(profileRef(u)); } catch { snap = await getDocFromCache(profileRef(u)).catch(() => null); }
+  return snap && snap.exists() ? snap.data() : null;
+}
+
+async function saveProfile(p) {
+  const u = await user();
+  setDoc(profileRef(u), p).catch((e) => console.warn("Hypa: profile not saved (" + e.code + ")."));
+  return null;
+}
+
 async function fetchFlags() {
   await ready;
   await ensureInitialized(rc);
@@ -206,8 +222,6 @@ async function stream({ side, model, prompt }, { emit, signal }) {
   return null;
 }
 
-// One turn of cloud Gemini with function calling. C# runs the calls (they go through the Hypa proxy) and sends the results
-// back as a "function" turn.
 async function generateTurn({ model, contents, tools }, { signal }) {
   const params = { model };
   if (tools && tools.length) params.tools = [{ functionDeclarations: tools }];
@@ -217,7 +231,6 @@ async function generateTurn({ model, contents, tools }, { signal }) {
   return { content, calls, text: calls.length ? "" : response.text() };
 }
 
-// Anonymous route statistics (routes/{uid}/events). The local cache keeps it while offline; errors are logged without the data.
 async function logRoute(event) {
   const u = await user();
   addDoc(collection(db, "routes", u.uid, "events"), event).catch((e) => console.warn("Hypa: route event not saved (" + e.code + ")."));
@@ -232,7 +245,7 @@ async function nanoDownload(args, { emit }) {
 
 const methods = {
   init, signIn, link, idToken: async () => (await user()).getIdToken(), appCheckToken,
-  loadProgress, saveProgress, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
+  loadProgress, saveProgress, loadProfile, saveProfile, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
 };
 
 /** Runs a method. ctx: { emit(chunk), event(name, value), signal }. */

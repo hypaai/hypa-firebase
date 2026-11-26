@@ -1,0 +1,29 @@
+{
+  "parameters": {
+    "route_prefer_on_device": {
+      "defaultValue": { "value": "true" },
+      "description": "Answer on the device first when the model is ready and the language and length fit.",
+      "valueType": "BOOLEAN"
+    },
+    "route_on_device_langs": {
+      "defaultValue": { "value": "en,fr,es" },
+      "description": "Languages the on-device model answers.",
+      "valueType": "STRING"
+    },
+    "route_hypa_langs": {
+      "defaultValue": { "value": "yo,ha,ig,pcm,sw" },
+      "description": "Languages answered by Hypa through /hypa/chat.",
+      "valueType": "STRING"
+    },
+    "route_max_on_device_tokens": {
+      "defaultValue": { "value": "5000" },
+      "description": "Longest prompt, in estimated tokens, sent to the on-device model.",
+      "valueType": "NUMBER"
+    },
+    "cloud_model": {
+      "defaultValue": { "value": "gemini-3.5-flash-lite" },
+      "description": "Gemini model for cloud answers through Firebase AI Logic.",
+      "valueType": "STRING"
+    }
+  }
+}

@@ -109,6 +109,7 @@ namespace HypaStories
                 enabled = false;
                 return;
             }
+            StoryProfileSync.Start();
             bool editing = AppRouter.Consume(ProfileCreator.EditRoute);
             if (!editing && StoryProfileStore.Load() != null) { BeginStory(); return; }
             _creatingProfile = true;

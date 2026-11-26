@@ -67,7 +67,7 @@ namespace HypaCore.Tests
         {
             var flags = new FakeRemoteFlags();
             Run(flags.FetchAsync());
-            Assert.AreEqual("gemini-2.5-flash-lite", flags.Get(RemoteConfigKeys.CloudModel, "x"));
+            Assert.AreEqual("gemini-3.5-flash-lite", flags.Get(RemoteConfigKeys.CloudModel, "x"));
             Assert.AreEqual("true", flags.Get(RemoteConfigKeys.RoutePreferOnDevice, "false"));
             Assert.AreEqual("yo,ha,ig,pcm,sw", flags.Get(RemoteConfigKeys.RouteHypaLangs, ""));
             Assert.AreEqual("fallback", flags.Get(RemoteConfigKeys.LiveModel, "fallback"), "live_model has no default yet");

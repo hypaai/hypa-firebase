@@ -196,6 +196,20 @@ namespace HypaStories.Tests
             Assert.AreEqual(HybridRouter.SavedAnswers, HybridStoryQa.Next(device, ctx, new Exception(), "English").Model, "on device only: nothing goes out");
         }
 
+        [Test] public void WithoutCloudGemini_NoPlaceholderIsEverSpoken()
+        {
+            _svc.Cloud = new HybridServices().Cloud;
+            _device.Available = false;
+            _proxy.Answer = (p, b) => (HttpStatusCode.OK, new JObject { ["content"] = "Dodo is a creature. Everyone fears it." }.ToString());
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Cloud · Gemini couldn't answer.*trying Hypa"));
+
+            var (said, route) = Run(Qa(), Ask("en"));
+
+            Assert.IsInstanceOf<NoCloudModel>(_svc.Cloud);
+            Assert.AreEqual(Route.Hypa, route.Route);
+            Assert.IsFalse(said.Any(s => s.text.Contains("fake")));
+        }
+
         [Test] public void Offline_TheDeviceAnswers_AndSaysItIsOffline()
         {
             _online = false;
