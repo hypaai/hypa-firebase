@@ -146,8 +146,9 @@ namespace HypaCore.Tests
             Assert.AreEqual("/hypa/chat", ProxyApi.Chat);
             Assert.AreEqual("app_check", ProxyApi.ErrorAppCheck);
             Assert.AreEqual("X-Firebase-AppCheck", ProxyApi.AppCheckHeader);
-            var asr = JObject.FromObject(new AsrRequest { audio = "AA==", sourceLang = "yo", durationSeconds = 2 });
-            CollectionAssert.AreEquivalent(new[] { "audio", "sourceLang", "durationSeconds" }, asr.Properties().Select(p => p.Name));
+            var asr = JObject.FromObject(new AsrRequest { audio = "AA==", sourceLang = "yo", durationSeconds = 2, model = "asr-model" });
+            CollectionAssert.AreEquivalent(new[] { "audio", "sourceLang", "durationSeconds", "model" }, asr.Properties().Select(p => p.Name));
+            Assert.AreEqual("asr-model", (string)asr["model"]);
             var tts = JObject.FromObject(new TtsResponse { audioBase64 = "AA==", mime = "audio/mpeg", route = new ProxyRoute { model = "m", voice = "v" } });
             Assert.AreEqual("v", (string)tts["route"]["voice"]);
             CollectionAssert.AreEquivalent(new[] { "audioUrl", "audioBase64", "mime", "sampleRate", "route", "usage" }, tts.Properties().Select(p => p.Name));

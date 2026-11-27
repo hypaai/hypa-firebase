@@ -12,48 +12,64 @@ import { handleRequest } from "./api/handler";
 import { HypaHttpClient } from "./api/hypa";
 import type { Deps } from "./api/types";
 import { DEFAULT_LIMITS, emulatorSettings, FUNCTION_TIMEOUT_SECONDS, MIN_INSTANCES, RC_KEYS, REGION } from "./config";
-import { RemoteConfigLimits } from "./services/limits";
+import { RemoteConfigLimits, type LimitsProvider } from "./services/limits";
 import { FirestoreQuotaStore } from "./services/quota";
+import {
+  FirestoreQuestChallenges,
+  handleQuestAppCheck,
+  questPolicy,
+  verifyMetaAttestation,
+} from "./services/questAttestation";
 import { deleteStaleRooms } from "./services/rooms";
 
 initializeApp();
 
 /** The Hypa key lives only in Secret Manager: `firebase functions:secrets:set HYPA_API_KEY`. */
 const HYPA_API_KEY = defineSecret("HYPA_API_KEY");
+const META_QUEST_APP_ACCESS_TOKEN = defineSecret("META_QUEST_APP_ACCESS_TOKEN");
 
 const emulator = emulatorSettings();
 
 let deps: Deps | undefined;
 function getDeps(): Deps {
   if (deps) return deps;
-  const template = getRemoteConfig().initServerTemplate({
-    defaultConfig: Object.fromEntries(
-      Object.entries(RC_KEYS).map(([k, rc]) => [rc, DEFAULT_LIMITS[k as keyof typeof DEFAULT_LIMITS]]),
-    ),
-  });
-  let config: ReturnType<typeof template.evaluate> | undefined;
   return (deps = {
     verifiers: {
       verifyIdToken: (t) => getAuth().verifyIdToken(t),
       verifyAppCheck: (t) => getAppCheck().verifyToken(t),
     },
     quota: new FirestoreQuotaStore(getFirestore()),
-    limits: new RemoteConfigLimits(
-      {
-        load: async () => {
-          await template.load();
-          config = template.evaluate();
-        },
-        // NaN (not loaded yet) is rejected by the limits and replaced with the default
-        getNumber: (key) => config?.getNumber(key) ?? NaN,
-      },
-      Date.now,
-      (e) => logger.warn("Remote Config unavailable, using last known or default limits", { error: String(e) }),
-    ),
-    hypa: new HypaHttpClient({ baseUrl: emulator.hypaApiBase, apiKey: () => HYPA_API_KEY.value() }),
+    limits: getLimits(),
+    hypa: new HypaHttpClient({
+      baseUrl: emulator.hypaApiBase,
+      apiKey: () => HYPA_API_KEY.value(),
+    }),
     skipAppCheck: emulator.skipAppCheck,
     log: logger,
   });
+}
+
+function getLimits(): LimitsProvider {
+  if (emulator.enabled) return { get: async () => DEFAULT_LIMITS };
+
+  const template = getRemoteConfig().initServerTemplate({
+    defaultConfig: Object.fromEntries(
+      Object.entries(RC_KEYS).map(([k, rc]) => [rc, DEFAULT_LIMITS[k as keyof typeof DEFAULT_LIMITS]]),
+    ),
+  });
+  let config: ReturnType<typeof template.evaluate> | undefined;
+  return new RemoteConfigLimits(
+    {
+      load: async () => {
+        await template.load();
+        config = template.evaluate();
+      },
+      // NaN (not loaded yet) is rejected by the limits and replaced with the default
+      getNumber: (key) => config?.getNumber(key) ?? NaN,
+    },
+    Date.now,
+    (e) => logger.warn("Remote Config unavailable, using last known or default limits", { error: String(e) }),
+  );
 }
 
 /**
@@ -83,10 +99,36 @@ export const hypa = onRequest(
   },
 );
 
+/** Native Quest clients authenticate with Firebase Auth, then exchange a one-time Meta attestation for App Check. */
+export const questAppCheck = onRequest(
+  {
+    region: REGION,
+    secrets: [META_QUEST_APP_ACCESS_TOKEN],
+    timeoutSeconds: 20,
+    invoker: "public",
+    cors: false,
+  },
+  async (req, res) => {
+    const out = await handleQuestAppCheck(
+      { method: req.method, path: req.path, header: (name) => req.header(name), body: req.body },
+      {
+        get policy() {
+          return questPolicy();
+        },
+        challenges: new FirestoreQuestChallenges(getFirestore()),
+        verifyIdToken: (token) => getAuth().verifyIdToken(token),
+        verifyMeta: (token) => verifyMetaAttestation(token, META_QUEST_APP_ACCESS_TOKEN.value()),
+        mint: (appId) => getAppCheck().createToken(appId),
+      },
+    );
+    res.set("cache-control", "no-store").status(out.status).json(out.body);
+  },
+);
+
 /** G09: remove Realtime Database rooms older than 2 hours. */
 export const cleanupRooms = onSchedule(
   { region: REGION, schedule: "every 30 minutes", timeoutSeconds: 120, retryCount: 0 },
   async () => {
-    logger.info("rooms cleanup", { removed: await deleteStaleRooms(getDatabase() as never, Date.now()) });
+    logger.info("rooms cleanup", { removed: await deleteStaleRooms(getDatabase(), Date.now()) });
   },
 );

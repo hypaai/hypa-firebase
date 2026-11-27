@@ -10,77 +10,49 @@ using UnityEngine;
 
 namespace HypaStories
 {
-    /// <summary>
-    /// Answers with the story's chat models (<see cref="StoryInfo.Models"/>) through Hypa /v2/developer/chat: the storyteller
-    /// persona, the story so far (up to the interrupted line, in the listener's language) and the question. The model answers in
-    /// the language directly. Not streamed yet: the reply is split into sentences, which are spoken one after another.
-    ///
-    /// Every question starts at the top of the story's list (Meta's Muse first). A model that fails hands the same question to
-    /// the next one at once, so a quick failure costs a second or two, not the answer. A model the service says doesn't exist
-    /// (or this key can't use) is skipped for the rest of the session. The whole question has <see cref="DeadlineMs"/>: past it,
-    /// it counts as offline and the story goes on, so the storyteller never goes quiet.
-    /// </summary>
+    /// <summary>Asks the Firebase proxy once per question and speaks its answer in the listener's language.</summary>
     public sealed class ChatStoryQa : IStoryQa
     {
         /// <summary>Reasoning models think before answering, and max_tokens covers that too.</summary>
         const int MaxTokens = 1200;
         public const int MaxSentences = 4;
-        public int DeadlineMs = 12000;
+        // The proxy has a 20-second budget. Leave room for sign-in, quota checks, and the response.
+        public int DeadlineMs = 25000;
 
         readonly HypaRestClient _rest = new HypaRestClient();
-        /// <summary>Models the service said it doesn't have: not tried again this session.</summary>
-        static readonly HashSet<string> Missing = new HashSet<string>();
 
         public string Mode => "chat";
 
-        /// <summary>The models to try for a story, in order, without those known to be missing. Pure (given the missing set).</summary>
-        public static List<string> Order(IEnumerable<string> models, ICollection<string> missing)
+        /// <summary>A story can pin one model. Other stories use the proxy's fallback order.</summary>
+        public static string RequestedModel(StoryInfo story)
         {
-            var list = (models ?? StoryLibrary.DefaultModels).Where(m => !string.IsNullOrEmpty(m) && !missing.Contains(m)).Distinct().ToList();
-            return list.Count > 0 ? list : (models ?? StoryLibrary.DefaultModels).Take(1).ToList(); // all "missing": try the first anyway
+            var models = story?.Models;
+            return models?.Length == 1 && !string.IsNullOrWhiteSpace(models[0]) ? models[0] : "auto";
         }
-
-        /// <summary>The service's way of saying a model doesn't exist or this key can't use it. Pure.</summary>
-        public static bool IsMissingModel(string message) =>
-            message != null && (message.IndexOf("model was not found", StringComparison.OrdinalIgnoreCase) >= 0
-                                || message.IndexOf("may not exist", StringComparison.OrdinalIgnoreCase) >= 0);
 
         public async Task AnswerAsync(QaRequest req, Action<string, int, bool> onSentence, CancellationToken ct)
         {
             var story = StoryLibrary.Find(req.StoryId);
             var messages = Messages(req, story?.Title);
-            Exception last = null;
             using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
                 deadline.CancelAfter(DeadlineMs);
-                foreach (var model in Order(story?.Models, Missing))
+                try
                 {
-                    string reply;
-                    try { reply = await _rest.ChatAsync(model, messages, MaxTokens, deadline.Token); }
-                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                    {
-                        throw new TimeoutException($"no answer within {DeadlineMs / 1000} s (last tried {model})");
-                    }
-                    catch (Exception e) when (!(e is OperationCanceledException))
-                    {
-                        if (IsMissingModel(e.Message)) Missing.Add(model);
-                        Debug.LogWarning($"Hypa Stories: {model} couldn't answer ({e.Message}); trying the next model.");
-                        last = e;
-                        continue;
-                    }
-                    var sentences = Sentences(reply);
+                    var reply = await _rest.ChatWithRouteAsync(RequestedModel(story), messages,
+                        req.Language?.HypaLabel ?? "English", MaxTokens, deadline.Token);
+                    var sentences = Sentences(reply.content);
                     if (sentences.Count == 0)
-                    {
-                        last = new HypaException(HypaErrorKind.InvalidResponse, $"{model} gave an empty answer.");
-                        Debug.LogWarning($"Hypa Stories: {last.Message} Trying the next model.");
-                        continue;
-                    }
-                    Debug.Log($"Hypa Stories: {model} answered “{req.Question}”: {reply}");
+                        throw new HypaException(HypaErrorKind.InvalidResponse, "chat: the proxy returned no speakable text.");
+
+                    Debug.Log($"Hypa Stories: {reply.route?.model} answered the question.");
                     for (var i = 0; i < sentences.Count; i++) onSentence(sentences[i], i, i == sentences.Count - 1);
-                    return;
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"No answer within {DeadlineMs / 1000} s.");
                 }
             }
-            throw last ?? new HypaException(HypaErrorKind.InvalidResponse, "no model could answer.");
         }
 
         /// <summary>The chat messages for a question. Pure.</summary>

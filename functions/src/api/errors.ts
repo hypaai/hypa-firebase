@@ -15,7 +15,7 @@ export interface ErrorExtras {
   used?: number;
   resetsAt?: string;
   retryAfterSeconds?: number;
-  reason?: "timeout" | "unavailable" | "rejected" | "invalid_response" | "tool_error";
+  reason?: "timeout" | "unavailable" | "rejected" | "invalid_response" | "tool_error" | "model_unavailable";
   retryable?: boolean;
 }
 
@@ -49,8 +49,9 @@ export const upstream = (
 export const timeoutError = () => upstream("Hypa took too long to answer. Try again.", 504, "timeout", true);
 
 export const providerBalanceError = () =>
-  new ProxyError("quota", 429, "The voice and translation service has reached its daily budget. Try again tomorrow.", {
+  new ProxyError("quota", 429, "The Hypa service budget is exhausted. Try again later.", {
     scope: "provider_balance",
+    retryAfterSeconds: 300,
   });
 
 export const isTimeout = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
@@ -63,4 +64,19 @@ export function mapHttpError(status: number, body: string): ProxyError {
   if (status === 429) return upstream("Hypa is busy. Try again in a moment.", 503, "unavailable", true);
   if (status >= 500) return upstream("Hypa had a problem. Try again in a moment.", 502, "unavailable", true);
   return upstream("The Hypa service is unavailable.", 502, "unavailable", false);
+}
+
+/** Some chat providers deliver plain or structured errors inside a successful SSE response. */
+export function chatPayloadError(payload: string): ProxyError | undefined {
+  if (/\bINSUFFICIENT_BALANCE\b/i.test(payload)) return providerBalanceError();
+  if (/\bmodel_(?:not_found|unavailable)\b|\bmodel (?:was not found|does not exist|may not exist)\b/i.test(payload)) {
+    return upstream("The requested Hypa chat model is unavailable.", 502, "model_unavailable", false);
+  }
+  return undefined;
+}
+
+export function mapChatHttpError(status: number, body: string): ProxyError {
+  const error = mapHttpError(status, body);
+  if (error.code === "quota" || status === 401 || status === 403) return error;
+  return chatPayloadError(body) ?? error;
 }

@@ -26,6 +26,19 @@
       <div id="bar"><div id="fill"></div></div>
       <div id="error"></div>
     </div>
+    <script>
+      // Suppress non-fatal Firebase/reCAPTCHA rejections before Unity's loader turns them into a fatal alert dialog.
+      window.addEventListener("unhandledrejection", function (e) {
+        var r = e && e.reason;
+        var s = r && (r.stack || r.message || String(r)) || "";
+        if ((r && r.name === "AbortError" && s.indexOf("firebase-firestore") !== -1)
+            || s.indexOf("reCAPTCHA") !== -1 || s.indexOf("recaptcha") !== -1) {
+          console.warn("Hypa: ignored non-fatal browser rejection:", r);
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
     <script src="Build/{{{ LOADER_FILENAME }}}"></script>
     <script>
       // Firebase JS SDK bridge (Assets/Plugins/WebGL/HypaFirebase.jslib). Loads alongside the game and never delays it; if it

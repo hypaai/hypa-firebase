@@ -1,13 +1,19 @@
 export const REGION = "us-central1";
 export const MIN_INSTANCES = 0;
 export const DEFAULT_HYPA_API_BASE = "https://api.hypaintelligence.com";
+/** Hypa VR's priority order for story chat. */
+export const CHAT_FALLBACK_MODELS = [
+  "meta/meta-models/Muse-Spark-Open-816B-A42B:baseten",
+  "google/gemini-3.5-flash",
+  "meta/meta-models/Muse-Glimmer-30B:deepinfra",
+  "meta/muse-wonder-1.0",
+] as const;
 export const TIMEOUT_MS = { tts: 20_000, chat: 20_000, translate: 20_000, asr: 30_000 } as const;
 export const FUNCTION_TIMEOUT_SECONDS = 60;
 
 export const MAX_ASR_SECONDS = 30;
 export const MAX_ASR_BYTES = 1024 * 1024;
 export const MAX_ASR_BASE64_CHARS = Math.ceil(MAX_ASR_BYTES / 3) * 4;
-export const ASSUMED_AUDIO_BYTES_PER_SECOND = 32_000;
 
 export const MAX_TTS_CHARS = 1_000;
 export const MAX_TRANSLATE_CHARS = 2_000;
@@ -43,12 +49,13 @@ export const ROOMS_CREATED_FIELD = "createdAt";
 export const ROOMS_MAX_AGE_MS = 2 * 60 * 60_000;
 
 /**
- * The only place environment variables are read. They exist only in the local emulator (functions/.env.local);
+ * These development overrides are read from the local emulator environment (functions/.env.local);
  * when deployed, FUNCTIONS_EMULATOR is unset so both settings are forced back to safe values.
  */
 export function emulatorSettings(env: Record<string, string | undefined> = process.env) {
   const emulated = env.FUNCTIONS_EMULATOR === "true";
   return {
+    enabled: emulated,
     /** HYPA_SKIP_APP_CHECK=true: the emulator has no App Check, so let it through (sign-in is still required). */
     skipAppCheck: emulated && env.HYPA_SKIP_APP_CHECK === "true",
     /** HYPA_API_BASE=http://127.0.0.1:9911: call a fake Hypa. Deployed, the key can only go to the real API. */

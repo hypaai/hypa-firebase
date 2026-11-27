@@ -118,7 +118,7 @@ namespace HypaStories
                 if (settleMs > 0)
                 {
                     Settling = true;
-                    await Task.Delay(settleMs, ct);
+                    await HypaAsync.Delay(settleMs, ct);
                     if (token == _ttsToken) Settling = false;
                 }
                 for (var i = idx; i < Caps.Length; i++)
@@ -136,7 +136,7 @@ namespace HypaStories
                     var next = i + 1 < Caps.Length ? Caps[i + 1].At : Caps[i].Until + 1f;
                     await _voice.PlayAsync(line, _ => _hold = next - 0.01f, ct);
                     if (token != _ttsToken) return;
-                    await Task.Delay(300, ct);
+                    await HypaAsync.Delay(300, ct);
                 }
                 if (token != _ttsToken) return;
                 _hold = float.PositiveInfinity;
@@ -149,7 +149,7 @@ namespace HypaStories
         async Task<SpeechLine> PrepareLine(string text, StoryLanguage lang, CancellationToken ct)
         {
             var prepared = _voice.PrepareAsync(text, lang, ct);
-            if (await Task.WhenAny(prepared, Task.Delay(LineTimeoutMs, ct)) == prepared) return await prepared;
+            if (await Task.WhenAny(prepared, HypaAsync.Delay(LineTimeoutMs, ct)) == prepared) return await prepared;
             ct.ThrowIfCancellationRequested();
             if (HypaTrace.Enabled) HypaTrace.Add("player", $"line timed out after {LineTimeoutMs / 1000}s: plays silently");
             return StoryVoice.Silent(text);

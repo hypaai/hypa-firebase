@@ -32,6 +32,7 @@ const ON_DEVICE = {
 let ready = Promise.reject(new BridgeError("not_configured", "Firebase was not initialised."));
 ready.catch(() => {});
 let auth, appCheck, db, rc, ai, nano, sendEvent = () => {};
+let usingEmulators = false;
 const cloudModels = new Map();
 // Progress: the newest updatedAt this page has seen (set once it has loaded or saved, so the first snapshot is not "news"),
 // and a save waiting for sign-in (first launch, still offline).
@@ -39,6 +40,7 @@ let known = null, pendingSave = null, unwatch = null;
 
 function init(config, ctx) {
   sendEvent = ctx.event;
+  usingEmulators = config.emulators === true;
   const app = initializeApp(config.firebase);
   // The emulators do not check App Check, so it stays off there. The real project on localhost (?firebase=live) uses the
   // App Check debug provider: register the token printed in the console in the Firebase console.
@@ -99,6 +101,7 @@ async function link({ provider }) {
 
 async function appCheckToken() {
   await ready;
+  if (usingEmulators) return "";
   if (!appCheck) throw new BridgeError("appcheck", "App Check is not configured.");
   return (await getToken(appCheck, false)).token;
 }

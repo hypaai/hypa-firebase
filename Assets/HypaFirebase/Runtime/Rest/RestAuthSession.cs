@@ -24,6 +24,7 @@ namespace HypaFirebase.Rest
         static readonly string[] DeadTokenErrors = { "INVALID_REFRESH_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND" };
 
         readonly string _apiKey;
+        readonly Uri _emulatorOrigin;
         readonly IRefreshTokenStore _store;
         readonly HttpClient _http;
         readonly Func<DateTime> _now;
@@ -40,9 +41,13 @@ namespace HypaFirebase.Rest
         public event Action Changed;
 
         /// <param name="apiKey">The Firebase web API key. It is public client configuration, not a secret.</param>
-        public RestAuthSession(string apiKey, IRefreshTokenStore store, HttpMessageHandler handler = null, Func<DateTime> now = null)
+        public RestAuthSession(string apiKey, IRefreshTokenStore store, HttpMessageHandler handler = null, Func<DateTime> now = null, Uri emulatorOrigin = null)
         {
+            if (emulatorOrigin != null && (!emulatorOrigin.IsAbsoluteUri || !emulatorOrigin.IsLoopback ||
+                (emulatorOrigin.Scheme != Uri.UriSchemeHttp && emulatorOrigin.Scheme != Uri.UriSchemeHttps)))
+                throw new ArgumentException("The Auth emulator must use a loopback HTTP origin.", nameof(emulatorOrigin));
             _apiKey = apiKey;
+            _emulatorOrigin = emulatorOrigin;
             _store = store;
             _http = handler == null ? new HttpClient() : new HttpClient(handler);
             _now = now ?? (() => DateTime.UtcNow);
@@ -53,6 +58,7 @@ namespace HypaFirebase.Rest
             await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                if (IsSignedIn) return;
                 _refreshToken = _store.Load();
                 if (!string.IsNullOrEmpty(_refreshToken))
                 {
@@ -101,7 +107,7 @@ namespace HypaFirebase.Rest
         {
             int generation = Volatile.Read(ref _generation);
             var content = new StringContent("{\"returnSecureToken\":true}", Encoding.UTF8, "application/json");
-            var body = await PostAsync(SignUpUrl + _apiKey, content, ct).ConfigureAwait(false);
+            var body = await PostAsync(AuthUrl(SignUpUrl), content, ct).ConfigureAwait(false);
             Apply(generation, (string)body["idToken"], (string)body["refreshToken"], (string)body["expiresIn"], (string)body["localId"]);
         }
 
@@ -109,7 +115,7 @@ namespace HypaFirebase.Rest
         {
             int generation = Volatile.Read(ref _generation);
             var form = new FormUrlEncodedContent(new Dictionary<string, string> { { "grant_type", "refresh_token" }, { "refresh_token", _refreshToken } });
-            var body = await PostAsync(RefreshUrl + _apiKey, form, ct).ConfigureAwait(false);
+            var body = await PostAsync(AuthUrl(RefreshUrl), form, ct).ConfigureAwait(false);
             Apply(generation, (string)body["id_token"], (string)body["refresh_token"], (string)body["expires_in"], (string)body["user_id"]);
         }
 
@@ -132,6 +138,13 @@ namespace HypaFirebase.Rest
         // Securetoken may add detail after the code, as in "TOKEN_EXPIRED : ...".
         static bool IsDeadToken(HypaFirebaseException e) =>
             e.StatusCode == 400 && Array.Exists(DeadTokenErrors, code => e.Message.StartsWith(code, StringComparison.Ordinal));
+
+        string AuthUrl(string endpoint)
+        {
+            if (_emulatorOrigin == null) return endpoint + _apiKey;
+            var upstream = new Uri(endpoint + _apiKey);
+            return _emulatorOrigin.GetLeftPart(UriPartial.Authority) + "/" + upstream.Host + upstream.PathAndQuery;
+        }
 
         async Task<JObject> PostAsync(string url, HttpContent content, CancellationToken ct)
         {
