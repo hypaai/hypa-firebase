@@ -5,7 +5,7 @@ using HypaCore.Hybrid;
 namespace HypaFirebase.Rest
 {
     /// <summary>
-    /// The services for Quest when the Firebase SDK does not run there: auth, App Check, progress, profile, cloud Gemini (Firebase AI Logic)
+    /// The services for Quest when the Firebase SDK does not run there: auth, App Check, progress, profile, cloud Gemini and the Live API (Firebase AI Logic)
     /// route stats and Remote Config over REST. Room sync stays on the Fakes until its own implementation exists.
     /// Use it with <see cref="HybridServices.UpgradeAsync"/>:
     /// <c>_ = HybridServices.UpgradeAsync(() =&gt; QuestRestServices.CreateAsync(config));</c>
@@ -28,6 +28,7 @@ namespace HypaFirebase.Rest
                 Profiles = new RestProfileStore(config, auth, store, handler),
                 Flags = new RestRemoteFlags(config, store, handler),
                 Cloud = new RestCloudModel(config, auth, () => HybridServices.Current.Flags.Get(RemoteConfigKeys.CloudModel, null), handler),
+                Live = new RestLiveModel(config, auth),
                 RouteLog = new RestRouteLog(config, auth, handler),
             };
         }

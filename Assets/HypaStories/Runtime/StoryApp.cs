@@ -96,6 +96,8 @@ namespace HypaStories
         KitButton _playDrum;
         const string DrumStory = "kings-drum";
         HutVisit _hut;           // the hut's household things, their cards and the old woman who tells you about them
+        // the words she teaches in the hut (G10). G08's Firestore-backed store does not exist yet: this one lives for the session
+        readonly UserDataSync _words = new UserDataSync(new HypaCore.Hybrid.FakeUserDataStore(), () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         bool Playing => (_game != null && _game.Active) || (_hatGame != null && _hatGame.Active) || (_drumGame != null && _drumGame.Active);
         void EndGames() { if (_game != null) _game.End(); if (_hatGame != null) _hatGame.End(); if (_drumGame != null) _drumGame.End(); }
 
@@ -451,13 +453,35 @@ namespace HypaStories
             try
             {
                 _hut.Init(_camp, assets, _mic, new HybridStoryQa(), () => _lang, PickLanguage,
-                    () => { if (_story.Live) _story.Pause(); }, ToggleSound);
+                    () => { if (_story.Live) _story.Pause(); }, ToggleSound, _words, GoToStory);
             }
             catch (Exception e)
             {
                 Debug.LogError("Hypa Stories: the hut's things couldn't be built: " + e);
                 _hut.enabled = false;
             }
+        }
+
+        /// <summary>
+        /// The old woman's offer (G10, <c>suggest_story</c>): back through the veil to the fire, the campfire's list, and that story.
+        /// A story already open by the fire is left as it is.
+        /// </summary>
+        void GoToStory(string storyId) => StartCoroutine(GoToStorySequence(storyId));
+
+        IEnumerator GoToStorySequence(string storyId)
+        {
+            int InList() { for (var k = 0; k < _list.Count; k++) if (_list.StoryAt(k)?.Id == storyId) return k; return -1; }
+            var until = Time.time + 10f;
+            while (_busy && Time.time < until) yield return null;
+            BackToTheFire();
+            yield return null;
+            while (_busy && Time.time < until) yield return null;
+            if (_screen == Screen.Play) yield break;
+            if (_screen == Screen.List && InList() < 0) { Go(Screen.Splash); yield return null; while (_busy && Time.time < until) yield return null; }
+            if (_screen == Screen.Splash) OpenStories(false);
+            while ((_busy || _screen != Screen.List) && Time.time < until) yield return null;
+            var i = InList();
+            if (_screen == Screen.List && i >= 0) Play(i);
         }
 
         // ---------- the hat game (after Eshu at the Crossroads) ----------

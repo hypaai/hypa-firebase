@@ -19,6 +19,8 @@ namespace HypaCore.Hybrid
         public IRoomSync Rooms { get; set; } = new FakeRoomSync();
         public IOnDeviceModel OnDevice { get; set; } = OnDeviceFactory?.Invoke() ?? new NoOnDeviceModel();
         public ICloudModel Cloud { get; set; } = new NoCloudModel();
+        /// <summary>The Gemini Live API (G10). <see cref="NoLiveModel"/> until the platform's services have started.</summary>
+        public ILiveModel Live { get; set; } = new NoLiveModel();
         public IRouteLog RouteLog { get; set; } = new FakeRouteLog();
 
         /// <summary>
@@ -71,6 +73,7 @@ namespace HypaCore.Hybrid
                 local.Rooms = real.Rooms;
                 local.OnDevice = real.OnDevice;
                 local.Cloud = real.Cloud;
+                local.Live = real.Live;
                 local.RouteLog = real.RouteLog;
 
                 // The player may have saved to the Fakes while the server was being read. Send that too.

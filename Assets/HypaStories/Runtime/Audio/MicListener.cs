@@ -86,13 +86,13 @@ namespace HypaStories
             // Unity's Microphone does not work in a browser. The browser asks for the microphone now; until it is allowed
             // no samples arrive, so the silence timer has not started.
             WebMicrophone.Start();
-            var source = (ISource)new WebSource();
+            var source = (IMicSource)new WebMicSource();
 #else
             if (Microphone.devices.Length == 0) throw new InvalidOperationException("No microphone.");
             var device = Device(Microphone.devices);
             var clip = Microphone.Start(device, true, Manual ? ManualSeconds : ClipSeconds, Rate);
             if (clip == null) throw new InvalidOperationException("Microphone could not start.");
-            var source = (ISource)new ClipSource(device, clip);
+            var source = (IMicSource)new ClipMicSource(device, clip);
 #endif
             return _active = new Session(source, language, onLevel, transcribe, _life.Token, _partial, Manual);
         }
@@ -104,62 +104,6 @@ namespace HypaStories
             catch (ArgumentException e) { throw new HypaException(HypaErrorKind.MissingConfiguration, e.Message); }
             return proxy.TranscribeAsync(wav, language.HypaLabel, ct);
         }
-
-        /// <summary>Where a session's samples come from: a Unity microphone clip, or the browser microphone in WebGL.</summary>
-        interface ISource
-        {
-            string Name { get; }
-            /// <summary>Why recording stopped working (e.g. the microphone was refused), or null.</summary>
-            string Error { get; }
-            /// <summary>The samples recorded since the last call, or null if none.</summary>
-            float[] ReadNew();
-            void End();
-        }
-
-        sealed class ClipSource : ISource
-        {
-            readonly string _device;
-            readonly AudioClip _clip;
-            int _read;
-            public ClipSource(string device, AudioClip clip) { _device = device; _clip = clip; }
-            public string Name => _device ?? "default input";
-            public string Error => null;
-
-            public float[] ReadNew()
-            {
-                var pos = Microphone.GetPosition(_device);
-                if (pos < 0) return null;
-                var n = (pos - _read + _clip.samples) % _clip.samples;
-                if (n == 0) return null;
-                var buf = new float[n]; // GetData reads exactly buf.Length samples
-                _clip.GetData(buf, _read); // wraps around the looping clip
-                _read = pos;
-                return buf;
-            }
-
-            public void End() => Microphone.End(_device);
-        }
-
-#if UNITY_WEBGL && !UNITY_EDITOR
-        sealed class WebSource : ISource
-        {
-            readonly float[] _buf = new float[Rate];
-            public string Name => "browser microphone";
-            public string Error => WebMicrophone.Current == WebMicrophone.State.Denied ? "Allow the microphone in your browser, then tap the mic again."
-                : WebMicrophone.Current == WebMicrophone.State.Failed ? "The microphone could not start in this browser." : null;
-
-            public float[] ReadNew()
-            {
-                var n = WebMicrophone.Read(_buf);
-                if (n == 0) return null;
-                var samples = new float[n];
-                Array.Copy(_buf, samples, n);
-                return samples;
-            }
-
-            public void End() => WebMicrophone.Stop();
-        }
-#endif
 
         void Update() => _active?.Tick(Time.unscaledDeltaTime);
 
@@ -200,7 +144,7 @@ namespace HypaStories
 
         sealed class Session : IListenSession
         {
-            readonly ISource _source;
+            readonly IMicSource _source;
             readonly StoryLanguage _lang;
             readonly Action<float> _onLevel;
             readonly Func<byte[], StoryLanguage, CancellationToken, Task<string>> _transcribe;
@@ -213,7 +157,7 @@ namespace HypaStories
 
             public Task<ListenResult> Result => _result.Task;
 
-            public Session(ISource source, StoryLanguage lang, Action<float> onLevel,
+            public Session(IMicSource source, StoryLanguage lang, Action<float> onLevel,
                 Func<byte[], StoryLanguage, CancellationToken, Task<string>> transcribe, CancellationToken ct, Action<string> partial, bool manual)
             {
                 if (manual) { _silence.SilenceMs = float.MaxValue; _silence.MaxMs = ManualSeconds * 1000f - 500f; }

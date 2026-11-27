@@ -70,7 +70,9 @@ namespace HypaCore.Tests
             Assert.AreEqual("gemini-3.5-flash-lite", flags.Get(RemoteConfigKeys.CloudModel, "x"));
             Assert.AreEqual("true", flags.Get(RemoteConfigKeys.RoutePreferOnDevice, "false"));
             Assert.AreEqual("yo,ha,ig,pcm,sw", flags.Get(RemoteConfigKeys.RouteHypaLangs, ""));
-            Assert.AreEqual("fallback", flags.Get(RemoteConfigKeys.LiveModel, "fallback"), "live_model has no default yet");
+            Assert.AreEqual("gemini-2.5-flash-native-audio-preview-12-2025", flags.Get(RemoteConfigKeys.LiveModel, "fallback"), "G10 set live_model");
+            Assert.AreEqual("en,fr,es,sw", flags.Get(RemoteConfigKeys.LiveLangs, ""));
+            Assert.AreEqual("300", flags.Get(RemoteConfigKeys.TalkMaxSeconds, ""));
             flags.Set(RemoteConfigKeys.CloudModel, "gemini-y");
             Assert.AreEqual("gemini-y", flags.Get(RemoteConfigKeys.CloudModel, "x"));
         }

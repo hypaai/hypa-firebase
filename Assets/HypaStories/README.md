@@ -194,6 +194,25 @@ button) and she tells you what the thing is and what it is for.
   rather than stand); a name it doesn't know shows a small crate, so content can go in before the shape is made.
 - Tests: `HutItemsTests` (content loads in the story format, places fit the room, the lost rule, the shapes).
 
+### Talking with her (G10)
+
+Inside the hut, **Talk with her** (under the language chips; in the headset, looking at her for a second also works) opens
+a voice conversation: just talk, interrupt her, and she answers. The mic stays open until **End** or you leave the hut.
+
+- **Two engines, one character** (`Talk/`, `IVoiceConversation`). `TalkRouter` sends the Remote Config `live_langs` (English,
+  French, Spanish, Kiswahili) to `LiveTalk` (Gemini Live through Firebase AI Logic), and the rest to `HypaTalk` (Hypa's
+  speech to text, chat and voice through the proxy, turn by turn, with client-side turn detection and barge-in). The route
+  chip says which.
+- **Her persona** is `Resources/Characters/elder/persona.json`; what she knows about her things comes from their own
+  `story.json`. Add a fact about her there, not in code.
+- **Her actions:** `show_item` (lights the card, she points), `tell_item_story` (plays it; the conversation waits),
+  `teach_word` (saved to your words; she says it slowly), `suggest_story` (**Walk to the fire** starts that story by the fire).
+- **Her voice** is a woman's: `voices` in her persona (English OpenAI `sage`; Hypa's Auto picks `alloy`, a man's). Live uses
+  `live_voice`, else `Aoede`.
+- Editor: talk through the Mac's microphone. There is no echo canceller there, so she can't be talked over: wait until she has
+  finished (600 ms after her voice stops, she is listening again). **Done** ends your turn if she is still waiting.
+- Tests: `TalkTests`, and `LiveProtocolTests` in HypaCore.
+
 ## Stories
 
 Each story is a folder in `Resources/Stories/{id}/`, listed in card order in `StoryLibrary.Ids`:

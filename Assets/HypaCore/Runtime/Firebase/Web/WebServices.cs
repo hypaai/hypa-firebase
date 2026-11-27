@@ -54,6 +54,7 @@ namespace HypaCore.Hybrid.Web
                 Flags = flags,
                 OnDevice = new ChromeNanoModel(),
                 Cloud = new WebCloudModel(flags),
+                Live = new WebLiveModel(),
                 RouteLog = new WebRouteLog(),
             };
         }

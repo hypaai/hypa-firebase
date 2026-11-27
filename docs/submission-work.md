@@ -113,3 +113,31 @@ On an iPhone with Apple Intelligence, answers come from Apple's on-device model;
 - A browser microphone at 16 kHz for `MicListener`.
 - On the web, the on-device model status is shown on Home, and the help card has a section on on-device AI.
 - Details: [web-bridge.md](web-bridge.md).
+
+## G10 (HYP-205): the old woman talks back
+
+An open voice conversation with the old woman in the hut. Code in `Assets/HypaStories/Runtime/Talk/`, the hut's side in `Runtime/World/HutVisit.Talk.cs`, the panel in `Runtime/Ui/TalkView.cs`.
+
+- **Start and end:** **Talk with her** (shown only inside the hut), or in the headset looking at her for 1 s. The mic stays open (a pulsing ring) until **End** or you leave the hut.
+- **One character, two engines** (`IVoiceConversation`), picked by `TalkRouter` from `live_langs`:
+  - `LiveTalk`: Gemini Live through Firebase AI Logic. New platform service `ILiveModel` (`HypaCore/Runtime/Firebase/Live.cs`, wire format in `LiveProtocol`). Native (Android, iOS, Quest, editor): `RestLiveModel`, a WebSocket from C# to the same endpoint the JS SDK uses (there is no Firebase Unity SDK in this project), her voice through `LivePlayback`. Web: `WebLiveModel` and `liveStart` in `firebase-bridge.js` (the page records and plays). Server-side voice activity detection and interruption; on native, the mic sends silence while she speaks until the player has been loud for 300 ms, so her own voice doesn't interrupt her. Reconnects with the resumption handle on `goAway` or a dropped socket, else with the last turns in her prompt.
+  - `HypaTalk`: Hypa turn by turn through `HypaProxyClient`. `TurnDetector` (MicListener's speech threshold plus a learned noise floor; 700 ms of quiet ends a turn), `/hypa/asr`, `/hypa/chat` (persona as system, then the last 8 turns), her reply split into sentences and spoken through `StoryVoice` as `AskFlow` does (first sentence fetched at once, the rest behind it). Barge-in after 300 ms of the player's voice stops her and drops the queued sentences. The room's own level (the hut's fire and wind through the speakers, a fan) is learned for 0.8 s before a turn can start and followed between turns; in a turn, anything under a quarter of the player's voice is quiet and a click doesn't count, so steady noise never holds a turn open. **Done** on the panel ends the turn at once (on native Live it sends 1.2 s of silence so the server ends it).
+  - Falls back to Hypa when Live is not set up or does not connect.
+- **Persona:** `Assets/HypaStories/Resources/Characters/elder/persona.json` (who she is, what she knows, how she talks, the stories she can send you to, her fixed lines in all eight languages). `PersonaPrompt` adds her four things from their own `story.json`. The non-European lines are machine-written and need a native speaker's check.
+- **Actions** (`TalkActions`; Live function calls, Hypa a JSON `action` in the reply, read by `TalkReply`): `show_item` lights the card and she points to it; `tell_item_story` plays the item's story and the conversation waits; `teach_word` saves the word through `UserDataSync` and she says it slowly; `suggest_story` shows **Walk to the fire**, which takes you to the campfire and starts that story (`StoryApp.GoToStory`).
+- **Echo:** Android records from `VOICE_COMMUNICATION` with the platform echo canceller (`HypaVoice.androidlib`, `HypaVoiceMic.java`); iOS switches the audio session to voice chat (`Plugins/iOS/HypaVoiceSession.mm`); the browser has echo cancellation on. On Quest the barge-in threshold is 4× her echo level instead of 2.5×. Her voice counts as hers for 600 ms after it stops (the room's echo, the gap between her sentences), so it never starts a turn. Where the microphone has no echo canceller (`MicStream.EchoCancelled` false: the editor, a desktop), nothing heard while she speaks counts and she can't be talked over, so she never answers her own words.
+- **Her voice:** a woman's. Hypa's Auto voice for English is OpenAI `alloy`, a man's, so `persona.json` names her voices (`voices`, as a story's): English OpenAI `sage`, then `coral`. Her remarks and her things' stories use them too. Live uses `live_voice` (`Gacrux`) and, if that is refused, `Aoede`, never the model's default (Puck, a man's).
+- **Transcript bubbles** for both sides on the panel, and the route chip ("Cloud · Gemini Live", "Hypa · Yorùbá").
+- **Things handled:** offline, she says (from her voice's cache, fetched while online) that she needs the connection, and the items' stories still play; no microphone, the panel says she can't hear you (the mic is tried again every 1.5 s while it is being allowed); the cap (`talk_max_seconds`, 300 s) ends with her goodbye.
+- Remote Config: `live_model` now has a default, plus `live_voice` and `talk_max_seconds` (`docs/contracts.md`, section 5).
+- Every reply's timing is logged (`TalkTurnLog`: speech to text, reply, first audio, interrupted).
+- Tests: `Assets/HypaCore/Tests/Editor/LiveProtocolTests.cs`, `Assets/HypaStories/Tests/Editor/TalkTests.cs`.
+- **Not done:**
+  - No Unity build or device run yet. The ticket's checks (latency on Android and web, Yorùbá barge-in, Quest) still need real devices.
+  - The Story Circle rule (only the starter talks, the others hear her): rooms and networking are not built.
+  - Saved words go to `FakeUserDataStore`, since G08's Firestore store does not exist yet.
+  - The offline clip is cached in memory only, so it is there only if she was heard online this session.
+  - Her pointing gesture has not been seen in the headset.
+  - Pidgin: Auto speaks it with Hypa Orpheus `Prince`, a man's voice, and no woman's Pidgin voice is named yet.
+  - First editor run (Nov 27): Live was refused with "Firebase App Check token is invalid" (from the editor's debug token), so it fell back to Hypa. Not resolved.
+
