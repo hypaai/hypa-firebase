@@ -83,3 +83,6 @@ coverage/
 .secret.local
 Assets/HypaFirebase/Resources/hypa_client_config_local.json
 Assets/HypaFirebase/Resources/hypa_client_config_local.json.meta
+
+# Burst output from WebGL builds
+/Data/

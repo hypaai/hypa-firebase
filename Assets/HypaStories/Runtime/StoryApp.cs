@@ -192,7 +192,7 @@ namespace HypaStories
             _ask.Logged += e => Debug.Log("Hypa Stories " + e);
             _ask.Sentence += (i, text, last) => _circle?.OnLocalSentence(i, text, last);
             _ask.Ended += () => _circle?.OnLocalAskEnded();
-            _circleView = new CircleView(_ui, CreateCircle, code => _ = JoinCircleAsync(code), () => _circleView.Show(false));
+            _circleView = new CircleView(_ui, CreateCircle, code => _ = JoinCircleAsync(code), HideCircleLobby);
 
             var prep = new GameObject("Preparing").transform;
             prep.SetParent(_ui, false);
@@ -771,14 +771,22 @@ namespace HypaStories
         {
             if (_busy || _screen != Screen.Splash || InCircle) return;
             _audio.Tap();
+            _splash.Prompt.gameObject.SetActive(false); // the campfire's row sits where the lobby card does
             _circleView.Show(true);
             _circleView.ShowMenu();
             if (code != null) { _circleView.ShowPad(code); _ = JoinCircleAsync(code); }
         }
 
-        void CreateCircle()
+        /// <summary>Closes the lobby and brings the campfire's row back.</summary>
+        void HideCircleLobby()
         {
             _circleView.Show(false);
+            _splash.Prompt.gameObject.SetActive(true);
+        }
+
+        void CreateCircle()
+        {
+            HideCircleLobby();
             _circlePick = true;
             ShowRoomNote("Story Circle: pick the story to tell together", 0f);
             OpenStories(false);
@@ -865,7 +873,7 @@ namespace HypaStories
                 if (index < 0) { _circleView.SetStatus("That story isn't in this version of the app."); await s.LeaveAsync(); EndCircle(); return; }
                 var lang = StoryLanguages.Find(info.language);
                 if (lang != null) PickLanguage(lang); // one language per room: the host's
-                _circleView.Show(false);
+                HideCircleLobby();
                 OpenStories(false);
                 StartCoroutine(PlayWhenListReady(index));
             }
