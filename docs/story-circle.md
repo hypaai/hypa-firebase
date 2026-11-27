@@ -46,6 +46,22 @@ Open `http://localhost:5002` in a normal Chrome window and in an incognito windo
 the code or with `http://localhost:5002/circle/ABCDE`. The emulator UI at `http://localhost:4000` shows `rooms/…` live. Speech and
 answers need the Hypa proxy (`functions/`, see `docs/hypa-proxy.md`); without it lines play silently but stay in step.
 
+### Real phones on the same Wi-Fi, no cloud
+
+For phones, tablets and the Quest browser on the same Wi-Fi (or hotspot) as the Mac, before the real project is set up:
+
+```sh
+HYPA_WEB_LAN=1 tools/build.sh web       # decompression in the page: phones get Brotli only over https
+npx --prefix firebase/tests firebase emulators:start --config firebase.lan.json --only auth,database,firestore,hosting --project demo-hypa
+ipconfig getifaddr en0                  # the Mac's Wi-Fi address, e.g. 172.20.10.6
+```
+
+`firebase.lan.json` is `firebase.json` with the emulators listening on the network (`0.0.0.0`). On each device open
+`http://<the Mac's address>:5002` in Chrome (the Mac itself can use the same address or localhost). A page on a private address uses
+the emulators by itself, like localhost. The Mac's firewall may ask to allow incoming connections for Java and Node: allow them.
+Limits: microphone questions need https (pick a suggested question instead); speech needs the Functions emulator and a dev
+Hypa key; the Android and Quest apps (not their browsers) can't reach the emulators, they need the real project.
+
 ## 2. Real devices (the `hypa-firebase` project)
 
 These change the Firebase project and need the owner's go-ahead:

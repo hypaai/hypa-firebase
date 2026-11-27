@@ -67,12 +67,23 @@ namespace HypaCore.Hybrid.Web
             catch (WebBridgeException e) { Debug.LogWarning($"Hypa: Firebase did not start ({e.Code}). Playing on local data."); }
         }
 
-        /// <summary>True for a page on localhost or 127.0.0.1, unless its URL asks for <c>firebase=live</c>.</summary>
+        /// <summary>
+        /// True for a page on this computer (localhost, 127.0.0.1) or on the local network (a private IPv4 address or a .local
+        /// name: phones on the same Wi-Fi opening the emulators' build), unless its URL asks for <c>firebase=live</c>.
+        /// </summary>
         public static bool UsesEmulators(string pageUrl)
         {
             if (!Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri)) return false;
-            if (uri.Host != "localhost" && uri.Host != "127.0.0.1") return false;
+            if (!IsLocal(uri.Host)) return false;
             return uri.Query.IndexOf("firebase=live", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        static bool IsLocal(string host)
+        {
+            if (host == "localhost" || host == "127.0.0.1" || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!System.Net.IPAddress.TryParse(host, out var ip) || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+            var b = ip.GetAddressBytes();
+            return b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168);
         }
 
         /// <summary>Init arguments for the emulators: placeholder app values (the emulators accept any) and no App Check.</summary>
