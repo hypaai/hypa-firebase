@@ -98,17 +98,25 @@ namespace HypaCore.Hybrid
             catch (JsonException) { throw new HypaProxyException(ProxyApi.ErrorUpstream, path + ": the proxy's answer was not JSON.", status); }
         }
 
+        /// <summary>
+        /// Sent twice at most: a request that fails while being sent (Mono's "An error occurred while sending the request") is
+        /// usually a pooled connection the server closed while it sat idle, so it never reached the proxy and is sent again.
+        /// </summary>
         async Task<(int, string)> HttpPostAsync(string url, string json, string idToken, string appCheck, CancellationToken ct)
         {
-            using (var req = new HttpRequestMessage(HttpMethod.Post, url))
+            for (var attempt = 1; ; attempt++)
             {
-                req.Headers.TryAddWithoutValidation(ProxyApi.AuthorizationHeader, "Bearer " + idToken);
-                req.Headers.TryAddWithoutValidation(ProxyApi.AppCheckHeader, appCheck);
-                req.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                HttpResponseMessage res;
-                try { res = await _http.SendAsync(req, ct).ConfigureAwait(false); }
-                catch (HttpRequestException e) { throw new HypaProxyException(ProxyApi.ErrorUpstream, "The proxy could not be reached: " + e.Message, 0); }
-                using (res) return ((int)res.StatusCode, await res.Content.ReadAsStringAsync().ConfigureAwait(false));
+                using (var req = new HttpRequestMessage(HttpMethod.Post, url))
+                {
+                    req.Headers.TryAddWithoutValidation(ProxyApi.AuthorizationHeader, "Bearer " + idToken);
+                    req.Headers.TryAddWithoutValidation(ProxyApi.AppCheckHeader, appCheck);
+                    req.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                    HttpResponseMessage res;
+                    try { res = await _http.SendAsync(req, ct).ConfigureAwait(false); }
+                    catch (HttpRequestException) when (attempt < 2 && !ct.IsCancellationRequested) { continue; }
+                    catch (HttpRequestException e) { throw new HypaProxyException(ProxyApi.ErrorUpstream, "The proxy could not be reached: " + e.Message, 0); }
+                    using (res) return ((int)res.StatusCode, await res.Content.ReadAsStringAsync().ConfigureAwait(false));
+                }
             }
         }
 

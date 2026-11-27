@@ -320,6 +320,8 @@ namespace HypaStories.Tests
             public readonly List<ChatMessage[]> Chats = new List<ChatMessage[]>();
             public readonly List<TalkTurnLog> Logs = new List<TalkTurnLog>();
             public string Heard = "What is that pot?", Reply = "It is my water pot. It keeps the water cool.";
+            /// <summary>Speech to text fails this many more times, as a dropped connection does.</summary>
+            public int AsrFails;
             public double Now = 10000;
             public HypaTalk Talk;
 
@@ -330,7 +332,9 @@ namespace HypaStories.Tests
                 if (persona != null) ctx.Persona = persona;
                 ctx.MaxSeconds = maxSeconds;
                 Talk = new HypaTalk(ctx, () => Mic, Speech,
-                    (wav, lang, ct) => Task.FromResult(Heard),
+                    (wav, lang, ct) => AsrFails-- > 0
+                        ? Task.FromException<string>(new HypaProxyException(ProxyApi.ErrorUpstream, "The proxy could not be reached.", 0))
+                        : Task.FromResult(Heard),
                     (messages, ct) => { Chats.Add(messages); return Task.FromResult(Reply); }, null, () => Now);
                 Talk.Logged += Logs.Add;
                 Talk.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -440,6 +444,30 @@ namespace HypaStories.Tests
             rig.Speech.Slow = false;
             rig.Turn();
             Assert.AreEqual(TalkState.Listening, rig.Talk.State, "and once her voice comes, the conversation carries on");
+        }
+
+        [Test] public void Hypa_OneFailedRequest_DoesNotEndTheConversation_TwoInARowDo()
+        {
+            var online = NetworkStatus.DeviceOnline;
+            NetworkStatus.DeviceOnline = () => true;
+            try
+            {
+                var rig = new Rig(this);
+                var notices = new List<string>();
+                rig.Talk.Notice += notices.Add;
+                rig.AsrFails = 1;
+                rig.Turn();
+                Assert.AreEqual(TalkState.Listening, rig.Talk.State, "one hiccup: say it again");
+                StringAssert.Contains("Say it again", notices.Last());
+                rig.Turn();
+                Assert.AreEqual(1, rig.Chats.Count, "and the next turn is answered");
+
+                rig.AsrFails = 2;
+                rig.Turn();
+                rig.Turn();
+                Assert.AreEqual(TalkState.Ended, rig.Talk.State, "failing again: she says she needs the connection");
+            }
+            finally { NetworkStatus.DeviceOnline = online; }
         }
 
         [Test] public void Hypa_HoldMutesTheMic()

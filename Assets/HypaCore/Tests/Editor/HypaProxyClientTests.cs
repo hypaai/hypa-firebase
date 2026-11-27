@@ -17,9 +17,13 @@ namespace HypaCore.Tests
             public string Body;
             public HttpStatusCode Status = HttpStatusCode.OK;
             public string Reply = "{}";
+            /// <summary>How many sends fail before one gets through (a stale pooled connection), and how many were made.</summary>
+            public int Fail, Sends;
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
             {
+                Sends++;
+                if (Fail-- > 0) throw new HttpRequestException("An error occurred while sending the request");
                 Request = request;
                 Body = await request.Content.ReadAsStringAsync().ConfigureAwait(false);
                 return new HttpResponseMessage(Status) { Content = new StringContent(Reply) };
@@ -53,6 +57,19 @@ namespace HypaCore.Tests
             Assert.AreEqual("Hello", (string)body["text"]);
             Assert.AreEqual("yo", (string)body["targetLang"]);
             Assert.IsNull(body["sourceLang"]);
+        }
+
+        [Test] public void AFailedSend_IsSentOnceMore_ThenReported()
+        {
+            var (client, stub, _) = Make();
+            stub.Fail = 1;
+            stub.Reply = "{\"transcript\":\"ẹ n lẹ\"}";
+            Assert.AreEqual("ẹ n lẹ", Run(client.TranscribeAsync(new byte[] { 1 }, "Yoruba", CancellationToken.None)), "the stale connection is retried");
+            Assert.AreEqual(2, stub.Sends);
+
+            stub.Fail = 2; stub.Sends = 0;
+            Assert.Throws<HypaException>(() => Run(client.TranscribeAsync(new byte[] { 1 }, "Yoruba", CancellationToken.None)));
+            Assert.AreEqual(2, stub.Sends, "only once more");
         }
 
         [Test] public void OptionalFields_AreLeftOut()

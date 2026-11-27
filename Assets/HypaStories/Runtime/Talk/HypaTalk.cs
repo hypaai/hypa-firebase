@@ -51,7 +51,7 @@ namespace HypaStories
         ITalkMic _mic;
         CancellationTokenSource _reply;
         Task _queue = Task.CompletedTask;
-        int _turns, _unclear, _speaking, _micTries;
+        int _turns, _unclear, _speaking, _micTries, _netFails;
         float _micRetry;
         bool _held, _ended;
         double _startedAt, _turnEnd;
@@ -264,6 +264,7 @@ namespace HypaStories
                     return;
                 }
                 _unclear = 0;
+                _netFails = 0;
                 log.Heard = heard;
                 if (_heard != null && !_heard.Final) _transcript.Update(_heard, heard, true);
                 else _transcript.Add(false, heard, true);
@@ -290,9 +291,16 @@ namespace HypaStories
                 if (cts.IsCancellationRequested) return;
                 log.Error = e.Message;
                 Logged?.Invoke(log);
-                if (NetworkStatus.IsNetworkError(e)) { _ = EndAsync(_ctx.Persona.Line("offline", _ctx.Language.Code)); return; }
-                Notice?.Invoke("She couldn't hear that: " + e.Message);
+                if (NetworkStatus.IsNetworkError(e))
+                {
+                    // really offline (or failing again): she says so and the conversation ends. One failed request doesn't end it
+                    if (!NetworkStatus.DeviceOnline() || ++_netFails >= 2) { _ = EndAsync(_ctx.Persona.Line("offline", _ctx.Language.Code)); return; }
+                    Set(TalkState.Listening);
+                    Notice?.Invoke("That didn't reach her. Say it again.");
+                    return;
+                }
                 Set(TalkState.Listening);
+                Notice?.Invoke("She couldn't hear that: " + e.Message);
             }
         }
 
