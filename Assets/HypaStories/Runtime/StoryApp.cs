@@ -771,17 +771,17 @@ namespace HypaStories
         {
             if (_busy || _screen != Screen.Splash || InCircle) return;
             _audio.Tap();
-            _splash.Prompt.gameObject.SetActive(false); // the campfire's row sits where the lobby card does
+            _splash.Brand.gameObject.SetActive(false); // the raised card sits where the floating "Hypa Stories" title is
             _circleView.Show(true);
             _circleView.ShowMenu();
             if (code != null) { _circleView.ShowPad(code); _ = JoinCircleAsync(code); }
         }
 
-        /// <summary>Closes the lobby and brings the campfire's row back.</summary>
+        /// <summary>Closes the lobby and brings the floating title back.</summary>
         void HideCircleLobby()
         {
             _circleView.Show(false);
-            _splash.Prompt.gameObject.SetActive(true);
+            _splash.Brand.gameObject.SetActive(true);
         }
 
         void CreateCircle()
