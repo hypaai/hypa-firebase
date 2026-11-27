@@ -771,7 +771,9 @@ namespace HypaStories
         {
             if (_busy || _screen != Screen.Splash || InCircle) return;
             _audio.Tap();
-            _splash.Brand.gameObject.SetActive(false); // the raised card sits where the floating "Hypa Stories" title is
+            // the raised card sits where the floating "Hypa Stories" title is: fade the title (switching it off would also take away the
+            // campfire's row, which TrailPanels shows only while the title is active)
+            _splash.Brand.Set(0f);
             _circleView.Show(true);
             _circleView.ShowMenu();
             if (code != null) { _circleView.ShowPad(code); _ = JoinCircleAsync(code); }
@@ -781,7 +783,7 @@ namespace HypaStories
         void HideCircleLobby()
         {
             _circleView.Show(false);
-            _splash.Brand.gameObject.SetActive(true);
+            _splash.Brand.Set(1f);
         }
 
         void CreateCircle()
@@ -1192,6 +1194,8 @@ namespace HypaStories
 
         void LateUpdate()
         {
+            // the lobby card covers the floating title: keep it faded while the lobby is open (the campfire's intro fades it back in)
+            if (_circleView != null && _circleView.Shown && _splash != null) _splash.Brand.Set(0f);
             if (_camp == null || _camp.Village == null || _voice == null) return;
             var speaking = _elderSession && !_away && _voice.IsSpeaking
                 && _ask.State != AskState.Listening && !(_tryOpen && _tryFlow.Listening);
