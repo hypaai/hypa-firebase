@@ -82,6 +82,17 @@ Logs: Chrome DevTools console; `adb logcat -s Unity` for Android and Quest; the 
 | Dropped player | Turn the guest's Wi-Fi off for 15 s, then on. | The host carries on; the guest's figure greys "(away)" on the host, and the guest picks up at the current line. |
 | Costs | Firebase console → Realtime Database → Usage during a 10-minute session. | Small, and zero once both leave. |
 
+## The game race (G11)
+
+After a story with a game (Seven Hot Stones, Eshu at the Crossroads, The King's Magic Drum), the host gets **Play together** where
+the game button would be. Both devices show 3-2-1 from the same server time, then each plays the game on its own. A bar above the
+game shows "Ada 12 · You 9"; when both are done a card shows "Ada wins: 41 s" with **Rematch** (either player) and **Back to the
+fire**. Points come from each game's own rules; equal points go to the faster game. Going back to the fire mid-game, or leaving the
+circle, gives the race to the other player once they finish. Logs: `Hypa Stories: race over, N points (best B, P plays)`.
+
+Checks (Done when): Web + Android race one game end to end with the result card on both; then Quest + web. Also try a rematch
+started by the guest, and the guest leaving mid-game (the host still gets a result after finishing).
+
 ## Known limits
 
 - The host starts telling as soon as the room is made; a guest who joins later starts at the current line (no waiting room yet).

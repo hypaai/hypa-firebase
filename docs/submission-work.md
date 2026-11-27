@@ -147,3 +147,16 @@ How to run it on devices and check each Done-when item: `docs/story-circle.md`.
 - Lobby and code pad (`CircleView`), "Story Circle" on Home and at the campfire, share links `…/circle/ABCDE` (Hosting rewrite, `<base>` in the web page), the other player's figure (`CirclePeer`, `PoseTrack`), head and hands sent 10 times a second.
 - Tests: `CircleSessionTests`, `RestRoomSyncTests`, share links in `HybridRoomsTests`.
 - Not yet run on a device or against the real database: that needs the Realtime Database created and the rules deployed (`docs/story-circle.md`).
+
+## G11 (HYP-206): Multiplayer game race
+
+After a story with a game, the two players in a Story Circle race at it, each on their own device. Built on G09 (the branch is stacked on it).
+
+- `GameRace` (`Assets/HypaStories/Runtime/Circle/`): a round over `rooms/{code}/game/{uid}` (`docs/contracts.md` section 4): the host taps **Play together**, both count 3-2-1 to the same server time, each plays the story's game locally, live scores at most once a second, the result when both are done. A player who leaves the room, or goes back to the fire mid-game (a forfeit), loses to the one who finishes. Either player can start a **Rematch**. Old rounds replayed by a reconnecting stream are not joined.
+- `RaceScore`: points from each game's own rules (Dodo: stones and lives; Eshu's hat: rounds less fights; the drum: dishes less misses); a tie on points goes to the faster game time, measured on the player's own device. No network timing.
+- `RaceView`: the count, the live bar ("Ada 12 · You 9") and the result card ("Ada wins: 41 s", **Rematch**, **Back to the fire**). In a circle, the host's **Play together** replaces the solo game button.
+- The best result goes to `stories/{id}.bestGameScore` through `UserDataSync` (G08). `HybridServices.UserData` holds the store: the Fake until G08's Firestore store exists, so the best score is kept on the device for now.
+- Games expose their rules read-only (`DodoGame.Rules`, `HatGame.Rules`, `DrumGame.Rules`).
+- Fix to G09: `RestRoomSync` read `game` updates wrongly when only one player's entry changed.
+- Tests: `GameRaceTests` (count, live scores, winner and ties, leaving, forfeit, rematch, old rounds, scores).
+- Not yet run on a device.
