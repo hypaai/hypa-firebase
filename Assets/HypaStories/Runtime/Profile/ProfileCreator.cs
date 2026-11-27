@@ -435,9 +435,10 @@ namespace HypaStories
             if (_field == field) return;
             EndInput(); _field = field;
             bool web = Application.platform == RuntimePlatform.WebGLPlayer;
-            // Web uses physical typing when available, or the system keyboard on touch devices.
+            // Web uses physical typing when available, or the system keyboard on touch devices. A computer's browser also reports
+            // keyboard support, but none appears and typing would end at once, so it types on the real keyboard.
             bool useSystemKeyboard = TouchScreenKeyboard.isSupported && (web
-                ? !TouchScreenKeyboard.isInPlaceEditingAllowed
+                ? Application.isMobilePlatform && !TouchScreenKeyboard.isInPlaceEditingAllowed
                 : Application.isMobilePlatform && !UnityEngine.XR.XRSettings.isDeviceActive);
             if (useSystemKeyboard)
                 _nativeKeyboard = TouchScreenKeyboard.Open(Value, TouchScreenKeyboardType.Default, false, false, false, false,
