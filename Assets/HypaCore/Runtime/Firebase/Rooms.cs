@@ -38,7 +38,7 @@ namespace HypaCore.Hybrid
         public string name;
         /// <summary>See <see cref="Platforms"/>.</summary>
         public string platform;
-        /// <summary>0 or 1. Seat 0 is the host's when the room is made; a seat stays with its player when the room is handed over.</summary>
+        /// <summary>0 to <see cref="RoomSeats.MaxPlayers"/> - 1. Seat 0 is the host's when the room is made; a seat stays with its player when the room is handed over.</summary>
         public int seat;
         /// <summary>
         /// Cleared by the server when the connection drops (<c>onDisconnect</c>). Where there is no <c>onDisconnect</c> (REST) the
@@ -90,6 +90,14 @@ namespace HypaCore.Hybrid
         public bool last;
 
         public const int MaxTextLength = 1000;
+    }
+
+    /// <summary>Seats at the fire.</summary>
+    public static class RoomSeats
+    {
+        /// <summary>Players in a room (G09: 2; P06 raises it to 8, with the <c>seat</c> rule in database.rules.json).</summary>
+        public const int MaxPlayers = 2;
+        public static bool Valid(int seat) => seat >= 0 && seat < MaxPlayers;
     }
 
     /// <summary>How long a player may stay silent before the room treats them as gone.</summary>

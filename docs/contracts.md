@@ -131,7 +131,8 @@ rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
 - `IRoomSync` (`Interfaces.cs`) is the contract G09 implements; the types are in `Rooms.cs`. Create a room (you take seat 0), join
   (seat 1; `RoomException` NotFound, Full or Expired), leave, host-only state and clock, your own
   entry and hand, poses (fire and forget, at most 10 a second), answer sentences, game results, and events for each. `ServerTimeMs` estimates the
-  server clock (`.info/serverTimeOffset`); `RoomClock.ElapsedMs(serverNow)` says how far into the line both players are.
+  server clock (see "Server time" below); `RoomClock.ElapsedMs(serverNow)` says how far into the line both players are.
+- Seats: `RoomSeats.MaxPlayers` (2 for G09; P06 raises it to 8 together with the `seat` rule).
 - `FakeRoomSync` clients on the same `FakeRoomServer` see each other like two devices (tests: `HybridRoomsTests`).
 - Codes: `RoomCode.New()`, 5 letters from `BCDFGHJKLMNPQRSTVWXZ` (no vowels, so no words; no Y), shown and compared in upper case.
   Rooms expire after 2 hours; G04's scheduled `cleanupRooms` deletes them.
@@ -160,6 +161,8 @@ rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
   other is refused. Seats do not move: only `host` does.
 - The implementation does this on its own when it sees the host gone (a `RoomChanged` carries the new `host`, and `IsHost`
   follows). The old host who comes back rejoins as a guest.
+- Presence on disconnect only sets `players/{uid}/online` to false. Never register an `onDisconnect` that removes the room or a
+  `players` entry: it would close the room under the player about to take it.
 - `lastSeen` (server time, never in the future) is for clients with no `onDisconnect`, such as REST on Quest and phones: they
   refresh it every `RoomPresence.HeartbeatMs` (3 s) with `{".sv": "timestamp"}`. A client that writes it must keep it fresh.
   The SDK clients may leave it out and rely on `onDisconnect`.
@@ -167,8 +170,20 @@ rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
 **Answers.** The player whose hand is up asks; their device answers (G05) and writes the answer a sentence at a time as the
 sentences come, so the other player starts to hear it after the first one, not after the whole answer. `n` is a count through
 the room, `q` the question number and `i` the sentence's place in it. Each device speaks the text itself. Only sentences added
-after you joined reach you (`IRoomSync.AnswerReceived`), and the sender is not sent their own. Both players raising a hand at
-once: the lower seat's question is taken.
+after you joined reach you (`IRoomSync.AnswerReceived`), and the sender is not sent their own.
+
+- Picking `n`: one more than the highest `n` in the room, read on joining (older sentences are read for this, not raised). If the
+  write is refused because that `n` is taken, try the next. Listeners order by `n` as a number and allow gaps.
+- The asker lowers their hand only after their last sentence is written: the rules refuse a sentence once `handUp` is false.
+- Both players raising a hand at once: the clients take the lower seat's question, and the other device lowers its hand. The
+  rules do not decide this: they let any player whose hand is up write a sentence. That is enough for two cooperative clients;
+  P06 can move the turn into the host-written `clock` if it needs the server to enforce it.
+
+**Server time.** Both devices place a line by `startedAtServerMs`, so each needs the server clock. The SDKs (web) read
+`.info/serverTimeOffset`. REST (Quest, Android, iOS) has no `.info`, so `RestRoomSync` measures it: write
+`{".sv": "timestamp"}` to its own `players/{uid}/lastSeen` (the heartbeat it sends anyway), note the local time before (`t0`) and
+after (`t1`) the request, read the stored value `s`, and take `offset = s - (t0 + t1) / 2`. Keep the sample with the shortest round
+trip of the last few; with a round trip under about 200 ms the error is under 100 ms, inside the ~300 ms target.
 
 ## 5. Remote Config keys
 

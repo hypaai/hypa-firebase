@@ -57,7 +57,10 @@ namespace HypaCore.Hybrid
         string Code { get; }
         /// <summary>True when this client is the room's host: it created the room, or took it over when the host went.</summary>
         bool IsHost { get; }
-        /// <summary>The server's clock in Unix ms, estimated from this device's clock (Realtime Database <c>.info/serverTimeOffset</c>).</summary>
+        /// <summary>
+        /// The server's clock in Unix ms, estimated from this device's clock. The SDKs read <c>.info/serverTimeOffset</c>; REST has no
+        /// such node, so the REST implementation measures it (docs/contracts.md, section 4, "Server time").
+        /// </summary>
         long ServerTimeMs { get; }
 
         /// <summary>Creates a room with a new <see cref="RoomCode"/>, seats you in seat 0, and returns the code.</summary>
@@ -81,7 +84,9 @@ namespace HypaCore.Hybrid
         /// <summary>
         /// Adds one sentence of the answer to your question (<c>answers/{n}</c>). Your hand must be up (<see cref="RoomPlayer.handUp"/>),
         /// or it throws <see cref="RoomException"/> <see cref="RoomError.NotYourTurn"/>. The implementation sets <see cref="RoomAnswer.uid"/>
-        /// and picks <c>n</c>.
+        /// and picks <c>n</c>: one more than the highest it has seen in the room, including sentences from before it joined, and the
+        /// next one up if the server refuses it because that <c>n</c> is taken. Await the last sentence before lowering your hand: the
+        /// rules refuse a sentence from a player whose hand is down.
         /// </summary>
         Task SendAnswerAsync(RoomAnswer sentence);
         /// <summary>Records your game result.</summary>
@@ -94,7 +99,7 @@ namespace HypaCore.Hybrid
         /// <summary>Another player's pose (uid, pose). Yours are not echoed back.</summary>
         event Action<string, PoseFrame> PoseReceived;
         /// <summary>
-        /// A sentence of another player's answer, in order. Yours are not echoed back. Only sentences added after you joined are
+        /// A sentence of another player's answer, in order of <c>n</c> (which may skip numbers). Yours are not echoed back. Only sentences added after you joined are
         /// raised, so rejoining never replays an old answer.
         /// </summary>
         event Action<RoomAnswer> AnswerReceived;

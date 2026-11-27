@@ -11,7 +11,7 @@ namespace HypaCore.Hybrid.Web
     /// <summary>
     /// The Web implementation of the G01 services (WebGL builds), on the Firebase JS SDK through <see cref="WebBridge"/>.
     /// The web config comes from <c>firebaseWeb</c> in <c>hypa_client_config_local.json</c>, else <c>hypa_client_config.json</c> (<see cref="HypaConfig.ClientConfig"/>). While it
-    /// is blank the factory returns null and the app plays on the Fakes. Rooms stay on the Fake until G09 defines them.
+    /// is blank the factory returns null and the app plays on the Fakes. Rooms stay on the Fake until <c>WebRoomSync</c> (G09) lands.
     /// On localhost the build uses the Firebase Emulator Suite instead (project <see cref="EmulatorProject"/>); add
     /// <c>?firebase=live</c> to the URL to use the real project there.
     /// </summary>

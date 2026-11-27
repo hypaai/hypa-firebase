@@ -174,7 +174,7 @@ namespace HypaCore.Hybrid
             else
             {
                 seat = -1;
-                for (int s = 0; s < 2 && seat < 0; s++) { bool taken = false; foreach (var p in room.Players.Values) taken |= p.seat == s; if (!taken) seat = s; }
+                for (int s = 0; s < RoomSeats.MaxPlayers && seat < 0; s++) { bool taken = false; foreach (var p in room.Players.Values) taken |= p.seat == s; if (!taken) seat = s; }
                 if (seat < 0) throw new RoomException(RoomError.Full, "Room " + normalized + " is full.");
             }
             room.Players[_uid] = Seat(me, seat);
@@ -190,9 +190,10 @@ namespace HypaCore.Hybrid
         {
             if (Code == null || !_server.Rooms.TryGetValue(Code, out var room)) { Code = null; return Task.CompletedTask; }
             var wasHost = room.Info.host == _uid;
+            if (wasHost && RoomHandover.NextHost(room.Players, _uid) == null) { _server.Close(Code); return Task.CompletedTask; } // nobody is left
             room.Players.Remove(_uid);
             room.Clients.Remove(this);
-            if (wasHost && !_server.HandOver(room)) { room.Clients.Add(this); _server.Close(Code); return Task.CompletedTask; } // nobody is left
+            if (wasHost) _server.HandOver(room);
             RaiseClosed();
             foreach (var c in room.Clients.ToArray()) c.RaisePlayers(room);
             return Task.CompletedTask;
