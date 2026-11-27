@@ -9,6 +9,7 @@ import {
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app-check.js";
 import {
   initializeFirestore, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromCache, setDoc, onSnapshot,
+  collection, addDoc,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 import {
   getRemoteConfig, ensureInitialized, fetchAndActivate, getAll,
@@ -29,6 +30,7 @@ const ON_DEVICE = {
 let ready = Promise.reject(new BridgeError("not_configured", "Firebase was not initialised."));
 ready.catch(() => {});
 let auth, appCheck, db, rc, ai, nano, sendEvent = () => {};
+let usingEmulators = false;
 const cloudModels = new Map();
 // Progress: the newest updatedAt this page has seen (set once it has loaded or saved, so the first snapshot is not "news"),
 // and a save waiting for sign-in (first launch, still offline).
@@ -36,6 +38,7 @@ let known = null, pendingSave = null, unwatch = null;
 
 function init(config, ctx) {
   sendEvent = ctx.event;
+  usingEmulators = config.emulators === true;
   const app = initializeApp(config.firebase);
   // The emulators do not check App Check, so it stays off there. The real project on localhost (?firebase=live) uses the
   // App Check debug provider: register the token printed in the console in the Firebase console.
@@ -96,6 +99,7 @@ async function link({ provider }) {
 
 async function appCheckToken() {
   await ready;
+  if (usingEmulators) return "";
   if (!appCheck) throw new BridgeError("appcheck", "App Check is not configured.");
   return (await getToken(appCheck, false)).token;
 }
@@ -143,6 +147,22 @@ async function saveProgress(p) {
   // Not signed in yet (first launch, maybe offline): keep the newest save and write it once sign-in succeeds.
   pendingSave = p;
   signInAnonymously(auth).catch(() => {});
+  return null;
+}
+
+const profileRef = (u) => doc(db, "users", u.uid);
+
+async function loadProfile() {
+  let u;
+  try { u = await user(); } catch { return null; }
+  let snap;
+  try { snap = await getDoc(profileRef(u)); } catch { snap = await getDocFromCache(profileRef(u)).catch(() => null); }
+  return snap && snap.exists() ? snap.data() : null;
+}
+
+async function saveProfile(p) {
+  const u = await user();
+  setDoc(profileRef(u), p).catch((e) => console.warn("Hypa: profile not saved (" + e.code + ")."));
   return null;
 }
 
@@ -205,6 +225,21 @@ async function stream({ side, model, prompt }, { emit, signal }) {
   return null;
 }
 
+async function generateTurn({ model, contents, tools }, { signal }) {
+  const params = { model };
+  if (tools && tools.length) params.tools = [{ functionDeclarations: tools }];
+  const response = (await getGenerativeModel(ai, params).generateContent({ contents }, { signal })).response;
+  const calls = (response.functionCalls && response.functionCalls()) || [];
+  const content = (response.candidates && response.candidates[0] && response.candidates[0].content) || { role: "model", parts: [] };
+  return { content, calls, text: calls.length ? "" : response.text() };
+}
+
+async function logRoute(event) {
+  const u = await user();
+  addDoc(collection(db, "routes", u.uid, "events"), event).catch((e) => console.warn("Hypa: route event not saved (" + e.code + ")."));
+  return null;
+}
+
 async function nanoDownload(args, { emit }) {
   // Needs a recent user gesture (Chrome's rule for starting a download); C# calls it from a button press.
   await (await nanoModel()).initializeDeviceModel((fraction) => emit(fraction));
@@ -213,7 +248,7 @@ async function nanoDownload(args, { emit }) {
 
 const methods = {
   init, signIn, link, idToken: async () => (await user()).getIdToken(), appCheckToken,
-  loadProgress, saveProgress, fetchFlags, generate, stream, nanoStatus, nanoDownload,
+  loadProgress, saveProgress, loadProfile, saveProfile, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
 };
 
 /** Runs a method. ctx: { emit(chunk), event(name, value), signal }. */

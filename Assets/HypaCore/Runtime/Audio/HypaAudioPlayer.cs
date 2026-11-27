@@ -2,6 +2,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -128,22 +131,77 @@ namespace HypaCore
 
         static async Task<AudioClip> DecodeCompressedAsync(byte[] bytes, string mime, CancellationToken ct)
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return await DecodeWebGlAsync(bytes, ct);
+#else
             mime = mime ?? "";
             var type = mime.Contains("ogg") ? AudioType.OGGVORBIS : AudioType.MPEG;
             var path = Path.Combine(Application.temporaryCachePath, "hypa_tts_" + Guid.NewGuid().ToString("N") + (type == AudioType.MPEG ? ".mp3" : ".ogg"));
             File.WriteAllBytes(path, bytes);
             try
             {
-                using (var req = UnityWebRequestMultimedia.GetAudioClip("file://" + path, type))
-                {
-                    var op = req.SendWebRequest();
-                    while (!op.isDone) { ct.ThrowIfCancellationRequested(); await Task.Yield(); }
-                    if (req.result != UnityWebRequest.Result.Success)
-                        throw new HypaException(HypaErrorKind.InvalidResponse, "Could not decode audio (" + mime + "): " + req.error);
-                    return DownloadHandlerAudioClip.GetContent(req);
-                }
+                return await RequestClipAsync(new Uri(path).AbsoluteUri, type, ct);
             }
             finally { try { File.Delete(path); } catch { } }
+#endif
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")] static extern int HypaAudio_Decode(byte[] data, int length);
+        [DllImport("__Internal")] static extern int HypaAudio_Status(int id);
+        [DllImport("__Internal")] static extern int HypaAudio_Channels(int id);
+        [DllImport("__Internal")] static extern int HypaAudio_Rate(int id);
+        [DllImport("__Internal")] static extern int HypaAudio_Length(int id);
+        [DllImport("__Internal")] static extern int HypaAudio_CopyAndFree(int id, float[] dst, int maxLen);
+        [DllImport("__Internal")] static extern void HypaAudio_Free(int id);
+
+        static async Task<AudioClip> DecodeWebGlAsync(byte[] bytes, CancellationToken ct)
+        {
+            var id = HypaAudio_Decode(bytes, bytes.Length);
+            try
+            {
+                while (HypaAudio_Status(id) == 0)
+                {
+                    await HypaAsync.NextFrame(ct);
+                }
+                if (HypaAudio_Status(id) != 1)
+                    throw new HypaException(HypaErrorKind.InvalidResponse, "Could not decode the Hypa audio.");
+                var ch = Math.Max(1, HypaAudio_Channels(id));
+                var rate = Math.Max(8000, HypaAudio_Rate(id));
+                var len = HypaAudio_Length(id);
+                if (len <= 0)
+                    throw new HypaException(HypaErrorKind.InvalidResponse, "Could not decode the Hypa audio.");
+                var samples = new float[len];
+                var copied = HypaAudio_CopyAndFree(id, samples, len);
+                id = 0;
+                var clip = AudioClip.Create("hypa-tts", copied / ch, ch, rate, false);
+                clip.SetData(samples, 0);
+                return clip;
+            }
+            finally
+            {
+                if (id != 0) HypaAudio_Free(id);
+            }
+        }
+#endif
+
+        static async Task<AudioClip> RequestClipAsync(string url, AudioType type, CancellationToken ct)
+        {
+            using (var req = UnityWebRequestMultimedia.GetAudioClip(url, type))
+            {
+                var op = req.SendWebRequest();
+                if (!op.isDone)
+                {
+                    var done = new TaskCompletionSource<bool>();
+                    op.completed += _ => done.TrySetResult(true);
+                    using (ct.Register(() => { req.Abort(); done.TrySetCanceled(ct); }))
+                        await done.Task;
+                }
+                ct.ThrowIfCancellationRequested();
+                if (req.result != UnityWebRequest.Result.Success)
+                    throw new HypaException(HypaErrorKind.InvalidResponse, "Could not decode the Hypa audio.");
+                return DownloadHandlerAudioClip.GetContent(req);
+            }
         }
     }
 }

@@ -28,6 +28,9 @@
   "database": {
     "rules": "firebase/database.rules.json"
   },
+  "remoteconfig": {
+    "template": "firebase/remoteconfig.template.json"
+  },
   "hosting": {
     "public": "Builds/Web",
     "ignore": [

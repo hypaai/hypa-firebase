@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace HypaCore.Hybrid
 {
@@ -18,6 +21,39 @@ namespace HypaCore.Hybrid
             var chip = string.IsNullOrEmpty(Model) ? label : label + " · " + Model;
             return LatencyMs > 0 ? chip + " · " + (LatencyMs / 1000f).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " s" : chip;
         }
+    }
+
+    public enum AiMode { Hybrid, CloudOnly, OnDeviceOnly }
+
+    public sealed class CloudTool
+    {
+        public string Name, Description;
+        public IReadOnlyDictionary<string, string> Parameters;
+        public Func<IReadOnlyDictionary<string, string>, CancellationToken, Task<string>> Run;
+    }
+
+    [Serializable]
+    public sealed class RouteEvent
+    {
+        public string kind;
+        public string route;
+        public string model;
+        public string language;
+        public int latencyMs;
+        public bool ok;
+        public string fallbackFrom;
+        public string device;
+        public long at;
+    }
+
+    public static class RouteNames
+    {
+        public const string Answer = "answer", Translate = "translate";
+
+        public static string Of(Route route) => route switch
+        {
+            Route.OnDevice => "onDevice", Route.CloudGemini => "cloud", Route.Hypa => "hypa", _ => "offline",
+        };
     }
 
     /// <summary>Firestore <c>users/{uid}/progress/current</c> (docs/contracts.md, section 3).</summary>
@@ -63,6 +99,7 @@ namespace HypaCore.Hybrid
         public static string Progress(string uid) => "users/" + uid + "/progress/current";
         public static string Story(string uid, string storyId) => "users/" + uid + "/stories/" + storyId;
         public static string Word(string uid, string wordId) => "users/" + uid + "/words/" + wordId;
+        public static string RouteEvent(string uid, string eventId) => "routes/" + uid + "/events/" + eventId;
     }
 
     /// <summary>Remote Config keys and their defaults (docs/contracts.md, section 5).</summary>
@@ -89,7 +126,7 @@ namespace HypaCore.Hybrid
                 case RouteOnDeviceLangs: return "en,fr,es";
                 case RouteHypaLangs: return "yo,ha,ig,pcm,sw";
                 case RouteMaxOnDeviceTokens: return "5000";
-                case CloudModel: return "gemini-2.5-flash-lite";
+                case CloudModel: return "gemini-3.5-flash-lite";
                 case LiveLangs: return "en,fr,es,sw";
                 case ProxyDailySecondsPerUser: return "600";
                 case ProxyDailyRequestsPerUser: return "400";
@@ -130,17 +167,17 @@ namespace HypaCore.Hybrid
 
     /// <summary><see cref="voice"/> works only with the <see cref="model"/> that owns it. <see cref="inline"/>: return base64, not a link.</summary>
     [Serializable] public sealed class TtsRequest { public string text; public string language; public string voice; public string model; public bool? inline; }
-    /// <summary>Either <see cref="audioUrl"/> or <see cref="audioBase64"/> (always base64 when the request was <c>inline</c>).</summary>
+    /// <summary>Returns <see cref="audioUrl"/> by default or <see cref="audioBase64"/> when inline is requested.</summary>
     [Serializable] public sealed class TtsResponse { public string audioUrl; public string audioBase64; public string mime; public int sampleRate; public ProxyRoute route; public ProxyUsage usage; }
     /// <summary>Base64 audio, at most 1 MiB and 30 s.</summary>
-    [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public double? durationSeconds; }
+    [Serializable] public sealed class AsrRequest { public string audio; public string sourceLang; public double? durationSeconds; public string model; }
     [Serializable] public sealed class AsrResponse { public string transcript; public string language; public double audioSeconds; public ProxyRoute route; public ProxyUsage usage; }
     /// <summary><see cref="role"/>: "system", "user" or "assistant".</summary>
     [Serializable] public sealed class ChatMessage { public string role; public string content; }
     /// <summary><see cref="model"/>: "auto" (the default) or "provider/model".</summary>
     [Serializable] public sealed class ChatRequest { public ChatMessage[] messages; public string model; public int? maxTokens; }
     [Serializable] public sealed class ChatResponse { public string content; public ProxyRoute route; public ProxyUsage usage; }
-    [Serializable] public sealed class TranslateRequest { public string text; public string targetLang; public string sourceLang; }
+    [Serializable] public sealed class TranslateRequest { public string text; public string targetLang; public string sourceLang; public string model; }
     [Serializable] public sealed class TranslateResponse { public string translation; public string language; public ProxyRoute route; public ProxyUsage usage; }
     /// <summary><see cref="scope"/> for quota, <see cref="reason"/> and <see cref="retryable"/> for upstream.</summary>
     [Serializable] public sealed class ProxyErrorBody { public string code; public string message; public string scope; public string reason; public bool? retryable; public int? retryAfterSeconds; }

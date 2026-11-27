@@ -67,7 +67,7 @@ namespace HypaCore.Tests
         {
             var flags = new FakeRemoteFlags();
             Run(flags.FetchAsync());
-            Assert.AreEqual("gemini-2.5-flash-lite", flags.Get(RemoteConfigKeys.CloudModel, "x"));
+            Assert.AreEqual("gemini-3.5-flash-lite", flags.Get(RemoteConfigKeys.CloudModel, "x"));
             Assert.AreEqual("true", flags.Get(RemoteConfigKeys.RoutePreferOnDevice, "false"));
             Assert.AreEqual("yo,ha,ig,pcm,sw", flags.Get(RemoteConfigKeys.RouteHypaLangs, ""));
             Assert.AreEqual("fallback", flags.Get(RemoteConfigKeys.LiveModel, "fallback"), "live_model has no default yet");
@@ -144,8 +144,9 @@ namespace HypaCore.Tests
             Assert.AreEqual("/hypa/chat", ProxyApi.Chat);
             Assert.AreEqual("app_check", ProxyApi.ErrorAppCheck);
             Assert.AreEqual("X-Firebase-AppCheck", ProxyApi.AppCheckHeader);
-            var asr = JObject.FromObject(new AsrRequest { audio = "AA==", sourceLang = "yo", durationSeconds = 2 });
-            CollectionAssert.AreEquivalent(new[] { "audio", "sourceLang", "durationSeconds" }, asr.Properties().Select(p => p.Name));
+            var asr = JObject.FromObject(new AsrRequest { audio = "AA==", sourceLang = "yo", durationSeconds = 2, model = "asr-model" });
+            CollectionAssert.AreEquivalent(new[] { "audio", "sourceLang", "durationSeconds", "model" }, asr.Properties().Select(p => p.Name));
+            Assert.AreEqual("asr-model", (string)asr["model"]);
             var tts = JObject.FromObject(new TtsResponse { audioBase64 = "AA==", mime = "audio/mpeg", route = new ProxyRoute { model = "m", voice = "v" } });
             Assert.AreEqual("v", (string)tts["route"]["voice"]);
             CollectionAssert.AreEquivalent(new[] { "audioUrl", "audioBase64", "mime", "sampleRate", "route", "usage" }, tts.Properties().Select(p => p.Name));

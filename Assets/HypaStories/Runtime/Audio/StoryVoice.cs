@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HypaCore;
+using HypaCore.Hybrid;
 using UnityEngine;
 
 namespace HypaStories
@@ -25,7 +26,6 @@ namespace HypaStories
         readonly VoiceLock _lock = new VoiceLock();
         readonly CancellationTokenSource _life = new CancellationTokenSource();
         readonly float[] _buf = new float[256];
-        HypaMcpClient _mcp;
         /// <summary>Failures already logged (voice / language / error), so each shows once instead of once per line.</summary>
         readonly HashSet<string> _logged = new HashSet<string>();
         /// <summary>Voice locks already logged this story, so each shows once.</summary>
@@ -44,7 +44,6 @@ namespace HypaStories
 
         public void Init(Transform mouth)
         {
-            _mcp = new HypaMcpClient();
             var go = new GameObject("Voice");
             go.transform.SetParent(mouth, false);
             var s = go.AddComponent<AudioSource>();
@@ -142,7 +141,7 @@ namespace HypaStories
             HypaSpeech speech = null;
             foreach (var voice in voices)
             {
-                try { speech = await _mcp.TextToSpeechAsync(text, label, _life.Token, voice.Voice, voice.Model); break; }
+                try { speech = await Speak(text, label, voice.Voice, voice.Model); break; }
                 catch (HypaException e) when (e.Kind != HypaErrorKind.MissingConfiguration && e.Kind != HypaErrorKind.Unauthorized)
                 {
                     Warn($"voice {voice} failed for {label} ({e.Message}); trying the next voice.");
@@ -151,11 +150,19 @@ namespace HypaStories
             if (speech == null)
             {
                 // Auto (pick = null) for the first line in the language, then the voice it picked.
-                speech = await _lock.SpeakAsync(language.Code, pick => _mcp.TextToSpeechAsync(text, label, _life.Token, pick?.Voice, pick?.Model));
+                speech = await _lock.SpeakAsync(language.Code, pick => Speak(text, label, pick?.Voice, pick?.Model));
                 var locked = _lock.PickFor(language.Code);
                 if (locked != null && _locked.Add(language.Code + "|" + locked)) Debug.Log($"Hypa Stories: {label} voice locked to {locked} for this story.");
             }
             return await HypaAudioPlayer.LoadClipAsync(speech, _life.Token); // main thread: we were called from it
+        }
+
+        Task<HypaSpeech> Speak(string text, string language, string voice, string model)
+        {
+            HypaProxyClient proxy;
+            try { proxy = HypaProxyClient.FromConfig(); }
+            catch (ArgumentException e) { throw new HypaException(HypaErrorKind.MissingConfiguration, e.Message); }
+            return proxy.SpeechAsync(text, language, voice, model, _life.Token);
         }
 
         /// <summary>A line with no audio, "spoken" for about as long as it would take to say.</summary>
@@ -177,7 +184,7 @@ namespace HypaStories
                 // pause, since an instant retry of a busy or rate-limited service fails the same way
                 try
                 {
-                    await Task.Delay(RetryMs, ct);
+                    await HypaAsync.Delay(RetryMs, ct);
                     var clip = await WithCancellation(Fetch(text, language), ct);
                     if (clip != null) return new SpeechLine { Text = text, Clip = clip, Seconds = clip.length };
                 }
@@ -215,8 +222,7 @@ namespace HypaStories
             {
                 while (token == _playToken && !_skip && Time.realtimeSinceStartup < end && (line.Clip == null || _speech.isPlaying))
                 {
-                    ct.ThrowIfCancellationRequested();
-                    await Task.Yield();
+                    await HypaAsync.NextFrame(ct);
                 }
             }
             finally

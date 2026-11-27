@@ -165,7 +165,7 @@ namespace HypaStories
             else
             {
                 float visibleHeight = 2 * 1.9f * Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-                _card.localScale = Vector3.one * Mathf.Min(1f, visibleHeight * 0.9f / _size.y, visibleHeight * _camera.aspect * 0.94f / _size.x);
+                _card.localScale = Vector3.one * Mathf.Min(visibleHeight * 0.72f / _size.y, visibleHeight * _camera.aspect * 0.82f / _size.x);
             }
             float top = _size.y * 0.5f, left = -_size.x * 0.5f, right = -left;
             Kit.Panel(_card, "Card", new Vector3(0, 0, 0.05f), _size, 0.05f,
@@ -434,11 +434,15 @@ namespace HypaStories
         {
             if (_field == field) return;
             EndInput(); _field = field;
-            // Phones and tablets only: a desktop browser also reports support, but no keyboard appears, so typing would end at once.
-            if (TouchScreenKeyboard.isSupported && Application.isMobilePlatform && !UnityEngine.XR.XRSettings.isDeviceActive)
+            bool web = Application.platform == RuntimePlatform.WebGLPlayer;
+            // Web uses physical typing when available, or the system keyboard on touch devices.
+            bool useSystemKeyboard = TouchScreenKeyboard.isSupported && (web
+                ? !TouchScreenKeyboard.isInPlaceEditingAllowed
+                : Application.isMobilePlatform && !UnityEngine.XR.XRSettings.isDeviceActive);
+            if (useSystemKeyboard)
                 _nativeKeyboard = TouchScreenKeyboard.Open(Value, TouchScreenKeyboardType.Default, false, false, false, false,
                     field == 0 ? "Username" : "Display name", field == 0 ? 20 : 24);
-            else Keyboard();
+            else if (!web) Keyboard();
             UpdateNames();
         }
 
@@ -448,7 +452,7 @@ namespace HypaStories
         {
             if (_card == null) return;
             _keyboard = new GameObject("Profile keyboard").transform; _keyboard.SetParent(_card, false);
-            _keyboard.localPosition = new Vector3(_portrait ? 0f : 0.3f, -_size.y * 0.5f + 0.2f, -0.15f);
+            _keyboard.localPosition = new Vector3(_portrait ? 0f : 0.3f, -_size.y * 0.5f + 0.26f, -0.04f);
             var order = Kit.OrderBoost; Kit.OrderBoost = 20;
             try
             {

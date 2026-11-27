@@ -1,6 +1,6 @@
 {
   "projectId": "hypa-firebase",
-  "proxyBaseUrl": "",
+  "proxyBaseUrl": "https://hypa-firebase.web.app",
   "firebaseWeb": {
     "apiKey": "",
     "authDomain": "",

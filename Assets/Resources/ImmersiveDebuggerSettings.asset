@@ -17,9 +17,6 @@ MonoBehaviour:
     DebugTypes:
     - TestSceneUsage
     - UIEditorSetup
-  - AssemblyName: Meta.XR.ImmersiveDebugger.DevAgent
-    DebugTypes:
-    - Meta.XR.ImmersiveDebugger.DevAgent.DictationController
   - AssemblyName: Meta.XR.MultiplayerBlocks.Shared
     DebugTypes:
     - Meta.XR.MultiplayerBlocks.Shared.CustomMatchmaking

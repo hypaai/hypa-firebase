@@ -31,4 +31,4 @@ export interface Prepared {
   cost: Cost;
   run(): Promise<Record<string, unknown>>;
 }
-export type Route = (body: Record<string, unknown>, hypa: HypaApi) => Prepared;
+export type Route = (body: Record<string, unknown>, hypa: HypaApi) => Prepared | Promise<Prepared>;

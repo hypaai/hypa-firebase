@@ -1,28 +1,32 @@
 import functionsTest from "firebase-functions-test";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ROOMS_MAX_AGE_MS } from "../src/config";
-import { deleteStaleRooms, type RoomsDb } from "../src/services/rooms";
+import { deleteStaleRooms } from "../src/services/rooms";
 
-/** An in-memory /rooms honouring orderByChild/endAt/limitToFirst like the Admin SDK. */
+/** An in-memory /rooms honouring orderByChild/startAt/endBefore/limitToFirst like the Admin SDK. */
 function fakeDb(rooms: Record<string, any>) {
-  const db: RoomsDb = {
+  const db = {
     ref: () => ({
       orderByChild: (field: string) => ({
-        endAt: (max: number) => ({
-          limitToFirst: (n: number) => ({
-            get: async () => {
-              const keys = Object.keys(rooms)
-                .filter((k) => typeof rooms[k]?.[field] === "number" && rooms[k][field] <= max)
-                .sort((a, b) => rooms[a][field] - rooms[b][field])
-                .slice(0, n);
-              return {
-                exists: () => keys.length > 0,
-                forEach: (cb: (c: { key: string }) => void) => {
-                  keys.forEach((key) => cb({ key }));
-                  return false;
-                },
-              };
-            },
+        startAt: (min: number) => ({
+          endBefore: (max: number) => ({
+            limitToFirst: (n: number) => ({
+              get: async () => {
+                const keys = Object.keys(rooms)
+                  .filter(
+                    (k) => typeof rooms[k]?.[field] === "number" && rooms[k][field] >= min && rooms[k][field] < max,
+                  )
+                  .sort((a, b) => rooms[a][field] - rooms[b][field])
+                  .slice(0, n);
+                return {
+                  exists: () => keys.length > 0,
+                  forEach: (cb: (c: { key: string }) => void) => {
+                    keys.forEach((key) => cb({ key }));
+                    return false;
+                  },
+                };
+              },
+            }),
           }),
         }),
       }),
@@ -31,7 +35,7 @@ function fakeDb(rooms: Record<string, any>) {
       },
     }),
   };
-  return db;
+  return db as unknown as Parameters<typeof deleteStaleRooms>[0];
 }
 
 // hoisted: vi.mock runs before imports, so the shared state it closes over must be hoisted too
@@ -48,9 +52,11 @@ describe("rooms cleanup", () => {
       exactly: { createdAt: NOW - ROOMS_MAX_AGE_MS },
       fresh: { createdAt: NOW - 60_000 },
       nodate: { host: "x" },
+      boolean: { createdAt: false },
+      string: { createdAt: "1" },
     };
-    expect(await deleteStaleRooms(fakeDb(rooms), NOW)).toBe(3);
-    expect(Object.keys(rooms).sort()).toEqual(["fresh", "nodate"]);
+    expect(await deleteStaleRooms(fakeDb(rooms), NOW)).toBe(2);
+    expect(Object.keys(rooms).sort()).toEqual(["boolean", "exactly", "fresh", "nodate", "string"]);
   });
 
   it("works through more than one batch", async () => {

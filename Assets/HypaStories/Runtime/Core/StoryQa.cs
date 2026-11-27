@@ -28,8 +28,7 @@ namespace HypaStories
 
     /// <summary>
     /// Stand-in for <see cref="ChatStoryQa"/> (canned, spoiler-guarded answers with simulated latency), ported from the prototype's
-    /// qa.js: tests the interaction loop without the network. Pick it with StoryApp's qaMode: "stub", "slow" (about 3 s to the first
-    /// sentence: exercises the second filler) or "offline" (every call fails).
+    /// qa.js. Its answers are the saved answers used offline.
     /// </summary>
     public sealed class StubStoryQa : IStoryQa
     {
@@ -260,11 +259,11 @@ namespace HypaStories
         public async Task AnswerAsync(QaRequest req, Action<string, int, bool> onSentence, CancellationToken ct)
         {
             if (Mode == "offline") throw new InvalidOperationException("offline");
-            await Task.Delay(Mode == "slow" ? 3200 : 450 + _rng.Next(250), ct); // chat: time to the first sentence
+            await HypaCore.HypaAsync.Delay(Mode == "slow" ? 3200 : 450 + _rng.Next(250), ct); // chat: time to the first sentence
             var sentences = AnswerFor(req.Question, req.LineIndex, req.Language?.Code, req.StoryId);
             for (var i = 0; i < sentences.Length; i++)
             {
-                if (i > 0) await Task.Delay(260, ct);
+                if (i > 0) await HypaCore.HypaAsync.Delay(260, ct);
                 onSentence(sentences[i], i, i == sentences.Length - 1);
             }
         }

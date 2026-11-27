@@ -14,6 +14,7 @@ namespace HypaStories
         public string localId;
         public string username = "";
         public string displayName = "";
+        public long createdAt, savedAt;
 
         // Choices index into ProfileCatalog. Sliders run 0..1 with 0.5 the average.
         public int skin = 4, eyeColor, brows = 1, hairStyle, hairColor;
@@ -68,6 +69,8 @@ namespace HypaStories
     public static class StoryProfileStore
     {
         const string Key = "hypa.stories.local-profile.v1";
+
+        public static event Action<StoryProfile> Saved;
         public static StoryProfile Load()
         {
             if (!PlayerPrefs.HasKey(Key)) return null;
@@ -83,7 +86,7 @@ namespace HypaStories
             catch (ArgumentException) { return null; }
         }
 
-        public static void Save(StoryProfile profile)
+        public static void Save(StoryProfile profile, bool byPlayer = true)
         {
             var error = StoryProfile.UsernameError(profile.username);
             if (error != null) throw new ArgumentException(error);
@@ -91,9 +94,17 @@ namespace HypaStories
             saved.Migrate();
             saved.Normalize();
             if (!Guid.TryParse(saved.localId, out _)) saved.localId = Guid.NewGuid().ToString("D");
+            if (byPlayer)
+            {
+                saved.savedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                if (saved.createdAt == 0) saved.createdAt = saved.savedAt;
+            }
             PlayerPrefs.SetString(Key, JsonUtility.ToJson(saved));
             PlayerPrefs.Save();
             profile.localId = saved.localId;
+            profile.createdAt = saved.createdAt;
+            profile.savedAt = saved.savedAt;
+            if (byPlayer) Saved?.Invoke(saved.Copy());
         }
     }
 }

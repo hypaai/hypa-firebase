@@ -6,17 +6,19 @@ describe("emulatorSettings", () => {
 
   it("applies the .env.local settings inside the emulator", () => {
     expect(emulatorSettings({ FUNCTIONS_EMULATOR: "true", ...fake })).toEqual({
+      enabled: true,
       skipAppCheck: true,
       hypaApiBase: "http://127.0.0.1:9911",
     });
   });
 
   it("ignores them when deployed (no FUNCTIONS_EMULATOR), so App Check stays on and the key only goes to Hypa", () => {
-    expect(emulatorSettings(fake)).toEqual({ skipAppCheck: false, hypaApiBase: DEFAULT_HYPA_API_BASE });
+    expect(emulatorSettings(fake)).toEqual({ enabled: false, skipAppCheck: false, hypaApiBase: DEFAULT_HYPA_API_BASE });
   });
 
   it("needs each setting to be asked for explicitly", () => {
     expect(emulatorSettings({ FUNCTIONS_EMULATOR: "true" })).toEqual({
+      enabled: true,
       skipAppCheck: false,
       hypaApiBase: DEFAULT_HYPA_API_BASE,
     });

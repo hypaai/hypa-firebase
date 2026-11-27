@@ -45,8 +45,8 @@ namespace HypaFirebase.Tests
     sealed class MemoryKeyValueStore : IKeyValueStore
     {
         public readonly Dictionary<string, string> Values = new Dictionary<string, string>();
-        public string Get(string key) => Values.TryGetValue(key, out var v) ? v : null;
-        public void Set(string key, string value) => Values[key] = value;
-        public void Remove(string key) => Values.Remove(key);
+        public string Get(string key) { lock (Values) return Values.TryGetValue(key, out var v) ? v : null; }
+        public void Set(string key, string value) { lock (Values) Values[key] = value; }
+        public void Remove(string key) { lock (Values) Values.Remove(key); }
     }
 }
