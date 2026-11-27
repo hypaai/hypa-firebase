@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
@@ -37,9 +38,13 @@ namespace HypaCore.Hybrid
         public string name;
         /// <summary>See <see cref="Platforms"/>.</summary>
         public string platform;
-        /// <summary>0 (the host) or 1.</summary>
+        /// <summary>0 or 1. Seat 0 is the host's when the room is made; a seat stays with its player when the room is handed over.</summary>
         public int seat;
-        /// <summary>Cleared by the server when the connection drops (<c>onDisconnect</c>).</summary>
+        /// <summary>
+        /// Cleared by the server when the connection drops (<c>onDisconnect</c>). Where there is no <c>onDisconnect</c> (REST) the
+        /// implementation keeps <c>players/{uid}/lastSeen</c> fresh, and reports a player whose <c>lastSeen</c> is more than
+        /// <see cref="RoomPresence.TimeoutMs"/> old as offline here.
+        /// </summary>
         public bool online;
         public bool handUp;
     }
@@ -63,6 +68,62 @@ namespace HypaCore.Hybrid
 
         public static float[] Pack(float x, float y, float z, float qx, float qy, float qz, float qw) => new[] { x, y, z, qx, qy, qz, qw };
         public static bool Valid(float[] part) => part != null && (part.Length == 0 || part.Length == Length);
+    }
+
+    /// <summary>
+    /// <c>rooms/{code}/answers/{n}</c>: one sentence of the answer to a player's question, written by the player whose hand is up (the
+    /// asker), so the other player can speak it too. <c>n</c> counts up through the room; the implementation picks it. The question
+    /// itself is never sent.
+    /// </summary>
+    [Serializable]
+    public sealed class RoomAnswer
+    {
+        /// <summary>Who asked and answered (the sender).</summary>
+        public string uid;
+        /// <summary>Which question of the room's story this answers, from 0.</summary>
+        public int q;
+        /// <summary>This sentence's place in the answer, from 0.</summary>
+        public int i;
+        /// <summary>One sentence, 1 to <see cref="MaxTextLength"/> characters.</summary>
+        public string text;
+        /// <summary>True on the answer's last sentence.</summary>
+        public bool last;
+
+        public const int MaxTextLength = 1000;
+    }
+
+    /// <summary>How long a player may stay silent before the room treats them as gone.</summary>
+    public static class RoomPresence
+    {
+        /// <summary>A player with no heartbeat (<c>lastSeen</c>) for this long is offline; the rules let the next player take the room then.</summary>
+        public const long TimeoutMs = 10_000;
+        /// <summary>How often a client without <c>onDisconnect</c> refreshes <c>lastSeen</c>.</summary>
+        public const long HeartbeatMs = 3_000;
+    }
+
+    /// <summary>Who takes the room when its host goes (docs/contracts.md, section 4). The rules accept any online player, the first write wins.</summary>
+    public static class RoomHandover
+    {
+        /// <summary>
+        /// The player who should take the room: the online player other than the host with the lowest seat, or null if there is none.
+        /// Every client works this out the same way, so the right one tries first. A host that is not in <paramref name="players"/>
+        /// or is offline is gone.
+        /// </summary>
+        public static string NextHost(IReadOnlyDictionary<string, RoomPlayer> players, string hostUid)
+        {
+            string next = null;
+            var seat = int.MaxValue;
+            foreach (var pair in players)
+            {
+                if (pair.Key == hostUid || pair.Value == null || !pair.Value.online) continue;
+                if (pair.Value.seat < seat || (pair.Value.seat == seat && string.CompareOrdinal(pair.Key, next) < 0)) { next = pair.Key; seat = pair.Value.seat; }
+            }
+            return next;
+        }
+
+        /// <summary>True when the host is missing from the room or offline, so another player may take it.</summary>
+        public static bool HostGone(IReadOnlyDictionary<string, RoomPlayer> players, string hostUid)
+            => hostUid != null && (!players.TryGetValue(hostUid, out var host) || host == null || !host.online);
     }
 
     /// <summary><c>rooms/{code}/game/{uid}</c>.</summary>
@@ -122,7 +183,7 @@ namespace HypaCore.Hybrid
         public static bool IsExpired(long createdAtMs, long serverNowMs) => serverNowMs - createdAtMs > LifetimeMs;
     }
 
-    public enum RoomError { NotFound, Full, Expired, NotHost, NotInRoom }
+    public enum RoomError { NotFound, Full, Expired, NotHost, NotInRoom, NotYourTurn }
 
     public sealed class RoomException : Exception
     {

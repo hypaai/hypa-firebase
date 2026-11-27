@@ -123,3 +123,14 @@ On an iPhone with Apple Intelligence, answers come from Apple's on-device model;
 - A browser microphone at 16 kHz for `MicListener`.
 - On the web, the on-device model status is shown on Home, and the help card has a section on on-device AI.
 - Details: [web-bridge.md](web-bridge.md).
+
+## G09 (HYP-204): Story Circle, contract and rules first
+
+Work in progress; the room itself is not built yet.
+
+- Handover: when the host goes (leaves, drops, or stops sending a heartbeat for 10 s) the next online player takes the room and the story carries on from the same clock. The ticket's scope said the room closes and its Done-when said the guest becomes host; handover is what was chosen. `docs/contracts.md` section 4 and `firebase/database.rules.json` now say so, and `RoomHandover` picks who takes it.
+- `rooms/{code}/answers/{n}`: an answer one sentence at a time, written by the player whose hand is up, so the other player hears it after the first sentence. The ticket left `{n}` open. `RoomAnswer`, `IRoomSync.SendAnswerAsync` and `AnswerReceived`.
+- `players/{uid}/lastSeen`: the heartbeat for clients with no `onDisconnect` (REST on Quest and phones). `RoomPresence`.
+- `FakeRoomSync` does handover and answers, so the room logic can be built and tested before any real service.
+- Tests: 9 more rules tests on the Realtime Database emulator (26 in all); EditMode tests in `HybridRoomsTests`.
+- Decided with the ticket's owner: one `RestRoomSync` for Quest, Android and iOS (the Firebase Unity SDK is not in the project, so the ticket's `NativeRoomSync` cannot be built), and `WebRoomSync` for the web.

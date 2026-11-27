@@ -122,14 +122,15 @@ routes/{uid}/events/{eventId}    { kind: "answer"|"translate", route: "onDevice"
 ```
 rooms/{code}                 { host, storyId, language, state: "lobby"|"story"|"game", createdAt }
 rooms/{code}/clock           { lineIndex, startedAtServerMs, paused }          // host writes
-rooms/{code}/players/{uid}   { name, platform, seat: 0|1, online, handUp }     // onDisconnect → online = false
+rooms/{code}/players/{uid}   { name, platform, seat: 0|1, online, handUp, lastSeen? } // onDisconnect → online = false
 rooms/{code}/poses/{uid}     { h: [x,y,z,qx,qy,qz,qw], l: [...], r: [...], t } // ≤ 10 Hz, head + hands; an untracked hand is left out
+rooms/{code}/answers/{n}     { uid, q, i, text, last? }                         // one sentence of an answer; n counts up from 0
 rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
 ```
 
 - `IRoomSync` (`Interfaces.cs`) is the contract G09 implements; the types are in `Rooms.cs`. Create a room (you take seat 0), join
-  (seat 1; `RoomException` NotFound, Full or Expired), leave (the host leaving closes the room), host-only state and clock, your own
-  entry and hand, poses (fire and forget, at most 10 a second), game results, and events for each. `ServerTimeMs` estimates the
+  (seat 1; `RoomException` NotFound, Full or Expired), leave, host-only state and clock, your own
+  entry and hand, poses (fire and forget, at most 10 a second), answer sentences, game results, and events for each. `ServerTimeMs` estimates the
   server clock (`.info/serverTimeOffset`); `RoomClock.ElapsedMs(serverNow)` says how far into the line both players are.
 - `FakeRoomSync` clients on the same `FakeRoomServer` see each other like two devices (tests: `HybridRoomsTests`).
 - Codes: `RoomCode.New()`, 5 letters from `BCDFGHJKLMNPQRSTVWXZ` (no vowels, so no words; no Y), shown and compared in upper case.
@@ -139,10 +140,35 @@ rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
     Its `clock`, `poses` and `game` are visible only to players in the room. Listen to these children separately: the room node
     as a whole is not readable.
   - The host creates (with a valid code) and deletes the room, and alone changes `storyId`, `language`, `state` and `clock`.
-    `host` and `createdAt` never change.
+    `createdAt` never changes. `host` changes only by handover (below).
   - Each player writes only their own `players`, `poses` and `game` entries, and `poses` and `game` only once seated. The host
     cannot overwrite other players' entries. Create the room first, then your `players` entry.
+  - `answers/{n}`: read only by players in the room. A player whose `handUp` is true adds a sentence in their own name
+    (`uid` = theirs, `n` 0–9999, text 1–1000 characters); a sentence already there is never rewritten or deleted, so a line
+    one device has started to speak cannot change. The question is never stored.
   - Every node accepts only its contract fields and types.
+
+**Handover.** When the host goes, the next player takes the room and the story carries on from the same `clock`
+(`lineIndex` + `startedAtServerMs`), so nothing restarts.
+
+- The host is *gone* when their `players` entry is missing, or `online` is false, or `lastSeen` is more than 10 s old
+  (`RoomPresence.TimeoutMs`). A host who leaves while another player is online hands the room over; the room closes only
+  when nobody else is online. A room whose host is lost with nobody to take it is deleted by `cleanupRooms` after 2 hours.
+- The new host is the online player, other than the old host, with the lowest seat (`RoomHandover.NextHost`; for two players, the
+  guest). Every client works this out the same way and the right one writes `host` = their own uid. The rules accept any
+  online player of the room, only for themselves and only while the host is gone; if two try, the first write wins and the
+  other is refused. Seats do not move: only `host` does.
+- The implementation does this on its own when it sees the host gone (a `RoomChanged` carries the new `host`, and `IsHost`
+  follows). The old host who comes back rejoins as a guest.
+- `lastSeen` (server time, never in the future) is for clients with no `onDisconnect`, such as REST on Quest and phones: they
+  refresh it every `RoomPresence.HeartbeatMs` (3 s) with `{".sv": "timestamp"}`. A client that writes it must keep it fresh.
+  The SDK clients may leave it out and rely on `onDisconnect`.
+
+**Answers.** The player whose hand is up asks; their device answers (G05) and writes the answer a sentence at a time as the
+sentences come, so the other player starts to hear it after the first one, not after the whole answer. `n` is a count through
+the room, `q` the question number and `i` the sentence's place in it. Each device speaks the text itself. Only sentences added
+after you joined reach you (`IRoomSync.AnswerReceived`), and the sender is not sent their own. Both players raising a hand at
+once: the lower seat's question is taken.
 
 ## 5. Remote Config keys
 

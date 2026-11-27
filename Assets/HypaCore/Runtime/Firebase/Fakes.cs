@@ -73,18 +73,33 @@ namespace HypaCore.Hybrid
         {
             public RoomInfo Info;
             public RoomClock Clock;
+            public int Answers;
             public readonly Dictionary<string, RoomPlayer> Players = new Dictionary<string, RoomPlayer>();
             public readonly List<FakeRoomSync> Clients = new List<FakeRoomSync>();
         }
 
         internal readonly Dictionary<string, Room> Rooms = new Dictionary<string, Room>();
 
-        /// <summary>For tests: the player's connection drops, as <c>onDisconnect</c> would report it.</summary>
+        /// <summary>
+        /// For tests: the player's connection drops, as <c>onDisconnect</c> would report it. If it was the host, the next player
+        /// takes the room, as the real clients do (<see cref="RoomHandover"/>).
+        /// </summary>
         public void Disconnect(string code, string uid)
         {
             if (!Rooms.TryGetValue(code, out var room) || !room.Players.TryGetValue(uid, out var p)) return;
             p.online = false;
             foreach (var c in room.Clients.ToArray()) c.RaisePlayers(room);
+            if (room.Info.host == uid) HandOver(room);
+        }
+
+        /// <summary>Gives the room to the next online player. False (and nothing changes) if there is none.</summary>
+        internal bool HandOver(Room room)
+        {
+            var next = RoomHandover.NextHost(room.Players, room.Info.host);
+            if (next == null) return false;
+            room.Info.host = next;
+            foreach (var c in room.Clients.ToArray()) c.RaiseRoom(room);
+            return true;
         }
 
         /// <summary>For tests: what the scheduled cleanup does to rooms older than <see cref="RoomCode.LifetimeMs"/>.</summary>
@@ -125,6 +140,7 @@ namespace HypaCore.Hybrid
         public event Action<RoomClock> ClockChanged;
         public event Action<IReadOnlyDictionary<string, RoomPlayer>> PlayersChanged;
         public event Action<string, PoseFrame> PoseReceived;
+        public event Action<RoomAnswer> AnswerReceived;
         public event Action<string, GameResult> GameResultReceived;
         public event Action Closed;
 
@@ -173,9 +189,10 @@ namespace HypaCore.Hybrid
         public Task LeaveAsync()
         {
             if (Code == null || !_server.Rooms.TryGetValue(Code, out var room)) { Code = null; return Task.CompletedTask; }
-            if (room.Info.host == _uid) { _server.Close(Code); return Task.CompletedTask; }
+            var wasHost = room.Info.host == _uid;
             room.Players.Remove(_uid);
             room.Clients.Remove(this);
+            if (wasHost && !_server.HandOver(room)) { room.Clients.Add(this); _server.Close(Code); return Task.CompletedTask; } // nobody is left
             RaiseClosed();
             foreach (var c in room.Clients.ToArray()) c.RaisePlayers(room);
             return Task.CompletedTask;
@@ -216,6 +233,18 @@ namespace HypaCore.Hybrid
             foreach (var c in room.Clients.ToArray()) if (c != this) c.PoseReceived?.Invoke(_uid, pose);
         }
 
+        public Task SendAnswerAsync(RoomAnswer sentence)
+        {
+            var room = Mine();
+            if (sentence == null || string.IsNullOrEmpty(sentence.text) || sentence.text.Length > RoomAnswer.MaxTextLength)
+                throw new ArgumentException("An answer sentence is 1 to " + RoomAnswer.MaxTextLength + " characters.");
+            if (!room.Players[_uid].handUp) throw new RoomException(RoomError.NotYourTurn, "Raise your hand before answering.");
+            room.Answers++;
+            var sent = new RoomAnswer { uid = _uid, q = sentence.q, i = sentence.i, text = sentence.text, last = sentence.last };
+            foreach (var c in room.Clients.ToArray()) if (c != this) c.AnswerReceived?.Invoke(Copy(sent));
+            return Task.CompletedTask;
+        }
+
         public Task SubmitGameAsync(GameResult result)
         {
             var room = Mine();
@@ -231,6 +260,8 @@ namespace HypaCore.Hybrid
         }
 
         internal void RaiseClosed() { Code = null; Closed?.Invoke(); }
+
+        internal void RaiseRoom(FakeRoomServer.Room room) => RoomChanged?.Invoke(Copy(room.Info));
 
         FakeRoomServer.Room Mine()
         {
@@ -248,6 +279,7 @@ namespace HypaCore.Hybrid
         static RoomPlayer Seat(RoomPlayer me, int seat) => new RoomPlayer { name = me?.name, platform = me?.platform, seat = seat, online = true, handUp = me != null && me.handUp };
         static RoomPlayer Copy(RoomPlayer p) => new RoomPlayer { name = p.name, platform = p.platform, seat = p.seat, online = p.online, handUp = p.handUp };
         static RoomInfo Copy(RoomInfo i) => new RoomInfo { host = i.host, storyId = i.storyId, language = i.language, state = i.state, createdAt = i.createdAt };
+        static RoomAnswer Copy(RoomAnswer a) => new RoomAnswer { uid = a.uid, q = a.q, i = a.i, text = a.text, last = a.last };
         static RoomClock Copy(RoomClock c) => new RoomClock { lineIndex = c.lineIndex, startedAtServerMs = c.startedAtServerMs, paused = c.paused };
     }
 
