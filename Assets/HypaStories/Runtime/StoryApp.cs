@@ -1983,7 +1983,8 @@ namespace HypaStories
                 if (showUi) SnapPanels();
             }
             // The list and player may follow an elder session; Gather round still belongs to the clearing.
-            _splash.Prompt.gameObject.SetActive(!far && _splash.Brand.gameObject.activeSelf);
+            // shown with the floating title, and under the Story Circle lobby (which fades the title away)
+            _splash.Prompt.gameObject.SetActive(!far && (_splash.Brand.gameObject.activeSelf || (_circleView != null && _circleView.Shown)));
             // a place's row, at its door
             var elderUiOpen = _elderSession && (_screen != Screen.Splash || _busy);
             foreach (var d in _doorRows)
