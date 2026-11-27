@@ -11,7 +11,7 @@ namespace HypaCore.Hybrid.Web
     /// <summary>
     /// The Web implementation of the G01 services (WebGL builds), on the Firebase JS SDK through <see cref="WebBridge"/>.
     /// The web config comes from <c>firebaseWeb</c> in <c>hypa_client_config_local.json</c>, else <c>hypa_client_config.json</c> (<see cref="HypaConfig.ClientConfig"/>). While it
-    /// is blank the factory returns null and the app plays on the Fakes. Rooms stay on the Fake until <c>WebRoomSync</c> (G09) lands.
+    /// is blank the factory returns null and the app plays on the Fakes. Rooms use <see cref="WebRoomSync"/> when the config has a <c>databaseURL</c>, else the Fake.
     /// On localhost the build uses the Firebase Emulator Suite instead (project <see cref="EmulatorProject"/>); add
     /// <c>?firebase=live</c> to the URL to use the real project there.
     /// </summary>
@@ -46,9 +46,12 @@ namespace HypaCore.Hybrid.Web
             // Firebase starts in the background. Calls made before it is ready wait in JS; the story never waits on it.
             _ = Init(config);
             var flags = new WebRemoteFlags();
+            var auth = new WebAuth();
+            var rooms = config["firebase"]?["databaseURL"] != null ? (IRoomSync)new WebRoomSync(auth) : new FakeRoomSync();
             return new HybridServices
             {
-                Auth = new WebAuth(),
+                Auth = auth,
+                Rooms = rooms,
                 Progress = new WebProgressStore(),
                 Profiles = new WebProfileStore(),
                 Flags = flags,
@@ -75,7 +78,11 @@ namespace HypaCore.Hybrid.Web
         /// <summary>Init arguments for the emulators: placeholder app values (the emulators accept any) and no App Check.</summary>
         public static JObject EmulatorConfig() => new JObject
         {
-            ["firebase"] = new JObject { ["apiKey"] = "demo-key", ["projectId"] = EmulatorProject, ["appId"] = "demo-app" },
+            ["firebase"] = new JObject
+            {
+                ["apiKey"] = "demo-key", ["projectId"] = EmulatorProject, ["appId"] = "demo-app",
+                ["databaseURL"] = "https://" + EmulatorProject + "-default-rtdb.firebaseio.com", // the emulator's default instance
+            },
             ["emulators"] = true,
         };
 

@@ -39,6 +39,19 @@ namespace HypaCore.Tests
             Assert.IsNull(RoomCode.Normalize(null));
         }
 
+        [Test] public void ShareLinks_CarryTheCode_BothWays()
+        {
+            Assert.AreEqual("https://hypa-firebase.web.app/circle/BCDFG", RoomCode.Link(null, "BCDFG"));
+            Assert.AreEqual("http://localhost:5002/circle/BCDFG", RoomCode.Link(RoomCode.SiteOf("http://localhost:5002/index.html?x=1"), "BCDFG"));
+            Assert.AreEqual("BCDFG", RoomCode.FromLink("https://hypa-firebase.web.app/circle/bcdfg"));
+            Assert.AreEqual("BCDFG", RoomCode.FromLink("https://hypa-firebase.web.app/circle/BCDFG/"));
+            Assert.AreEqual("BCDFG", RoomCode.FromLink("http://localhost:5002/?circle=BCDFG"));
+            Assert.IsNull(RoomCode.FromLink("https://hypa-firebase.web.app/"));
+            Assert.IsNull(RoomCode.FromLink("https://hypa-firebase.web.app/circle/HELLO"), "vowels are never in a code");
+            Assert.IsNull(RoomCode.FromLink(""));
+            Assert.IsNull(RoomCode.SiteOf("file:///data/app/index.html"));
+        }
+
         [Test] public void RoomCode_ExpiresAfterTwoHours()
         {
             Assert.IsFalse(RoomCode.IsExpired(0, RoomCode.LifetimeMs));

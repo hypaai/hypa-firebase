@@ -189,6 +189,28 @@ namespace HypaCore.Hybrid
         }
 
         public static bool IsExpired(long createdAtMs, long serverNowMs) => serverNowMs - createdAtMs > LifetimeMs;
+
+        /// <summary>Where a share link points when the app is not itself a web page (the web build on Firebase Hosting).</summary>
+        public const string DefaultSite = "https://hypa-firebase.web.app";
+
+        /// <summary>The share link for a room: <c>{site}/circle/ABCDE</c>.</summary>
+        public static string Link(string site, string code) => (string.IsNullOrEmpty(site) ? DefaultSite : site.TrimEnd('/')) + "/circle/" + code;
+
+        /// <summary>The room code in a share link (<c>…/circle/ABCDE</c>, or <c>?circle=ABCDE</c>), or null.</summary>
+        public static string FromLink(string url)
+        {
+            if (string.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+            var path = uri.AbsolutePath.TrimEnd('/');
+            var i = path.LastIndexOf("/circle/", StringComparison.OrdinalIgnoreCase);
+            if (i >= 0) return Normalize(path.Substring(i + "/circle/".Length));
+            foreach (var part in uri.Query.TrimStart('?').Split('&'))
+                if (part.StartsWith("circle=", StringComparison.OrdinalIgnoreCase)) return Normalize(Uri.UnescapeDataString(part.Substring(7)));
+            return null;
+        }
+
+        /// <summary>The site of a web page's URL (scheme and host), for a share link from the page itself.</summary>
+        public static string SiteOf(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https")
+            ? uri.GetLeftPart(UriPartial.Authority) : null;
     }
 
     public enum RoomError { NotFound, Full, Expired, NotHost, NotInRoom, NotYourTurn }

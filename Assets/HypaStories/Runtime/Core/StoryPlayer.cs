@@ -13,7 +13,7 @@ namespace HypaStories
     /// spoken (it waits at the line's start until its audio starts, and never runs past the next line's start).
     /// Pause freezes both. Interrupt / resume (a question) restarts the interrupted line from its beginning.
     /// </summary>
-    public sealed class StoryPlayer : INarration
+    public sealed class StoryPlayer : INarration, ICircleNarration
     {
         readonly StoryVoice _voice;
         /// <summary>
@@ -53,6 +53,21 @@ namespace HypaStories
         public StoryLanguage LineLanguage(int i) => Story != null && i >= 0 && i < Caps.Length ? Spoken(i) : null;
         public string LineText(int i) => Story != null && i >= 0 && i < Caps.Length ? Text(i) : "";
         float _hold = float.PositiveInfinity, _lastT;
+
+        // ---------- Story Circle (G09) ----------
+        /// <summary>
+        /// Awaited when a line's audio is ready, just before it plays (<see cref="CircleSession"/>: the host announces the line and
+        /// both devices wait for the agreed start). Null outside a circle.
+        /// </summary>
+        public Func<int, CancellationToken, Task> LineGate { get; set; }
+        /// <summary>A circle's guest: play only the line the host's clock names, then wait at its end for the next one.</summary>
+        public bool Following { get; set; }
+        /// <summary>A line is being fetched, waited for or spoken.</summary>
+        public bool Narrating { get; private set; }
+        /// <summary>The story was paused on this device (the pause button, or the headset going to sleep). Not raised for a question.</summary>
+        public event Action UserPaused;
+        bool ICircleNarration.Paused => Paused;
+        bool ICircleNarration.Ended => Ended;
 
         /// <summary>Thunder claps to play this frame (lightning flashes crossed by the clock).</summary>
         public event Action Thunder;
@@ -113,6 +128,7 @@ namespace HypaStories
             var token = ++_ttsToken;
             var ct = _tts.Token;
             _hold = Caps[idx].At; // held at the line's start while it settles, not at the last line's end
+            Narrating = true;
             try
             {
                 if (settleMs > 0)
@@ -129,6 +145,11 @@ namespace HypaStories
                     WaitingFor = i; WaitingSince = HypaTrace.Now;
                     var line = await PrepareLine(Text(i), Spoken(i), ct);
                     if (token != _ttsToken) return;
+                    if (LineGate != null)
+                    {
+                        await LineGate(i, ct);
+                        if (token != _ttsToken) return;
+                    }
                     WaitingFor = -1;
                     if (HypaTrace.Enabled)
                         HypaTrace.Add("player", $"line {i + 1} {(line.Clip != null ? $"ready, {line.Clip.length:0.0}s clip" : "SILENT")} after {HypaTrace.Now - WaitingSince:0.0}s wait");
@@ -136,6 +157,7 @@ namespace HypaStories
                     var next = i + 1 < Caps.Length ? Caps[i + 1].At : Caps[i].Until + 1f;
                     await _voice.PlayAsync(line, _ => _hold = next - 0.01f, ct);
                     if (token != _ttsToken) return;
+                    if (Following) return; // the host's clock says when the next line starts
                     await HypaAsync.Delay(300, ct);
                 }
                 if (token != _ttsToken) return;
@@ -143,6 +165,7 @@ namespace HypaStories
                 T = Duration;
             }
             catch (OperationCanceledException) { }
+            finally { if (token == _ttsToken) Narrating = false; }
         }
 
         // The fetch carries on after a timeout, so the line's audio is cached for the next time it is read.
@@ -157,7 +180,7 @@ namespace HypaStories
 
         void StopTts()
         {
-            WaitingFor = -1; Settling = false;
+            WaitingFor = -1; Settling = false; Narrating = false;
             _ttsToken++;
             _tts.Cancel();
             _tts.Dispose();
@@ -206,6 +229,24 @@ namespace HypaStories
             if (!Live || Paused || Asking) return;
             Paused = true;
             StopTts();
+            UserPaused?.Invoke();
+        }
+
+        /// <summary>A circle's guest: the story is open and waits, silent, for the host's clock to name a line.</summary>
+        public void StartFollowing()
+        {
+            StopTts();
+            T = _lastT = 0f;
+            Running = true; Paused = Asking = Ended = false;
+            _hold = Caps.Length > 0 ? Caps[0].At : 0f;
+        }
+
+        /// <summary>A circle's guest: play line <paramref name="lineIndex"/> now (through <see cref="LineGate"/>), clearing a pause.</summary>
+        public void FollowTo(int lineIndex)
+        {
+            if (Story == null) return;
+            Running = true; Asking = false; Paused = false; Ended = false;
+            Seek(Caps[Mathf.Clamp(lineIndex, 0, Caps.Length - 1)].At + 0.02f);
         }
 
         public void Stop()
@@ -248,6 +289,13 @@ namespace HypaStories
 
         public void Resume(int lineIndex)
         {
+            if (Following)
+            {
+                // a circle's guest waits for the host's clock (CircleSession calls FollowTo) instead of starting the line itself
+                Asking = false; Paused = true;
+                T = _lastT = Caps[Mathf.Clamp(lineIndex, 0, Caps.Length - 1)].At;
+                return;
+            }
             Asking = false; Paused = false;
             Seek(Caps[Mathf.Clamp(lineIndex, 0, Caps.Length - 1)].At + 0.02f);
         }

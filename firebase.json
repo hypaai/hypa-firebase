@@ -119,6 +119,10 @@
           "functionId": "hypa",
           "region": "us-central1"
         }
+      },
+      {
+        "source": "/circle/**",
+        "destination": "/index.html"
       }
     ]
   },

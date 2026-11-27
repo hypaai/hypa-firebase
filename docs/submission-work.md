@@ -135,3 +135,15 @@ Work in progress; the room itself is not built yet.
 - Tests: 9 more rules tests on the Realtime Database emulator (26 in all); EditMode tests in `HybridRoomsTests`.
 - Review fixes: `RoomSeats.MaxPlayers` (2); the contract now says how REST measures server time (no `.info/serverTimeOffset` there), how `n` is picked and retried, that the asker lowers their hand only after the last sentence, that presence never removes the room on disconnect, and that the lower seat wins a tie on the clients, not in the rules. `AGENTS.md` and `Assets/HypaMultiplayer/README.md` no longer say multiplayer is undecided.
 - Decided with the ticket's owner: one `RestRoomSync` for Quest, Android and iOS (the Firebase Unity SDK is not in the project, so the ticket's `NativeRoomSync` cannot be built), and `WebRoomSync` for the web.
+
+## G09 (HYP-204), part 2: the Story Circle itself
+
+How to run it on devices and check each Done-when item: `docs/story-circle.md`.
+
+- `CircleSession` (`Assets/HypaStories/Runtime/Circle/`): the host announces each line 0.5 s ahead in server time and both devices start it then; a late or returning guest starts at the current line; the host's pause pauses the guest. Raised hands: the lowest seat with a hand up has the turn, the storyteller turns to the asker, both stop, the asker's device answers and shares it sentence by sentence, the other device speaks it, then "Now, where was I…" and both carry on. When the room passes to the guest it carries the story on. Each line's start is logged in server time on both devices, to measure the ~300 ms target.
+- Small hooks: `StoryPlayer` (`LineGate`, `Following`, `FollowTo`, `StartFollowing`, `UserPaused`), `AskFlow` (`Sentence`, `Ended`), `Storyteller.AttendTarget`.
+- `RestRoomSync` (Quest, Android, iOS): seven event streams, a 3 s heartbeat for presence, the server clock measured from it, handover, answer numbering with retry. `RestRealtimeDatabase` writes now return what was stored.
+- `WebRoomSync` and `room*` in `firebase-bridge.js` (web): the JS SDK's Realtime Database with `onDisconnect` and `.info/serverTimeOffset`, the emulator on localhost.
+- Lobby and code pad (`CircleView`), "Story Circle" on Home and at the campfire, share links `…/circle/ABCDE` (Hosting rewrite, `<base>` in the web page), the other player's figure (`CirclePeer`, `PoseTrack`), head and hands sent 10 times a second.
+- Tests: `CircleSessionTests`, `RestRoomSyncTests`, share links in `HybridRoomsTests`.
+- Not yet run on a device or against the real database: that needs the Realtime Database created and the rules deployed (`docs/story-circle.md`).
