@@ -17,6 +17,8 @@ namespace HypaStories
         public float Level;
         /// <summary>1 while a question is open: turn to the listener.</summary>
         public float Attend;
+        /// <summary>Who to turn to while <see cref="Attend"/> is on: another player at the fire (Story Circle). Null = the viewer.</summary>
+        public Transform AttendTarget;
         public Transform Fire;
         public Transform Mouth { get; private set; }
         /// <summary>
@@ -183,7 +185,7 @@ namespace HypaStories
             // Head: toward the fire while telling (with a slow drift), toward the listener when asked. Computed in world space so it
             // doesn't depend on the model's bone axes.
             var cam = Camera.main != null ? Camera.main.transform : null;
-            var target = _attend > 0.5f && cam != null ? cam.position : Fire != null ? Fire.position + Vector3.up * 0.3f : transform.position + transform.forward;
+            var target = _attend > 0.5f && AttendTarget != null ? AttendTarget.position : _attend > 0.5f && cam != null ? cam.position : Fire != null ? Fire.position + Vector3.up * 0.3f : transform.position + transform.forward;
             var from = transform.position + Vector3.up * (SeatTop + 0.75f);
             var local = transform.InverseTransformDirection(target - from);
             var yawTo = Mathf.Clamp(Mathf.Atan2(local.x, local.z), -0.9f, 0.9f) + (_attend > 0.5f ? 0f : Mathf.Sin(t * 0.4f) * 0.2f);

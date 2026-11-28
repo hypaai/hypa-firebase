@@ -39,6 +39,19 @@ namespace HypaCore.Tests
             Assert.IsNull(RoomCode.Normalize(null));
         }
 
+        [Test] public void ShareLinks_CarryTheCode_BothWays()
+        {
+            Assert.AreEqual("https://hypa-firebase.web.app/circle/BCDFG", RoomCode.Link(null, "BCDFG"));
+            Assert.AreEqual("http://localhost:5002/circle/BCDFG", RoomCode.Link(RoomCode.SiteOf("http://localhost:5002/index.html?x=1"), "BCDFG"));
+            Assert.AreEqual("BCDFG", RoomCode.FromLink("https://hypa-firebase.web.app/circle/bcdfg"));
+            Assert.AreEqual("BCDFG", RoomCode.FromLink("https://hypa-firebase.web.app/circle/BCDFG/"));
+            Assert.AreEqual("BCDFG", RoomCode.FromLink("http://localhost:5002/?circle=BCDFG"));
+            Assert.IsNull(RoomCode.FromLink("https://hypa-firebase.web.app/"));
+            Assert.IsNull(RoomCode.FromLink("https://hypa-firebase.web.app/circle/HELLO"), "vowels are never in a code");
+            Assert.IsNull(RoomCode.FromLink(""));
+            Assert.IsNull(RoomCode.SiteOf("file:///data/app/index.html"));
+        }
+
         [Test] public void RoomCode_ExpiresAfterTwoHours()
         {
             Assert.IsFalse(RoomCode.IsExpired(0, RoomCode.LifetimeMs));
@@ -125,7 +138,7 @@ namespace HypaCore.Tests
             Assert.AreEqual(1, seen["bob"].seat, "the seat is kept");
         }
 
-        [Test] public void Leaving_FreesTheSeat_AndTheHostLeavingClosesTheRoom()
+        [Test] public void Leaving_FreesTheSeat()
         {
             var code = Run(_alice.CreateAsync("s1", "yo", Me("Alice")));
             Run(_bob.JoinAsync(code, Me("Bob")));
@@ -135,11 +148,102 @@ namespace HypaCore.Tests
             Assert.AreEqual(1, closed);
 
             var carol = new FakeRoomSync(_server, "carol");
-            Run(carol.JoinAsync(code, Me("Carol")));
-            bool carolClosed = false; carol.Closed += () => carolClosed = true;
+            Assert.AreEqual("alice", Run(carol.JoinAsync(code, Me("Carol"))).host, "the freed seat can be taken");
+        }
+
+        [Test] public void TheHostLeaving_ClosesTheRoom_OnlyWhenNobodyIsLeft()
+        {
+            var code = Run(_alice.CreateAsync("s1", "yo", Me("Alice")));
+            bool closed = false; _alice.Closed += () => closed = true;
             Run(_alice.LeaveAsync());
-            Assert.IsTrue(carolClosed);
+            Assert.IsTrue(closed);
+            Assert.IsNull(_alice.Code);
             Assert.AreEqual(RoomError.NotFound, Assert.Throws<RoomException>(() => Run(_bob.JoinAsync(code, Me("Bob")))).Error);
+        }
+
+        [Test] public void TheHostLeaving_HandsTheRoomToTheNextPlayer_AndTheStoryCarriesOn()
+        {
+            var code = Run(_alice.CreateAsync("s1", "yo", Me("Alice")));
+            Run(_bob.JoinAsync(code, Me("Bob")));
+            Run(_alice.SetStateAsync(RoomStates.Story));
+            Run(_alice.SetClockAsync(new RoomClock { lineIndex = 4, startedAtServerMs = _now }));
+            RoomInfo seen = null; int bobClosed = 0, aliceClosed = 0;
+            _bob.RoomChanged += r => seen = r; _bob.Closed += () => bobClosed++; _alice.Closed += () => aliceClosed++;
+
+            Run(_alice.LeaveAsync());
+
+            Assert.AreEqual(1, aliceClosed, "the host who left is out");
+            Assert.AreEqual(0, bobClosed, "the room stays open for the guest");
+            Assert.AreEqual("bob", seen.host);
+            Assert.AreEqual(RoomStates.Story, seen.state);
+            Assert.IsTrue(_bob.IsHost);
+            Run(_bob.SetClockAsync(new RoomClock { lineIndex = 5, startedAtServerMs = _now })); // the new host drives the clock
+        }
+
+        [Test] public void TheHostDropping_HandsTheRoomOver_AndTheOldHostComesBackAsAGuest()
+        {
+            var code = Run(_alice.CreateAsync("s1", "yo", Me("Alice")));
+            Run(_bob.JoinAsync(code, Me("Bob")));
+            RoomInfo seen = null; _bob.RoomChanged += r => seen = r;
+
+            _server.Disconnect(code, "alice");
+            Assert.AreEqual("bob", seen.host);
+            Assert.IsTrue(_bob.IsHost);
+            Assert.IsFalse(_alice.IsHost);
+
+            Run(_alice.UpdateMeAsync(Me("Alice"))); // back online
+            Assert.IsFalse(_alice.IsHost);
+            Assert.AreEqual(RoomError.NotHost, Assert.Throws<RoomException>(() => Run(_alice.SetClockAsync(new RoomClock { lineIndex = 9 }))).Error);
+        }
+
+        [Test] public void AGuestDropping_LeavesTheHostInCharge()
+        {
+            var code = Run(_alice.CreateAsync("s1", "yo", Me("Alice")));
+            Run(_bob.JoinAsync(code, Me("Bob")));
+            _server.Disconnect(code, "bob");
+            Assert.IsTrue(_alice.IsHost);
+        }
+
+        [Test] public void NextHost_IsTheOnlinePlayerWithTheLowestSeat()
+        {
+            var players = new Dictionary<string, RoomPlayer>
+            {
+                ["host"] = new RoomPlayer { seat = 0, online = false },
+                ["c"] = new RoomPlayer { seat = 2, online = true },
+                ["b"] = new RoomPlayer { seat = 1, online = true },
+                ["d"] = new RoomPlayer { seat = 0, online = false },
+            };
+            Assert.AreEqual("b", RoomHandover.NextHost(players, "host"));
+            players["b"].online = false;
+            Assert.AreEqual("c", RoomHandover.NextHost(players, "host"));
+            players["c"].online = false;
+            Assert.IsNull(RoomHandover.NextHost(players, "host"));
+            Assert.IsTrue(RoomHandover.HostGone(players, "host"));
+            Assert.IsTrue(RoomHandover.HostGone(players, "left"), "a host with no entry has left");
+            players["host"].online = true;
+            Assert.IsFalse(RoomHandover.HostGone(players, "host"));
+        }
+
+        [Test] public void Answers_ReachTheOtherPlayer_SentenceBySentence_AndOnlyFromThePlayerWhoseHandIsUp()
+        {
+            var code = Run(_alice.CreateAsync("s1", "yo", Me("Alice")));
+            Run(_bob.JoinAsync(code, Me("Bob")));
+            var heard = new List<RoomAnswer>();
+            _alice.AnswerReceived += heard.Add;
+            _bob.AnswerReceived += _ => Assert.Fail("an answer is not echoed to the player who gave it");
+
+            Assert.AreEqual(RoomError.NotYourTurn, Assert.Throws<RoomException>(() => Run(_bob.SendAnswerAsync(new RoomAnswer { text = "Too early." }))).Error);
+
+            Run(_bob.UpdateMeAsync(new RoomPlayer { name = "Bob", platform = Platforms.Web, handUp = true }));
+            Run(_bob.SendAnswerAsync(new RoomAnswer { uid = "alice", q = 0, i = 0, text = "The drum was a gift." }));
+            Run(_bob.SendAnswerAsync(new RoomAnswer { q = 0, i = 1, text = "Nobody else could play it.", last = true }));
+
+            Assert.AreEqual(2, heard.Count);
+            Assert.AreEqual("bob", heard[0].uid, "the sender is set by the room, not by the caller");
+            Assert.AreEqual("Nobody else could play it.", heard[1].text);
+            Assert.IsTrue(heard[1].last);
+            Assert.Throws<System.ArgumentException>(() => Run(_bob.SendAnswerAsync(new RoomAnswer { text = "" })));
+            Assert.Throws<System.ArgumentException>(() => Run(_bob.SendAnswerAsync(new RoomAnswer { text = new string('x', RoomAnswer.MaxTextLength + 1) })));
         }
 
         [Test] public void Cleanup_RemovesRoomsOlderThanTwoHours()

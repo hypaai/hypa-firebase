@@ -15,6 +15,9 @@ import {
   getRemoteConfig, ensureInitialized, fetchAndActivate, getAll,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-remote-config.js";
 import {
+  getDatabase, connectDatabaseEmulator, ref, get, set, remove, onValue, onDisconnect, serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
+import {
   getAI, getGenerativeModel, getLiveGenerativeModel, GoogleAIBackend, InferenceMode, InferenceSource, ResponseModality,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js";
 
@@ -31,7 +34,7 @@ const ON_DEVICE = {
 
 let ready = Promise.reject(new BridgeError("not_configured", "Firebase was not initialised."));
 ready.catch(() => {});
-let auth, appCheck, db, rc, ai, nano, sendEvent = () => {};
+let auth, appCheck, db, rc, ai, nano, rtdb = null, sendEvent = () => {};
 let usingEmulators = false;
 const cloudModels = new Map();
 // Progress: the newest updatedAt this page has seen (set once it has loaded or saved, so the first snapshot is not "news"),
@@ -62,6 +65,13 @@ function init(config, ctx) {
     // fails, and Gemini Nano works (it runs on the device).
     connectAuthEmulator(auth, "http://" + location.hostname + ":9099", { disableWarnings: true });
     connectFirestoreEmulator(db, location.hostname, 8080);
+  }
+  // Story Circle rooms (G09): only when the config names a Realtime Database.
+  if (config.firebase.databaseURL) {
+    rtdb = getDatabase(app);
+    if (config.emulators) connectDatabaseEmulator(rtdb, location.hostname, 9000);
+    onValue(ref(rtdb, ".info/serverTimeOffset"), (s) => sendEvent("roomOffset", s.val() || 0));
+    onValue(ref(rtdb, ".info/connected"), (s) => { if (s.val() === true) rejoinPresence(); });
   }
   rc = getRemoteConfig(app);
   ai = getAI(app, { backend: new GoogleAIBackend() });
@@ -446,10 +456,171 @@ async function liveHold({ on }) {
   return null;
 }
 
+// ---------- Story Circle rooms (G09, docs/contracts.md section 4) ----------
+// The room node is not readable as a whole, so each child is listened to on its own. Presence: onDisconnect sets
+// players/{uid}/online to false (never removes anything, so handover still works) and is set again on every reconnect.
+// Handover and turn-taking are decided in C# (RoomHandover, CircleSession); this side only reads and writes.
+
+let room = null; // { code, uid, me, unsubs, answersSeen, primed }
+
+function database() {
+  if (!rtdb) throw new BridgeError("not_configured", "No Realtime Database URL in the web config.");
+  return rtdb;
+}
+
+const roomRef = (path) => ref(database(), "rooms/" + room.code + (path ? "/" + path : ""));
+const denied = (e) => e && (e.code === "PERMISSION_DENIED" || String(e.message || "").toLowerCase().includes("permission"));
+
+function playerEntry(me) {
+  return { name: String(me.name || "").slice(0, 24), platform: me.platform || "web", seat: me.seat, online: true, handUp: !!me.handUp };
+}
+
+async function seat(me) {
+  await set(roomRef("players/" + room.uid), playerEntry(me));
+  await onDisconnect(roomRef("players/" + room.uid + "/online")).set(false);
+}
+
+function rejoinPresence() {
+  // after a dropped connection the server ran onDisconnect (online = false): say we are back, and arm it again
+  if (!room) return;
+  seat(room.me).catch((e) => console.warn("Hypa: room presence not restored (" + (e.code || e.name) + ")."));
+}
+
+function listen() {
+  const on = (path, fn) => room.unsubs.push(onValue(roomRef(path), (s) => fn(s.val()), (e) => {
+    console.warn("Hypa: room listener stopped (" + (e.code || e.name) + ").");
+    if (denied(e)) closeRoom();
+  }));
+  on("host", (v) => { if (v === null) closeRoom(); else sendEvent("roomHost", v); });
+  on("state", (v) => { if (v !== null) sendEvent("roomState", v); });
+  on("clock", (v) => { if (v !== null) sendEvent("roomClock", v); });
+  on("players", (v) => sendEvent("roomPlayers", v || {}));
+  on("poses", (v) => sendEvent("roomPoses", v || {}));
+  on("game", (v) => { if (v !== null) sendEvent("roomGame", v); });
+  on("answers", (v) => {
+    const all = v || {};
+    const keys = Object.keys(all).map(Number).filter((n) => Number.isInteger(n) && n >= 0).sort((a, b) => a - b);
+    if (!room.primed) { room.primed = true; room.answersSeen = keys.length ? keys[keys.length - 1] : -1; room.nextAnswer = room.answersSeen + 1; return; }
+    for (const n of keys) {
+      if (n <= room.answersSeen) continue;
+      room.answersSeen = n;
+      room.nextAnswer = Math.max(room.nextAnswer, n + 1);
+      if (all[n] && all[n].uid !== room.uid) sendEvent("roomAnswer", all[n]);
+    }
+  });
+}
+
+function stopListening() {
+  if (!room) return;
+  for (const u of room.unsubs) u();
+  room.unsubs = [];
+}
+
+function closeRoom() {
+  if (!room) return;
+  stopListening();
+  room = null;
+  sendEvent("roomClosed", null);
+}
+
+async function roomCreate({ code, storyId, language, me }) {
+  const u = await user();
+  if (room) throw new BridgeError("bad_request", "Already in a room.");
+  const r = ref(database(), "rooms/" + code);
+  try {
+    await set(r, { host: u.uid, storyId: storyId || "", language: language || "", state: "lobby", createdAt: serverTimestamp() });
+  } catch (e) {
+    if (denied(e)) throw new BridgeError("taken", "That room code is taken.");
+    throw e;
+  }
+  room = { code, uid: u.uid, me: { ...me, seat: 0 }, unsubs: [], primed: false, answersSeen: -1, nextAnswer: 0 };
+  await seat(room.me);
+  listen();
+  return { host: u.uid, storyId, language, state: "lobby", createdAt: Date.now() };
+}
+
+async function roomJoin({ code, me, maxPlayers, serverNow }) {
+  const u = await user();
+  if (room) throw new BridgeError("bad_request", "Already in a room.");
+  const base = "rooms/" + code;
+  const read = async (path) => (await get(ref(database(), base + "/" + path))).val();
+  let host;
+  try { host = await read("host"); } catch (e) { if (denied(e)) throw new BridgeError("not_found", "No room " + code + "."); throw e; }
+  if (host === null) throw new BridgeError("not_found", "No room " + code + ".");
+  const createdAt = (await read("createdAt")) || 0;
+  if (serverNow - createdAt > 2 * 60 * 60 * 1000) throw new BridgeError("expired", "Room " + code + " has expired.");
+  const players = (await read("players")) || {};
+  let seatNo = players[u.uid] ? players[u.uid].seat : -1;
+  for (let s = 0; seatNo < 0 && s < maxPlayers; s++) if (!Object.values(players).some((p) => p && p.seat === s)) seatNo = s;
+  if (seatNo < 0) throw new BridgeError("full", "Room " + code + " is full.");
+  room = { code, uid: u.uid, me: { ...me, seat: seatNo }, unsubs: [], primed: false, answersSeen: -1, nextAnswer: 0 };
+  try {
+    await seat(room.me);
+    // two players may have taken the same seat at once: the lower uid keeps it
+    const after = (await read("players")) || {};
+    if (Object.entries(after).some(([id, p]) => id !== u.uid && p && p.seat === seatNo && id < u.uid)) throw new BridgeError("full", "Room " + code + " is full.");
+  } catch (e) {
+    await remove(roomRef("players/" + u.uid)).catch(() => {});
+    room = null;
+    throw e;
+  }
+  listen();
+  return { info: { host, storyId: await read("storyId"), language: await read("language"), state: await read("state"), createdAt }, seat: seatNo };
+}
+
+async function roomLeave({ closeRoom: close }) {
+  if (!room) return null;
+  const r = room;
+  stopListening();
+  room = null;
+  await onDisconnect(ref(database(), "rooms/" + r.code + "/players/" + r.uid + "/online")).cancel().catch(() => {});
+  const path = "rooms/" + r.code + (close ? "" : "/players/" + r.uid);
+  await remove(ref(database(), path)).catch((e) => console.warn("Hypa: leaving the room was not recorded (" + (e.code || e.name) + ")."));
+  return null;
+}
+
+function inRoom() { if (!room) throw new BridgeError("not_in_room", "Not in a room."); }
+
+async function roomSetState({ state }) { inRoom(); await set(roomRef("state"), state); return null; }
+async function roomSetClock({ clock }) {
+  inRoom();
+  await set(roomRef("clock"), { lineIndex: Math.max(0, clock.lineIndex | 0), startedAtServerMs: clock.startedAtServerMs, paused: !!clock.paused });
+  return null;
+}
+async function roomUpdateMe({ me }) {
+  inRoom();
+  room.me = { ...room.me, name: me.name ?? room.me.name, platform: me.platform ?? room.me.platform, handUp: !!me.handUp };
+  await set(roomRef("players/" + room.uid), playerEntry(room.me));
+  return null;
+}
+async function roomPose({ pose }) {
+  inRoom();
+  const p = { h: pose.h, t: pose.t };
+  if (pose.l && pose.l.length) p.l = pose.l;
+  if (pose.r && pose.r.length) p.r = pose.r;
+  set(roomRef("poses/" + room.uid), p).catch(() => {}); // fire and forget: the next pose replaces it
+  return null;
+}
+async function roomAnswer({ sentence }) {
+  inRoom();
+  const value = { uid: room.uid, q: Math.max(0, sentence.q | 0), i: Math.max(0, sentence.i | 0), text: sentence.text, last: !!sentence.last };
+  for (let attempt = 0; ; attempt++) {
+    const n = room.nextAnswer++;
+    try { await set(roomRef("answers/" + n), value); return null; } catch (e) { if (!denied(e) || attempt >= 2) throw e; } // n taken: next one
+  }
+}
+async function roomGame({ result }) { inRoom(); await set(roomRef("game/" + room.uid), result); return null; }
+async function roomTakeOver() {
+  inRoom();
+  try { await set(roomRef("host"), room.uid); } catch (e) { if (!denied(e)) throw e; } // someone else was first, or the host is back
+  return null;
+}
+
 const methods = {
   init, signIn, link, idToken: async () => (await user()).getIdToken(), appCheckToken,
   loadProgress, saveProgress, loadProfile, saveProfile, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
   liveStart, liveSend, liveTool, liveHold,
+  roomCreate, roomJoin, roomLeave, roomSetState, roomSetClock, roomUpdateMe, roomPose, roomAnswer, roomGame, roomTakeOver,
 };
 
 /** Runs a method. ctx: { emit(chunk), event(name, value), signal }. */

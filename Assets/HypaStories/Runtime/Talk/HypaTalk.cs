@@ -396,10 +396,15 @@ namespace HypaStories
                 _transcript.Add(true, lastLine, true);
                 try
                 {
-                    var line = await _speech.PrepareAsync(lastLine, _ctx.Language, CancellationToken.None);
-                    _speaking = 1;
-                    await _speech.PlayAsync(line, null, CancellationToken.None);
+                    var line = await _speech.PrepareAsync(lastLine, _ctx.Language, _life.Token);
+                    // Leaving the hut disposes her and cancels this. The goodbye must not start after that.
+                    if (!_life.IsCancellationRequested)
+                    {
+                        _speaking = 1;
+                        await _speech.PlayAsync(line, null, _life.Token);
+                    }
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception e) { Debug.LogWarning("Hypa Stories: she couldn't say goodbye: " + e.Message); }
                 _speaking = 0;
             }

@@ -60,6 +60,7 @@ A profile card for Stories with a realistic character the player shapes. Code in
 - Web profile fields use the physical or system keyboard. The in-game keyboard remains available on Quest.
 - Tests: `Assets/HypaStories/Tests/Editor/StoryProfileTests.cs`.
 - Not yet synced through Firebase.
+- Follow-up: a first profile opens finished, with a random look and a friendly name such as "Brave Lion", and one "Your name" field. The handle is generated from that name. Phone and headset screens were not checked.
 
 ## G03: Firebase web bridge (HYP-198)
 
@@ -144,10 +145,46 @@ An open voice conversation with the old woman in the hut. Code in `Assets/HypaSt
 - Tests: `Assets/HypaCore/Tests/Editor/LiveProtocolTests.cs`, `Assets/HypaStories/Tests/Editor/TalkTests.cs`.
 - **Not done:**
   - No Unity build or device run yet. The ticket's checks (latency on Android and web, Yorùbá barge-in, Quest) still need real devices.
-  - The Story Circle rule (only the starter talks, the others hear her): rooms and networking are not built.
+  - In a Story Circle, only the player who started the conversation should talk with her. That is not wired up yet.
   - Saved words go to `FakeUserDataStore`, since G08's Firestore store does not exist yet.
   - The offline clip is cached in memory only, so it is there only if she was heard online this session.
   - Her pointing gesture has not been seen in the headset.
   - Pidgin: Auto speaks it with Hypa Orpheus `Prince`, a man's voice, and no woman's Pidgin voice is named yet.
   - First editor run (Nov 27): Live was refused with "Firebase App Check token is invalid" (from the editor's debug token), so it fell back to Hypa. Not resolved.
 
+## G09 (HYP-204): Story Circle, contract and rules first
+
+Work in progress; the room itself is not built yet.
+
+- Handover: when the host goes (leaves, drops, or stops sending a heartbeat for 10 s) the next online player takes the room and the story carries on from the same clock. The ticket's scope said the room closes and its Done-when said the guest becomes host; handover is what was chosen. `docs/contracts.md` section 4 and `firebase/database.rules.json` now say so, and `RoomHandover` picks who takes it.
+- `rooms/{code}/answers/{n}`: an answer one sentence at a time, written by the player whose hand is up, so the other player hears it after the first sentence. The ticket left `{n}` open. `RoomAnswer`, `IRoomSync.SendAnswerAsync` and `AnswerReceived`.
+- `players/{uid}/lastSeen`: the heartbeat for clients with no `onDisconnect` (REST on Quest and phones). `RoomPresence`.
+- `FakeRoomSync` does handover and answers, so the room logic can be built and tested before any real service.
+- Tests: 9 more rules tests on the Realtime Database emulator (26 in all); EditMode tests in `HybridRoomsTests`.
+- Review fixes: `RoomSeats.MaxPlayers` (2); the contract now says how REST measures server time (no `.info/serverTimeOffset` there), how `n` is picked and retried, that the asker lowers their hand only after the last sentence, that presence never removes the room on disconnect, and that the lower seat wins a tie on the clients, not in the rules. `AGENTS.md` and `Assets/HypaMultiplayer/README.md` no longer say multiplayer is undecided.
+- Decided with the ticket's owner: one `RestRoomSync` for Quest, Android and iOS (the Firebase Unity SDK is not in the project, so the ticket's `NativeRoomSync` cannot be built), and `WebRoomSync` for the web.
+
+## G09 (HYP-204), part 2: the Story Circle itself
+
+How to run it on devices and check each Done-when item: `docs/story-circle.md`.
+
+- `CircleSession` (`Assets/HypaStories/Runtime/Circle/`): the host announces each line 0.5 s ahead in server time and both devices start it then; a late or returning guest starts at the current line; the host's pause pauses the guest. Raised hands: the lowest seat with a hand up has the turn, the storyteller turns to the asker, both stop, the asker's device answers and shares it sentence by sentence, the other device speaks it, then "Now, where was I…" and both carry on. When the room passes to the guest it carries the story on. Each line's start is logged in server time on both devices, to measure the ~300 ms target.
+- Small hooks: `StoryPlayer` (`LineGate`, `Following`, `FollowTo`, `StartFollowing`, `UserPaused`), `AskFlow` (`Sentence`, `Ended`), `Storyteller.AttendTarget`.
+- `RestRoomSync` (Quest, Android, iOS): seven event streams, a 3 s heartbeat for presence, the server clock measured from it, handover, answer numbering with retry. `RestRealtimeDatabase` writes now return what was stored.
+- `WebRoomSync` and `room*` in `firebase-bridge.js` (web): the JS SDK's Realtime Database with `onDisconnect` and `.info/serverTimeOffset`, the emulator on localhost. A web guest treats a phone or Quest host's stale `lastSeen` as gone (re-checked every 3 s, since the database does not change when the 10 s run out) and keeps the room snapshots that arrive during join, so a late guest starts on the current line. A guest finishes the story on its last line.
+- Lobby and code pad (`CircleView`), "Story Circle" on Home and at the campfire, share links `…/circle/ABCDE` (Hosting rewrite, `<base>` in the web page), the other player's figure (`CirclePeer`, `PoseTrack`), head and hands sent 10 times a second.
+- Tests: `CircleSessionTests`, `RestRoomSyncTests`, share links in `HybridRoomsTests`.
+- Not yet run on a device or against the real database: that needs the Realtime Database created and the rules deployed (`docs/story-circle.md`).
+
+## G11 (HYP-206): Multiplayer game race
+
+After a story with a game, the two players in a Story Circle race at it, each on their own device. Built on G09.
+
+- `GameRace` (`Assets/HypaStories/Runtime/Circle/`): a round over `rooms/{code}/game/{uid}` (`docs/contracts.md` section 4): the host taps **Play together**, both count 3-2-1 to the same server time, each plays the story's game locally, live scores at most once a second, the result when both are done. A player who leaves the room, goes back to the fire, or leaves the game with its Back button forfeits and loses to the one who finishes. Two Rematches at once share the later start. A live score already on the way cannot replace a finish. Either player can start a **Rematch**. Old rounds replayed by a reconnecting stream are not joined.
+- `RaceScore`: points from each game's own rules (Dodo: stones and lives; Eshu's hat: rounds less fights; the drum: dishes less misses); a tie on points goes to the faster game time, measured on the player's own device. No network timing.
+- `RaceView`: the count, the live bar ("Ada 12 · You 9") and the result card ("Ada wins: 41 s", **Rematch**, **Back to the fire**). In a circle, the host's **Play together** replaces the solo game button.
+- The best result goes to `stories/{id}.bestGameScore` through `UserDataSync` (G08). `HybridServices.UserData` holds the store: the Fake until G08's Firestore store exists, so the best score is kept on the device for now.
+- Games expose their rules read-only (`DodoGame.Rules`, `HatGame.Rules`, `DrumGame.Rules`).
+- Fix to G09: `RestRoomSync` read `game` updates wrongly when only one player's entry changed.
+- Tests: `GameRaceTests` (count, live scores, winner and ties, leaving, forfeit, rematch, old rounds, scores).
+- Not yet run on a device.

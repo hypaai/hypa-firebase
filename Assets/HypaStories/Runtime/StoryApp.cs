@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HypaCore;
+using HypaCore.Hybrid;
 using UnityEngine;
 
 namespace HypaStories
@@ -103,6 +104,23 @@ namespace HypaStories
 
         bool _creatingProfile;
 
+        // ---------- Story Circle (G09) ----------
+        CircleSession _circle;
+        CircleView _circleView;
+        CirclePeer _peer;
+        string _peerUid;
+        bool _openCircle, _circlePick;
+        Task _circleCreate;
+        float _poseClock;
+        bool InCircle => _circle != null && _circle.Code != null;
+        // ---------- the race after the story (G11) ----------
+        GameRace _race;
+        RaceView _raceView;
+        KitButton _playTogether;
+        float _raceT0;
+        string _raceStory;
+        bool CircleGuest => InCircle && !_circle.IsHost;
+
         void Start()
         {
             if (assets == null || Camera.main == null)
@@ -112,6 +130,7 @@ namespace HypaStories
                 return;
             }
             StoryProfileSync.Start();
+            _openCircle = AppRouter.Consume(AppRouter.StoryCircle);
             bool editing = AppRouter.Consume(ProfileCreator.EditRoute);
             if (!editing && StoryProfileStore.Load() != null) { BeginStory(); return; }
             _creatingProfile = true;
@@ -154,9 +173,9 @@ namespace HypaStories
             // Back (to the Hypa home menu: only under the shell), Hut, Gather round, Village: one row in front of you at the start.
             _splash = new SplashView(_world, _ui, _camp.Fire.Root, assets.logo, () => OpenStories(false), on => _portalHover = on,
                 HypaShell.Instance != null ? (System.Action)(() => HypaShell.Instance.ExitToHome()) : null,
-                () => Places.GoTo(PlaceIds.Hut), () => Places.GoTo(PlaceIds.Gathering), EditProfile);
+                () => Places.GoTo(PlaceIds.Hut), () => Places.GoTo(PlaceIds.Gathering), EditProfile, () => ShowCircle());
             _list = new StoryListView(_ui, assets, Play, () => Go(Screen.Splash), ToggleSound, PickLanguage);
-            _player = new PlayerView(_ui, () => _story.Jump(-1), () => _story.TogglePause(), () => _story.Jump(1),
+            _player = new PlayerView(_ui, () => { if (!CircleGuest) _story.Jump(-1); }, () => { if (!CircleGuest) _story.TogglePause(); }, () => { if (!CircleGuest) _story.Jump(1); },
                 OpenTry, CornerTap, ExitPlay, ToggleSound, q => _ask.SubmitText(q), ToggleRoom);
             // DEBUG=true in .env only: otherwise the panel is never made and no call is recorded
             if (HypaConfig.Current.DebugMode)
@@ -173,6 +192,9 @@ namespace HypaStories
             qa.Notice += text => { if (_ask.State == AskState.Thinking) _player.SetState(AskState.Thinking, text); };
             _ask = new AskFlow(_story, _voice, _mic, qa, _player, () => _story.Language, OnAsking);
             _ask.Logged += e => Debug.Log("Hypa Stories " + e);
+            _ask.Sentence += (i, text, last) => _circle?.OnLocalSentence(i, text, last);
+            _ask.Ended += () => _circle?.OnLocalAskEnded();
+            _circleView = new CircleView(_ui, CreateCircle, code => _ = JoinCircleAsync(code), HideCircleLobby);
 
             var prep = new GameObject("Preparing").transform;
             prep.SetParent(_ui, false);
@@ -201,6 +223,7 @@ namespace HypaStories
             BuildDodoGame();
             BuildHatGame();
             BuildDrumGame();
+            BuildRace();
             BuildHutVisit();
             Places.EnsureRunner();
             Places.Leaving += OnLeavingPlace;
@@ -212,6 +235,7 @@ namespace HypaStories
             // The places veil is still up, so skip the campfire's own intro.
             if (ApplyCampSpot()) { SetVeil(0f); _splash.SetAlpha(0f); }
             else StartCoroutine(Intro());
+            if (_openCircle) StartCoroutine(OpenCircleWhenReady());
         }
 
         // ---------- places (3F) ----------
@@ -588,6 +612,7 @@ namespace HypaStories
             if (_busy || _screen != Screen.List) return;
             _busy = true; _active = i;
             var st = _list.StoryAt(i);
+            if (_circlePick) { _circlePick = false; HideRoomNote(); _circleCreate = CreateCircleRoomAsync(st, _lang); }
             _audio.Tap();
             _story.Load(st, _lang);
             _audio.Prepare(System.Linq.Enumerable.Select(st.Timeline.Sounds, c => c.Name)); // the story's sounds, made now, not mid-story
@@ -618,9 +643,25 @@ namespace HypaStories
             _story.Live = true;
             Run(0.2f, 0.9f, u => _player.Fade.Set(u), Out);
             yield return new WaitForSeconds(0.8f);
-            _story.Start(0f);
+            if (_circleCreate != null)
+            {
+                var t1 = Time.time;
+                while (!_circleCreate.IsCompleted && Time.time - t1 < 8f) yield return null;
+                _circleCreate = null;
+            }
+            if (InCircle && !_circle.IsHost)
+            {
+                _story.StartFollowing(); // the host's clock says which line
+                _circle.AttachStory(_story);
+            }
+            else
+            {
+                if (InCircle) { _circle.AttachStory(_story); _ = _circle.SetStateAsync(RoomStates.Story); }
+                _story.Start(0f);
+            }
             _busy = false;
             _screen = Screen.Play;
+            if (InCircle) ShowCircleHint();
         }
 
         void ExitPlay()
@@ -631,6 +672,7 @@ namespace HypaStories
             if (_tryOpen) HideTryNow();
             _ask.Cancel();
             _story.Stop();
+            if (_circle != null) _ = LeaveCircleAsync();
             _audio.SetStorm(0f);
             _audio.Tap();
             Run(0f, 0.6f, u => _player.Fade.Set(1f - u), In);
@@ -727,9 +769,363 @@ namespace HypaStories
         void AskTap()
         {
             if (_screen != Screen.Play || _tryOpen) return;
-            if (_ask.State == AskState.Idle) _ = _ask.BeginAsync();
+            if (_ask.State == AskState.Idle) StartAsk();
             else if (_ask.State == AskState.Listening) _ask.StopListening();
             else _ask.Skip();
+        }
+
+        // ---------- Story Circle (G09) ----------
+
+        /// <summary>Raise a hand / Ask: in a circle the turn is asked for first (the question starts when it is ours).</summary>
+        void StartAsk()
+        {
+            if (!InCircle) { _ = _ask.BeginAsync(); return; }
+            if (!_circle.RequestAsk()) ShowRoomNote("Someone else is asking. Your turn next.", 2.5f);
+        }
+
+        IEnumerator OpenCircleWhenReady()
+        {
+            var t0 = Time.time;
+            while ((_busy || _screen != Screen.Splash) && Time.time - t0 < 10f) yield return null;
+            ShowCircle(RoomCode.FromLink(Application.absoluteURL));
+        }
+
+        /// <summary>The lobby. A code (from a share link) is joined straight away.</summary>
+        void ShowCircle(string code = null)
+        {
+            if (_busy || _screen != Screen.Splash || InCircle) return;
+            _audio.Tap();
+            // the raised card sits where the floating "Hypa Stories" title is: fade the title (switching it off would also take away the
+            // campfire's row, which TrailPanels shows only while the title is active)
+            _splash.Brand.Set(0f);
+            _circleView.Show(true);
+            _circleView.ShowMenu();
+            if (code != null) { _circleView.ShowPad(code); _ = JoinCircleAsync(code); }
+        }
+
+        /// <summary>Closes the lobby and brings the floating title back.</summary>
+        void HideCircleLobby()
+        {
+            _circleView.Show(false);
+            _splash.Brand.Set(1f);
+        }
+
+        void CreateCircle()
+        {
+            HideCircleLobby();
+            _circlePick = true;
+            ShowRoomNote("Story Circle: pick the story to tell together", 0f);
+            OpenStories(false);
+        }
+
+        async Task<CircleSession> NewCircleAsync()
+        {
+            var services = HybridServices.Current;
+            var uid = services.Auth.Uid;
+            if (string.IsNullOrEmpty(uid)) uid = await services.Auth.SignInAnonymouslyAsync();
+            var s = new CircleSession(services.Rooms, uid, _voice, () => _story.Language);
+            s.BeginAsk += () =>
+            {
+                var started = _ask.BeginAsync();
+                if (started.IsCompleted && _ask.State == AskState.Idle) s.OnLocalAskEnded(); // the question could not start
+            };
+            s.CancelAsk += () => _ask.Cancel();
+            s.AnswerShown += text => _player.SetAnswer(text ?? "");
+            s.AttendChanged += who =>
+            {
+                var other = who != null && who != s.Uid;
+                _camp.Teller.AttendTarget = other && _peer != null ? _peer.Head : null;
+                if (other) OnAsking(true); else if (who == null && _ask.State == AskState.Idle) OnAsking(false);
+            };
+            s.PlayersChanged += OnCirclePlayers;
+            s.PoseReceived += (who, pose) => { if (_peer != null && who == _peerUid) _peer.Track.Push(pose); };
+            s.Closed += OnCircleClosed;
+            _race = new GameRace(s.Room, uid);
+            _race.Go += StartRaceGame;
+            _race.StateChanged += OnRaceState;
+            _circle = s;
+            return s;
+        }
+
+        static RoomPlayer CircleMe()
+        {
+            var profile = StoryProfileStore.Load();
+            var name = profile != null && !string.IsNullOrWhiteSpace(profile.displayName) ? profile.displayName
+                : profile != null && !string.IsNullOrWhiteSpace(profile.username) ? profile.username : "Friend";
+#if UNITY_WEBGL && !UNITY_EDITOR
+            var platform = Platforms.Web;
+#elif UNITY_IOS && !UNITY_EDITOR
+            var platform = Platforms.Ios;
+#elif UNITY_ANDROID && HYPA_FLAT && !UNITY_EDITOR
+            var platform = Platforms.Android;
+#elif UNITY_ANDROID && !UNITY_EDITOR
+            var platform = Platforms.Quest;
+#else
+            var platform = Platforms.Editor;
+#endif
+            return new RoomPlayer { name = name.Length > 24 ? name.Substring(0, 24) : name, platform = platform };
+        }
+
+        async Task CreateCircleRoomAsync(StoryInfo story, StoryLanguage lang)
+        {
+            try
+            {
+                var s = await NewCircleAsync();
+                var code = await s.CreateAsync(story.Id, lang.Code, CircleMe());
+                var site = RoomCode.SiteOf(Application.absoluteURL) ?? RoomCode.DefaultSite;
+                Debug.Log($"Hypa Stories: Story Circle {code} ({RoomCode.Link(site, code)})");
+                ShowRoomNote($"Story Circle {code}\nFriends join with this code, or at {RoomCode.Link(site, code)}", 15f);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Hypa Stories: couldn't start a Story Circle (" + e.GetType().Name + ").");
+                EndCircle();
+                ShowRoomNote("Couldn't start a circle. Check the connection; the story plays here.", 5f);
+            }
+        }
+
+        async Task JoinCircleAsync(string code)
+        {
+            if (InCircle) return;
+            _circleView.SetStatus("Joining " + code + "…");
+            CircleSession s = null;
+            try
+            {
+                s = await NewCircleAsync();
+                var info = await s.JoinAsync(code, CircleMe());
+                _list.SetStories(StoryLibrary.Campfire);
+                var index = -1;
+                for (var i = 0; i < _list.Count; i++) if (_list.StoryAt(i).Id == info.storyId) { index = i; break; }
+                if (index < 0) { _circleView.SetStatus("That story isn't in this version of the app."); await s.LeaveAsync(); EndCircle(); return; }
+                var lang = StoryLanguages.Find(info.language);
+                if (lang != null) PickLanguage(lang); // one language per room: the host's
+                HideCircleLobby();
+                OpenStories(false);
+                StartCoroutine(PlayWhenListReady(index));
+            }
+            catch (RoomException e)
+            {
+                _circleView.SetStatus(e.Error == RoomError.Full ? "That circle is full." : e.Error == RoomError.Expired ? "That circle has ended." : "No circle with that code.");
+                EndCircle();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Hypa Stories: couldn't join a Story Circle (" + e.GetType().Name + ").");
+                _circleView.SetStatus("Couldn't reach the circle. Check the connection.");
+                EndCircle();
+            }
+        }
+
+        IEnumerator PlayWhenListReady(int index)
+        {
+            var t0 = Time.time;
+            while ((_busy || _screen != Screen.List) && Time.time - t0 < 6f) yield return null;
+            if (_screen == Screen.List) Play(index);
+        }
+
+        void OnCirclePlayers(System.Collections.Generic.IReadOnlyDictionary<string, RoomPlayer> players)
+        {
+            string other = null;
+            RoomPlayer them = null;
+            foreach (var pair in players) if (pair.Key != _circle.Uid) { other = pair.Key; them = pair.Value; break; }
+            if (other == null)
+            {
+                if (_peer != null) { ShowRoomNote("Your friend left the circle.", 3f); Destroy(_peer.gameObject); _peer = null; _peerUid = null; }
+                return;
+            }
+            if (_peer == null || _peerUid != other)
+            {
+                if (_peer != null) Destroy(_peer.gameObject);
+                _peer = CirclePeer.Create(_world, assets.lit, CirclePeer.SeatColours[Mathf.Clamp(them.seat, 0, CirclePeer.SeatColours.Length - 1)], them.name);
+                _peerUid = other;
+                ShowRoomNote((string.IsNullOrEmpty(them.name) ? "A friend" : them.name) + " joined the circle.", 3f);
+            }
+            _peer.SetPlayer(them.name, !them.online);
+        }
+
+        void OnCircleClosed()
+        {
+            if (_circle == null) return;
+            var wasGuest = !_circle.IsHost;
+            EndCircle();
+            if (_screen != Screen.Play) return;
+            ShowRoomNote("The circle has ended. The story carries on here.", 4f);
+            // a guest waiting for the host's next line carries on alone
+            if (wasGuest && !_story.Narrating && !_story.Paused && !_story.Ended) _story.FollowTo(Mathf.Min(_story.LineIndex + 1, _story.LineCount - 1));
+        }
+
+        async Task LeaveCircleAsync()
+        {
+            var s = _circle;
+            EndCircle();
+            if (s == null) return;
+            try { await s.LeaveAsync(); } catch (Exception e) { Debug.LogWarning("Hypa Stories: leaving the circle failed (" + e.GetType().Name + ")."); }
+        }
+
+        void EndCircle()
+        {
+            var s = _circle;
+            _circle = null;
+            if (s != null) { s.Closed -= OnCircleClosed; s.Dispose(); }
+            if (_race != null) { _race.Dispose(); _race = null; _raceView?.Hide(); }
+            if (_peer != null) { Destroy(_peer.gameObject); _peer = null; _peerUid = null; }
+            if (_camp != null) _camp.Teller.AttendTarget = null;
+            _circlePick = false;
+            _player?.SetNote("");
+        }
+
+        // ---------- the race after the story (G11) ----------
+
+        bool HasGame(string storyId) => storyId == DodoStory || storyId == EshuStory || storyId == DrumStory;
+
+        void BuildRace()
+        {
+            _raceView = new RaceView(_ui, RaceRematch, RaceBack);
+            // where the story's own game button sits when the story ends
+            _playTogether = Kit.Button(_player.Body, new Vector3(0f, 0.255f, -0.01f), new Vector2(0.26f, 0.064f), "Play together", "users", KitStyle.Primary, PlayTogether, null, 0.022f);
+            _playTogether.gameObject.SetActive(false);
+        }
+
+        void PlayTogether()
+        {
+            if (_race == null || !_race.CanStart || _busy || Playing || _screen != Screen.Play) return;
+            _audio.Tap();
+            _race.Start();
+        }
+
+        void RaceRematch()
+        {
+            if (_race == null || !_race.CanStart) return;
+            _audio.Tap();
+            _race.Start();
+        }
+
+        void RaceBack()
+        {
+            _audio.Tap();
+            _race?.Leave();
+            _raceView.Hide();
+            EndGames();
+            _voice.StopAll();
+            _player.Root.gameObject.SetActive(true);
+            _player.Follow.Snap();
+        }
+
+        /// <summary>The count reached zero on this device: play the story's game here, on its own (no physics is shared).</summary>
+        void StartRaceGame()
+        {
+            if (_screen != Screen.Play) { _race.Leave(); return; }
+            EndGames(); // a rematch restarts the game
+            _ask.Cancel();
+            if (_tryOpen) HideTryNow();
+            _raceStory = _story.StoryId;
+            _player.Root.gameObject.SetActive(false);
+            if (_raceStory == DodoStory) { _game.Fit(CurrentFit()); _game.Begin(); }
+            else if (_raceStory == EshuStory) { _hatGame.Fit(CurrentFit()); _hatGame.Begin(); }
+            else if (_raceStory == DrumStory) { _drumGame.Fit(CurrentFit()); _drumGame.Begin(); }
+            else { _player.Root.gameObject.SetActive(true); _race.Leave(); return; }
+            _raceT0 = Time.realtimeSinceStartup;
+            _raceView.SetCount("Go!");
+            At(0.8f, () => { if (_race != null && _race.State != RaceState.Countdown) _raceView.SetCount(null); });
+        }
+
+        void OnRaceState(RaceState state)
+        {
+            switch (state)
+            {
+                case RaceState.Countdown: _raceView.HideResult(); _player.SetNote(""); break;
+                case RaceState.Idle: _raceView.Hide(); break;
+                case RaceState.Result: ShowRaceResult(); break;
+            }
+        }
+
+        /// <summary>The game's points so far and whether it is over, from its own rules (never from the network).</summary>
+        (int score, bool over) RaceProgress()
+        {
+            if (_raceStory == DodoStory) return (RaceScore.Dodo(_game.Rules), RaceScore.DodoOver(_game.Rules));
+            if (_raceStory == EshuStory) return (RaceScore.Hat(_hatGame.Rules), RaceScore.HatOver(_hatGame.Rules));
+            if (_raceStory == DrumStory) return (RaceScore.Drum(_drumGame.Rules), RaceScore.DrumOver(_drumGame.Rules));
+            return (0, false);
+        }
+
+        void UpdateRace()
+        {
+            if (_race == null) return;
+            _race.Tick();
+            switch (_race.State)
+            {
+                case RaceState.Countdown:
+                    var n = _race.CountdownSeconds;
+                    _raceView.SetCount(n > 0 ? n.ToString() : null);
+                    break;
+                case RaceState.Playing:
+                    // Back, Stories, or Escape ends the game without a result. That is a forfeit, the same as Back to the fire.
+                    if (!Playing) { _race.Leave(); break; }
+                    var (score, over) = RaceProgress();
+                    if (over) _race.Finish(score, (long)((Time.realtimeSinceStartup - _raceT0) * 1000f));
+                    else _race.Report(score);
+                    break;
+            }
+            if (_race.State == RaceState.Playing || _race.State == RaceState.Waiting) _raceView.SetBar(RaceBar());
+            else if (_race.State != RaceState.Result) _raceView.SetBar(null);
+        }
+
+        /// <summary>"Ada 12 · You 9": the other player first, then you; a tick for a finished game.</summary>
+        string RaceBar()
+        {
+            var s = _race.Standings();
+            string One(RaceStanding r, bool you) => (you ? "You" : r.Name) + " " + r.Score + (r.Finished ? " ✓" : r.Left ? " (left)" : "");
+            return s.Count > 1 ? One(s[1], false) + "  ·  " + One(s[0], true) : One(s[0], true);
+        }
+
+        void ShowRaceResult()
+        {
+            var r = _race.Result;
+            if (r == null) return;
+            var s = _race.Standings();
+            string Secs(long ms) => (ms / 1000f).ToString(ms < 10000 ? "0.0" : "0") + " s";
+            var title = r.Draw ? "A draw: " + Secs(r.WinnerMs) : (r.YouWon ? "You win" : r.WinnerName + " wins") + ": " + Secs(r.WinnerMs);
+            var sub = r.ByDefault ? "Your friend left the race." : s.Count > 1 ? $"{s[1].Name} {s[1].Score} · You {s[0].Score}" : "";
+            _raceView.SetBar(null);
+            _raceView.ShowResult(title, sub);
+            _ = RecordBestAsync(_raceStory, s[0].Score);
+        }
+
+        /// <summary>The best result goes to stories/{id}.bestGameScore (G08: the higher is kept).</summary>
+        async Task RecordBestAsync(string storyId, int score)
+        {
+            try
+            {
+                var caps = _story.Story?.Timeline.Captions;
+                var last = caps != null && caps.Length > 0 ? caps[caps.Length - 1].Id : null;
+                var saved = await new UserDataSync(HybridServices.Current.UserData, () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                    .RecordStoryAsync(storyId, true, score, last, playedGame: true);
+                Debug.Log($"Hypa Stories: race over, {score} points (best {saved.bestGameScore}, {saved.gamePlays} plays).");
+            }
+            catch (Exception e) { Debug.LogWarning("Hypa Stories: couldn't save the game result (" + e.GetType().Name + ")."); }
+        }
+
+        void ShowCircleHint() => _player.SetNote($"Circle {_circle.Code} · raise a hand to ask");
+
+        /// <summary>Each frame in a circle: send our head (and hands on Quest) 10 times a second, and play the other player's back.</summary>
+        void UpdateCircle(float dt)
+        {
+            if (!InCircle) return;
+            _peer?.Tick(_circle.ServerTimeMs, _cam);
+            if (_screen != Screen.Play || _world == null) return;
+            _poseClock += dt;
+            if (_poseClock < PoseFrame.IntervalMs / 1000f) return;
+            _poseClock = 0f;
+            var rot = Quaternion.Inverse(_world.rotation) * _cam.rotation; // the camp's space: facing the fire is +z
+            var pos = _world.InverseTransformPoint(_cam.position);
+            var frame = new PoseFrame { h = PoseFrame.Pack(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w) };
+            if (StoryInput.Hand != null)
+            {
+                var l = StoryInput.Hand(0); var r = StoryInput.Hand(1);
+                if (l.HasValue) { var p = _world.InverseTransformPoint(l.Value); frame.l = PoseFrame.Pack(p.x, p.y, p.z, 0, 0, 0, 1); }
+                if (r.HasValue) { var p = _world.InverseTransformPoint(r.Value); frame.r = PoseFrame.Pack(p.x, p.y, p.z, 0, 0, 0, 1); }
+            }
+            _circle.SendPose(frame);
         }
 
         // ---------- frame ----------
@@ -781,9 +1177,12 @@ namespace HypaStories
                 VillageLayout.LeftElder(ViewerOnGround), _room))
                 EndElderVisit();
 
-            if (_hatGame != null) _turnHat.gameObject.SetActive(!Playing && _story.Live && _story.Ended && _story.StoryId == EshuStory && !_busy);
-            if (_game != null) _faceDodo.gameObject.SetActive(!Playing && _story.Live && _story.Ended && _story.StoryId == DodoStory && !_busy);
-            if (_drumGame != null) _playDrum.gameObject.SetActive(!Playing && _story.Live && _story.Ended && _story.StoryId == DrumStory && !_busy);
+            // in a Story Circle the host gets Play together instead of the game on your own (G11)
+            if (_hatGame != null) _turnHat.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == EshuStory && !_busy);
+            if (_game != null) _faceDodo.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == DodoStory && !_busy);
+            if (_drumGame != null) _playDrum.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == DrumStory && !_busy);
+            if (_playTogether != null) _playTogether.gameObject.SetActive(InCircle && _circle.IsHost && !Playing && _story.Live && _story.Ended && HasGame(_story.StoryId)
+                && !_busy && _race != null && _race.CanStart);
             if (_story.Live && !Playing)
             {
                 var s = _story.Update(dt);
@@ -795,7 +1194,8 @@ namespace HypaStories
                 if (_story.Ended && !_endNoted)
                 {
                     _endNoted = true;
-                    _player.SetNote("The end. Try Hypa Translate, or replay.");
+                    _player.SetNote(!InCircle || !HasGame(_story.StoryId) ? "The end. Try Hypa Translate, or replay."
+                        : _circle.IsHost ? "The end. Play together: race for the best result." : "The end. The host can start the game for you both.");
                 }
                 if (!_story.Ended) _endNoted = false;
                 _player.SetTryOffer(_story.Ended && !_tryOpen && _ask.State == AskState.Idle);
@@ -803,7 +1203,9 @@ namespace HypaStories
             }
             _debug?.Update();
             _camp.Teller.Level = _voice.Level;
-            _camp.Teller.Attend = _ask.State != AskState.Idle ? 1f : 0f;
+            _camp.Teller.Attend = _ask.State != AskState.Idle || (_circle != null && _circle.Turn != null) ? 1f : 0f;
+            UpdateCircle(dt);
+            UpdateRace();
 
             if (_tryOpen)
             {
@@ -812,12 +1214,14 @@ namespace HypaStories
             }
             UpdatePortal(dt);
             var raised = RaiseHand.Probe != null && RaiseHand.Probe();
-            if (_raise.Update(raised, dt) && _screen == Screen.Play && !_busy && !_tryOpen && _ask.State == AskState.Idle && !Playing && !InHutTelling()) _ = _ask.BeginAsync();
+            if (_raise.Update(raised, dt) && _screen == Screen.Play && !_busy && !_tryOpen && _ask.State == AskState.Idle && !Playing && !InHutTelling()) StartAsk();
             if (Application.isEditor) EditorKeys();
         }
 
         void LateUpdate()
         {
+            // the lobby card covers the floating title: keep it faded while the lobby is open (the campfire's intro fades it back in)
+            if (_circleView != null && _circleView.Shown && _splash != null) _splash.Brand.Set(0f);
             if (_camp == null || _camp.Village == null || _voice == null) return;
             var speaking = _elderSession && !_away && _voice.IsSpeaking
                 && _ask.State != AskState.Listening && !(_tryOpen && _tryFlow.Listening);
@@ -828,6 +1232,7 @@ namespace HypaStories
         {
             if (Input.GetKeyDown(KeyCode.R)) ToggleRoom(); // In my room / back to the forest
             if (Input.GetKeyDown(KeyCode.P)) { if (_room) UseDoor(null); else ToggleRoom(); } // editor: step through the door (into your room first)
+            if (Input.GetKeyDown(KeyCode.C) && _screen == Screen.Splash) ShowCircle(); // editor: Story Circle lobby
             if (Input.GetKeyDown(KeyCode.G)) StepThroughPortal(); // editor: step through the door, or back out (you can't walk here)
             if (Input.GetKeyDown(KeyCode.V) && _screen == Screen.Play) _player.SetHidden(!_player.Hidden); // hide / show the story panel
             switch (_screen)
@@ -868,7 +1273,7 @@ namespace HypaStories
                     if (Input.GetKeyDown(KeyCode.Space)) _story.TogglePause();
                     if (Input.GetKeyDown(KeyCode.RightArrow)) _story.Jump(1);
                     if (Input.GetKeyDown(KeyCode.LeftArrow)) _story.Jump(-1);
-                    if (Input.GetKeyDown(KeyCode.H) && _ask.State == AskState.Idle && !InHutTelling()) _ = _ask.BeginAsync();
+                    if (Input.GetKeyDown(KeyCode.H) && _ask.State == AskState.Idle && !InHutTelling()) StartAsk();
                     if (Input.GetKeyDown(KeyCode.T)) OpenTry();
                     if (Input.GetKeyDown(KeyCode.Q)) { _qDown = Time.time; AskTap(); }
                     if (Input.GetKeyUp(KeyCode.Q) && Time.time - _qDown > 0.5f && _ask.State == AskState.Listening) _ask.StopListening(); // hold-to-talk
@@ -914,6 +1319,7 @@ namespace HypaStories
             _cts.Cancel();
             _cts.Dispose();
             _ask?.Cancel();
+            if (_circle != null) { _ = _circle.LeaveAsync(); _circle.Dispose(); _circle = null; }
             _tryFlow?.Cancel();
             _story?.Stop();
             AudioListener.volume = 1f;
@@ -1603,7 +2009,8 @@ namespace HypaStories
                 if (showUi) SnapPanels();
             }
             // The list and player may follow an elder session; Gather round still belongs to the clearing.
-            _splash.Prompt.gameObject.SetActive(!far && _splash.Brand.gameObject.activeSelf);
+            // shown with the floating title, and under the Story Circle lobby (which fades the title away)
+            _splash.Prompt.gameObject.SetActive(!far && (_splash.Brand.gameObject.activeSelf || (_circleView != null && _circleView.Shown)));
             // a place's row, at its door
             var elderUiOpen = _elderSession && (_screen != Screen.Splash || _busy);
             foreach (var d in _doorRows)

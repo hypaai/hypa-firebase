@@ -481,6 +481,17 @@ namespace HypaStories.Tests
             Assert.AreEqual(TalkState.Listening, rig.Talk.State);
         }
 
+        [Test] public void Hypa_LeavingDuringGoodbye_DoesNotPlayIt()
+        {
+            var rig = new Rig(this);
+            rig.Speech.Slow = true;
+            var ending = rig.Talk.EndAsync("Come back soon.");
+            rig.Talk.Dispose();
+            ending.GetAwaiter().GetResult();
+            Assert.AreEqual(0, rig.Speech.Played.Count);
+            Assert.AreEqual(TalkState.Ended, rig.Talk.State);
+        }
+
         [Test] public void Hypa_TheCap_EndsWithHerGoodbye()
         {
             var rig = new Rig(this, null, 2f);
@@ -497,13 +508,17 @@ namespace HypaStories.Tests
             public readonly List<LiveSetup> Setups = new List<LiveSetup>();
             public readonly List<FakeSession> Sessions = new List<FakeSession>();
             public string RefuseVoice;
-            public Task<ILiveSession> ConnectAsync(LiveSetup setup, CancellationToken ct)
+            /// <summary>When set, <see cref="ConnectAsync"/> waits for it, so a test can end the talk while it is still connecting.</summary>
+            public Task HoldConnect;
+            public async Task<ILiveSession> ConnectAsync(LiveSetup setup, CancellationToken ct)
             {
+                if (HoldConnect != null) await HoldConnect;
+                ct.ThrowIfCancellationRequested();
                 Setups.Add(setup);
                 if (setup.Voice != null && setup.Voice == RefuseVoice) throw new InvalidOperationException("no such voice");
                 var s = new FakeSession();
                 Sessions.Add(s);
-                return Task.FromResult<ILiveSession>(s);
+                return s;
             }
         }
 
@@ -559,6 +574,21 @@ namespace HypaStories.Tests
             Assert.IsFalse(lines[0].Hers);
             Assert.AreEqual("My broom.", lines[1].Text);
             Assert.IsTrue(lines[1].Final);
+        }
+
+        [Test] public void Live_EndingWhileConnecting_DoesNotOpenTheMicrophone()
+        {
+            var gate = new TaskCompletionSource<bool>();
+            var live = new FakeLive { HoldConnect = gate.Task };
+            var opens = 0;
+            var talk = new LiveTalk(Small(En), live, "m", "Gacrux", () => { opens++; return new FakeMic(); }, null, null, 2.5f);
+            var start = talk.StartAsync(CancellationToken.None);
+            talk.EndAsync().GetAwaiter().GetResult();
+            gate.SetResult(true);
+            start.GetAwaiter().GetResult();
+            Assert.AreEqual(0, opens);
+            Assert.AreEqual(1, live.Sessions.Count);
+            Assert.IsTrue(live.Sessions[0].Disposed);
         }
 
         [Test] public void Live_ARefusedVoice_FallsBackToAnotherWoman_NotTheDefault()
