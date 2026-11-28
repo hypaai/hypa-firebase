@@ -17,10 +17,12 @@ namespace HypaCore.Hybrid.Web
         readonly IHypaAuth _auth;
         readonly Func<long> _localNow;
         readonly Dictionary<string, long> _poseSeen = new Dictionary<string, long>();
+        readonly List<(string name, JToken value)> _early = new List<(string, JToken)>();
         RoomInfo _info;
         RoomPlayer _me;
+        JObject _playersRaw;
         long _offset, _lastPose = long.MinValue;
-        bool _takingOver;
+        bool _takingOver, _acceptEarly;
         IReadOnlyDictionary<string, RoomPlayer> _players = new Dictionary<string, RoomPlayer>();
 
         public WebRoomSync(IHypaAuth auth, Func<long> localNow = null)
@@ -28,6 +30,9 @@ namespace HypaCore.Hybrid.Web
             _auth = auth;
             _localNow = localNow ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             WebBridge.Event += OnEvent;
+            // A phone host writes lastSeen and then goes quiet. Nothing in the database changes when the 10 s pass, so look again
+            // on a timer or the web guest never notices and never takes the room.
+            _ = WatchPresenceAsync();
         }
 
         public string Code { get; private set; }
@@ -49,15 +54,18 @@ namespace HypaCore.Hybrid.Web
             for (var attempt = 0; ; attempt++)
             {
                 var code = RoomCode.New();
+                ArmEarly();
                 try
                 {
                     var info = await WebBridge.CallAsync("roomCreate", new JObject { ["code"] = code, ["storyId"] = storyId, ["language"] = language, ["me"] = Me(me, 0) });
                     _me = Seat(me, 0);
                     Code = code;
                     _info = Info(info);
+                    CommitEarly();
                     return code;
                 }
-                catch (WebBridgeException e) when (e.Code == "taken" && attempt < MaxCodeTries - 1) { }
+                catch (WebBridgeException e) when (e.Code == "taken" && attempt < MaxCodeTries - 1) { DropEarly(); }
+                catch { DropEarly(); throw; }
             }
         }
 
@@ -67,6 +75,7 @@ namespace HypaCore.Hybrid.Web
             var normalized = RoomCode.Normalize(code) ?? throw new RoomException(RoomError.NotFound, "No room " + code + ".");
             await _auth.SignInAnonymouslyAsync();
             JToken result;
+            ArmEarly();
             try
             {
                 result = await WebBridge.CallAsync("roomJoin", new JObject
@@ -74,12 +83,14 @@ namespace HypaCore.Hybrid.Web
                     ["code"] = normalized, ["me"] = Me(me, 0), ["maxPlayers"] = RoomSeats.MaxPlayers, ["serverNow"] = ServerTimeMs,
                 });
             }
-            catch (WebBridgeException e) when (e.Code == "not_found") { throw new RoomException(RoomError.NotFound, "No room " + normalized + "."); }
-            catch (WebBridgeException e) when (e.Code == "full") { throw new RoomException(RoomError.Full, "Room " + normalized + " is full."); }
-            catch (WebBridgeException e) when (e.Code == "expired") { throw new RoomException(RoomError.Expired, "Room " + normalized + " has expired."); }
+            catch (WebBridgeException e) when (e.Code == "not_found") { DropEarly(); throw new RoomException(RoomError.NotFound, "No room " + normalized + "."); }
+            catch (WebBridgeException e) when (e.Code == "full") { DropEarly(); throw new RoomException(RoomError.Full, "Room " + normalized + " is full."); }
+            catch (WebBridgeException e) when (e.Code == "expired") { DropEarly(); throw new RoomException(RoomError.Expired, "Room " + normalized + " has expired."); }
+            catch { DropEarly(); throw; }
             _me = Seat(me, (int?)result["seat"] ?? 1);
             Code = normalized;
             _info = Info(result["info"]);
+            CommitEarly();
             return Copy(_info);
         }
 
@@ -160,7 +171,39 @@ namespace HypaCore.Hybrid.Web
         public void OnEvent(string name, JToken value)
         {
             if (name == "roomOffset") { _offset = value?.Type == JTokenType.Integer || value?.Type == JTokenType.Float ? (long)value : 0; return; }
-            if (Code == null || !name.StartsWith("room", StringComparison.Ordinal)) return;
+            if (name == null || !name.StartsWith("room", StringComparison.Ordinal)) return;
+            // The JS listeners fire the room's current children as soon as they attach, which is still inside roomJoin, before
+            // this side has a code. Hold those until the join succeeds or a late guest never sees the clock, state or players.
+            if (Code == null)
+            {
+                if (_acceptEarly) _early.Add((name, value?.DeepClone()));
+                return;
+            }
+            Dispatch(name, value);
+        }
+
+        void ArmEarly() { _acceptEarly = true; _early.Clear(); }
+        void DropEarly() { _acceptEarly = false; _early.Clear(); }
+
+        void CommitEarly()
+        {
+            _acceptEarly = false;
+            var queued = _early.ToArray();
+            _early.Clear();
+            foreach (var e in queued) if (Code != null) Dispatch(e.name, e.value);
+        }
+
+        async Task WatchPresenceAsync()
+        {
+            while (true)
+            {
+                await Task.Delay((int)RoomPresence.HeartbeatMs);
+                if (Code != null && _playersRaw != null) ApplyPlayers(_playersRaw);
+            }
+        }
+
+        void Dispatch(string name, JToken value)
+        {
             switch (name)
             {
                 case "roomHost":
@@ -181,14 +224,7 @@ namespace HypaCore.Hybrid.Web
                     ClockChanged?.Invoke(new RoomClock { lineIndex = (int?)c["lineIndex"] ?? 0, startedAtServerMs = (long?)c["startedAtServerMs"] ?? 0, paused = (bool?)c["paused"] ?? false });
                     break;
                 case "roomPlayers":
-                    var players = new Dictionary<string, RoomPlayer>();
-                    if (value is JObject all)
-                        foreach (var pair in all)
-                            if (pair.Value is JObject p)
-                                players[pair.Key] = new RoomPlayer { name = (string)p["name"], platform = (string)p["platform"], seat = (int?)p["seat"] ?? 0, online = (bool?)p["online"] ?? false, handUp = (bool?)p["handUp"] ?? false };
-                    _players = players;
-                    PlayersChanged?.Invoke(players);
-                    CheckHandover();
+                    ApplyPlayers(value as JObject);
                     break;
                 case "roomPoses":
                     if (!(value is JObject poses)) return;
@@ -213,9 +249,46 @@ namespace HypaCore.Hybrid.Web
                     break;
                 case "roomClosed":
                     Code = null;
+                    _playersRaw = null;
                     Closed?.Invoke();
                     break;
             }
+        }
+
+        /// <summary>
+        /// Players from a snapshot. A phone or Quest host keeps <c>online</c> true and only refreshes <c>lastSeen</c>, so a stale
+        /// heartbeat counts as gone (<see cref="RoomPresence.IsOnline"/>). Called again on a timer: the database does not change
+        /// when the 10 s run out.
+        /// </summary>
+        void ApplyPlayers(JObject all)
+        {
+            _playersRaw = all;
+            var players = new Dictionary<string, RoomPlayer>();
+            if (all != null)
+                foreach (var pair in all)
+                    if (pair.Value is JObject p)
+                        players[pair.Key] = new RoomPlayer
+                        {
+                            name = (string)p["name"], platform = (string)p["platform"], seat = (int?)p["seat"] ?? 0,
+                            online = RoomPresence.IsOnline((bool?)p["online"] ?? false, (long?)p["lastSeen"], ServerTimeMs),
+                            handUp = (bool?)p["handUp"] ?? false,
+                        };
+            if (Same(_players, players)) { CheckHandover(); return; }
+            _players = players;
+            PlayersChanged?.Invoke(players);
+            CheckHandover();
+        }
+
+        static bool Same(IReadOnlyDictionary<string, RoomPlayer> a, IReadOnlyDictionary<string, RoomPlayer> b)
+        {
+            if (a.Count != b.Count) return false;
+            foreach (var pair in a)
+            {
+                if (!b.TryGetValue(pair.Key, out var other)) return false;
+                var p = pair.Value;
+                if (p.online != other.online || p.handUp != other.handUp || p.seat != other.seat || p.name != other.name || p.platform != other.platform) return false;
+            }
+            return true;
         }
 
         void CheckHandover()

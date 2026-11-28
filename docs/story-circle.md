@@ -70,7 +70,7 @@ These change the Firebase project and need the owner's go-ahead:
    for example `https://hypa-firebase-default-rtdb.firebaseio.com`.
 2. **Deploy the rules:** `npx --prefix firebase/tests firebase deploy --only database --project hypa-firebase`.
 3. **Web:** put the URL in `firebaseWeb.databaseURL` in `Assets/HypaFirebase/Resources/hypa_client_config_local.json` (git-ignored) and
-   build; serve it from Hosting (`firebase hosting:channel:deploy circle` gives a preview URL; the `/circle/**` rewrite is in
+   build; serve it from Hosting (`firebase hosting:channel:deploy circle --project hypa-firebase` gives a preview URL; the `/circle/**` rewrite is in
    `firebase.json`). A share link from a preview channel uses that channel's site.
 4. **Quest, Android, iOS:** add `"databaseUrl": "<the URL>"` to `hypa.firebase.local.json` (`docs/quest-path.md`) and copy it to the app's
    data folder. Register each device's App Check debug token in the console.

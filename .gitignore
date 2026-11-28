@@ -50,6 +50,9 @@ crashlytics-buildid.txt
 *.pdb.meta
 *.mdb.meta
 *.pidb.meta
+# Burst output copied out of a player build (Data/ is a WebGL build folder, not project source)
+/Data/Plugins/lib_burst_generated.cpp
+/Data/Plugins/lib_burst_generated.wasm
 # Empty folder Unity recreates; its lone .meta would warn on fresh clones
 /[Aa]ssets/StreamingAssets.meta
 /[Aa]ssets/StreamingAssets/

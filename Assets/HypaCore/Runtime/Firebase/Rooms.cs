@@ -107,6 +107,19 @@ namespace HypaCore.Hybrid
         public const long TimeoutMs = 10_000;
         /// <summary>How often a client without <c>onDisconnect</c> refreshes <c>lastSeen</c>.</summary>
         public const long HeartbeatMs = 3_000;
+
+        /// <summary>
+        /// Whether a player is still here. <paramref name="online"/> is the stored flag (<c>onDisconnect</c> clears it). A client with no
+        /// <c>onDisconnect</c> (REST on a phone or Quest) also writes <paramref name="lastSeen"/>; once that is older than
+        /// <see cref="TimeoutMs"/> the player is gone even if the flag is still true. <paramref name="serverNowMs"/> of
+        /// <see cref="long.MaxValue"/> skips the heartbeat check. A player with no <paramref name="lastSeen"/> relies on the flag alone.
+        /// </summary>
+        public static bool IsOnline(bool online, long? lastSeen, long serverNowMs)
+        {
+            if (!online) return false;
+            if (!lastSeen.HasValue || serverNowMs == long.MaxValue) return true;
+            return serverNowMs - lastSeen.Value <= TimeoutMs;
+        }
     }
 
     /// <summary>Who takes the room when its host goes (docs/contracts.md, section 4). The rules accept any online player, the first write wins.</summary>

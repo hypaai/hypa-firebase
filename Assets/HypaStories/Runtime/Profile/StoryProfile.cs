@@ -34,6 +34,16 @@ namespace HypaStories
             return Regex.IsMatch(value, "^[A-Za-z][A-Za-z0-9_]*$") ? null : "Start with a letter. Use letters, numbers or underscores.";
         }
 
+        static readonly string[] Adjectives = { "Brave", "Happy", "Sunny", "Swift", "Kind", "Bright", "Calm", "Bold", "Merry", "Lucky" };
+        static readonly string[] Animals = { "Lion", "Zebra", "Parrot", "Tortoise", "Eagle", "Gecko", "Hippo", "Antelope", "Heron", "Otter" };
+
+        /// <summary>A friendly starting name like "Brave Lion" with a matching valid handle like "bravelion42", so a child never has to type one.</summary>
+        public static (string username, string displayName) FriendlyName(System.Random random)
+        {
+            string adjective = Adjectives[random.Next(Adjectives.Length)], animal = Animals[random.Next(Animals.Length)];
+            return ((adjective + animal + random.Next(10, 100)).ToLowerInvariant(), adjective + " " + animal);
+        }
+
         /// <summary>Version 1 had 8 skin tones, 5 hair styles and three-step face and build presets.</summary>
         public void Migrate()
         {
