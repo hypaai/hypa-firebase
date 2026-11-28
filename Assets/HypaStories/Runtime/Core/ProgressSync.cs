@@ -16,10 +16,10 @@ namespace HypaStories
         /// <summary>The question for the prompt. The story title is plain here; the screen can set it in italics.</summary>
         public string Text(string storyTitle) => $"Continue {storyTitle} where you left off on {Where(Saved.device)}?";
 
-        /// <summary>"your phone", "your Quest", "the web", or "another device".</summary>
+        /// <summary>"your phone", "your Quest", "the web", or "another device". The kind comes before a ":" (see <see cref="ProgressSync.DeviceId"/>).</summary>
         public static string Where(string device)
         {
-            switch ((device ?? "").ToLowerInvariant())
+            switch ((device ?? "").Split(':')[0].ToLowerInvariant())
             {
                 case "android": case "ios": case "phone": return "your phone";
                 case "quest": return "your Quest";
@@ -45,8 +45,10 @@ namespace HypaStories
         readonly Func<long> _nowMs;
         Progress _pending;
         long? _lastSentAt; // null until the first send, so the first position goes out at once
-        // One save at a time, so a slow older save can never finish after (and overwrite) a newer one.
-        readonly SemaphoreSlim _sendGate = new SemaphoreSlim(1, 1);
+        // One save at a time, so a slow older save can never finish after (and overwrite) a newer one. Not a SemaphoreSlim: its
+        // Release wakes a waiter on the thread pool, which a WebGL build does not have, so the second overlapping save never ran.
+        readonly object _gate = new object();
+        Task _sending = Task.CompletedTask;
 
         /// <summary>What this device last saved, or null. A newer save from another device is compared against its time.</summary>
         public Progress LastSaved { get; private set; }
@@ -54,7 +56,13 @@ namespace HypaStories
         /// <summary>Raised when another device is further along: show the offer.</summary>
         public event Action<ContinueOffer> ContinueOffered;
 
-        /// <param name="device">"android", "ios", "quest" or "web".</param>
+        /// <summary>
+        /// This device in <see cref="Progress.device"/>: its kind ("android", "ios", "quest", "web", or "phone" for a phone's browser),
+        /// ":", and an id made once per install. Two browsers are both "web", so the id is what tells them apart. Fits the 32 characters the rules allow.
+        /// </summary>
+        public static string DeviceId(string kind, string installId) => kind + ":" + installId;
+
+        /// <param name="device">This device, from <see cref="DeviceId"/>.</param>
         public ProgressSync(IProgressStore store, string device, Func<long> nowMs)
         {
             _store = store;
@@ -78,27 +86,41 @@ namespace HypaStories
 
         async Task SendAsync(bool force)
         {
-            if (_pending == null) return;
-            await _sendGate.WaitAsync();
+            while (true)
+            {
+                Task wait;
+                bool mine;
+                lock (_gate)
+                {
+                    // Looked at only when no save is in flight: a save that was waiting may already have sent this position.
+                    mine = _sending.IsCompleted;
+                    if (mine)
+                    {
+                        var p = _pending;
+                        if (p == null) return;
+                        if (!force && _lastSentAt != null && _nowMs() - _lastSentAt.Value < MinIntervalMs) return;
+                        _lastSentAt = _nowMs();
+                        _sending = SaveAsync(p);
+                    }
+                    wait = _sending;
+                }
+                await wait;
+                if (mine) return;
+            }
+        }
+
+        async Task SaveAsync(Progress p)
+        {
             try
             {
-                // Checked again inside the gate: a save that was waiting may already have sent this position.
-                var p = _pending;
-                if (p == null) return;
-                if (!force && _lastSentAt != null && _nowMs() - _lastSentAt.Value < MinIntervalMs) return;
-                _lastSentAt = _nowMs();
-                try
-                {
-                    await _store.SaveAsync(p);
-                    LastSaved = p;
-                    if (ReferenceEquals(_pending, p)) _pending = null;
-                }
-                catch (Exception)
-                {
-                    // The store keeps a local copy and syncs later; if it still fails, keep the position and try again on a later tick.
-                }
+                await _store.SaveAsync(p);
+                LastSaved = p;
+                Interlocked.CompareExchange(ref _pending, null, p);
             }
-            finally { _sendGate.Release(); }
+            catch (Exception)
+            {
+                // The store keeps a local copy and syncs later; if it still fails, keep the position and try again on a later tick.
+            }
         }
 
         /// <summary>This device's newest position: one still waiting to be saved, or else the last one saved.</summary>

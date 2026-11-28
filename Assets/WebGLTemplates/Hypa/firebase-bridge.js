@@ -4,12 +4,12 @@
 // Tokens are returned to C# only; nothing here logs a token.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
 import {
-  getAuth, connectAuthEmulator, onAuthStateChanged, signInAnonymously, linkWithPopup, GoogleAuthProvider, OAuthProvider,
+  getAuth, connectAuthEmulator, onAuthStateChanged, signInAnonymously, linkWithPopup, signInWithCredential, GoogleAuthProvider, OAuthProvider,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app-check.js";
 import {
   initializeFirestore, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromCache, setDoc, onSnapshot,
-  collection, addDoc,
+  collection, addDoc, getDocs,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 import {
   getRemoteConfig, ensureInitialized, fetchAndActivate, getAll,
@@ -44,6 +44,8 @@ let known = null, pendingSave = null, unwatch = null;
 function init(config, ctx) {
   sendEvent = ctx.event;
   usingEmulators = config.emulators === true;
+  // Google sign-in (Sign in to sync) needs an auth domain; the emulators serve its popup themselves, so any name will do.
+  if (usingEmulators && !config.firebase.authDomain) config.firebase.authDomain = config.firebase.projectId + ".firebaseapp.com";
   const app = initializeApp(config.firebase);
   // The emulators do not check App Check, so it stays off there. The real project on localhost (?firebase=live) uses the
   // App Check debug provider: register the token printed in the console in the Firebase console.
@@ -96,17 +98,29 @@ async function user() {
   return auth.currentUser;
 }
 
+// Sign in to sync (G08): links this device's anonymous account to Google or Apple, so its progress stays. When that account
+// already has a player (signed in on another device first), this device switches to it, so both share one save; what this
+// anonymous account saved stays on this device only. Returns "linked" or "switched".
 async function link({ provider }) {
   const u = await user();
   const p = provider === "google.com" ? new GoogleAuthProvider() : new OAuthProvider(provider);
   try {
     await linkWithPopup(u, p);
+    return "linked";
   } catch (e) {
-    // Linking must never swap the player for another account and lose this one's progress.
-    if (e.code === "auth/credential-already-in-use") throw new BridgeError("already_linked", "That account already belongs to another player.");
-    throw e;
+    if (e.code !== "auth/credential-already-in-use") throw e;
+    const credential = provider === "google.com" ? GoogleAuthProvider.credentialFromError(e) : OAuthProvider.credentialFromError(e);
+    if (!credential) throw e;
+    await signInWithCredential(auth, credential);
+    return "switched";
   }
-  return null;
+}
+
+/** Who is signed in: { anonymous, email }, or null before sign-in. */
+async function account() {
+  await ready;
+  const u = auth.currentUser;
+  return u ? { anonymous: u.isAnonymous, email: u.email || "" } : null;
 }
 
 async function appCheckToken() {
@@ -587,6 +601,36 @@ async function roomSetClock({ clock }) {
   await set(roomRef("clock"), { lineIndex: Math.max(0, clock.lineIndex | 0), startedAtServerMs: clock.startedAtServerMs, paused: !!clock.paused });
   return null;
 }
+// Story results and saved words (G08): users/{uid}/stories/{storyId} and users/{uid}/words/{wordId}. Reads fall back to the
+// local cache offline; writes go to the cache at once and reach the server when it is reachable.
+async function readDoc(ref) {
+  try { return await getDoc(ref); } catch { return await getDocFromCache(ref).catch(() => null); }
+}
+
+async function getStory({ storyId }) {
+  const snap = await readDoc(doc(db, "users", (await user()).uid, "stories", storyId));
+  return snap && snap.exists() ? snap.data() : null;
+}
+
+async function saveStory(result) {
+  const u = await user();
+  setDoc(doc(db, "users", u.uid, "stories", result.storyId), result).catch((e) => console.warn("Hypa: story result not saved (" + e.code + ")."));
+  return null;
+}
+
+async function listWords() {
+  const ref = collection(db, "users", (await user()).uid, "words");
+  let snap;
+  try { snap = await getDocs(ref); } catch { return []; }
+  return snap.docs.map((d) => d.data());
+}
+
+async function saveWord({ id, word }) {
+  const u = await user();
+  setDoc(doc(db, "users", u.uid, "words", id), word).catch((e) => console.warn("Hypa: word not saved (" + e.code + ")."));
+  return null;
+}
+
 async function roomUpdateMe({ me }) {
   inRoom();
   room.me = { ...room.me, name: me.name ?? room.me.name, platform: me.platform ?? room.me.platform, handUp: !!me.handUp };
@@ -617,8 +661,8 @@ async function roomTakeOver() {
 }
 
 const methods = {
-  init, signIn, link, idToken: async () => (await user()).getIdToken(), appCheckToken,
-  loadProgress, saveProgress, loadProfile, saveProfile, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
+  init, signIn, link, account, idToken: async () => (await user()).getIdToken(), appCheckToken,
+  loadProgress, saveProgress, loadProfile, saveProfile, getStory, saveStory, listWords, saveWord, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
   liveStart, liveSend, liveTool, liveHold,
   roomCreate, roomJoin, roomLeave, roomSetState, roomSetClock, roomUpdateMe, roomPose, roomAnswer, roomGame, roomTakeOver,
 };

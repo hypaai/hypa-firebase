@@ -66,6 +66,26 @@ namespace HypaStories.Tests
             Assert.AreEqual(2, sync.LastSaved.lineIndex);
         }
 
+        [Test] public void AfterTwoSavesOverlap_LaterSavesStillGoOut()
+        {
+            long now = 0;
+            var store = new SlowFirstStore();
+            var sync = new ProgressSync(store, "web", () => now);
+
+            sync.Record(At(1));
+            var tick = Task.Run(() => sync.TickAsync());
+            SpinWait.SpinUntil(() => store.Started, 2000);
+            now = 1000; sync.Record(At(2));
+            var flush = Task.Run(() => sync.FlushAsync());
+            Thread.Sleep(50);
+            store.Release.SetResult(true);
+            Run(Task.WhenAll(tick, flush));
+
+            now = 10000; sync.Record(At(3));
+            Run(sync.TickAsync());
+            Assert.AreEqual(new[] { 1, 2, 3 }, store.Finished.Select(p => p.lineIndex).ToArray());
+        }
+
         [Test] public void NoOffer_ForAnOlderPositionElsewhere_WhileANewerOneHereWaitsToBeSaved()
         {
             long now = 0;
@@ -216,7 +236,17 @@ namespace HypaStories.Tests
             Assert.AreEqual(5, offers[0].Saved.updatedAt);
         }
 
-        [TestCase("android", "your phone"), TestCase("ios", "your phone"), TestCase("quest", "your Quest"), TestCase("web", "the web"), TestCase("toaster", "another device"), TestCase(null, "another device")]
+        [Test] public void TwoBrowsers_AreTwoDevices()
+        {
+            var laptop = ProgressSync.DeviceId("web", "k3j9x2");
+            var saved = new Progress { storyId = "s", device = ProgressSync.DeviceId("phone", "q7m2zp"), updatedAt = 500 };
+            Assert.IsNotNull(ProgressSync.Decide(saved, null, laptop), "another browser's save");
+            saved.device = laptop;
+            Assert.IsNull(ProgressSync.Decide(saved, null, laptop), "this browser's own save");
+        }
+
+        [TestCase("android", "your phone"), TestCase("ios", "your phone"), TestCase("quest", "your Quest"), TestCase("web", "the web"), TestCase("toaster", "another device"), TestCase(null, "another device"),
+         TestCase("web:k3j9x2", "the web"), TestCase("phone:q7m2zp", "your phone")]
         public void TheOfferNamesTheDevice(string device, string expected)
             => Assert.AreEqual(expected, ContinueOffer.Where(device));
 

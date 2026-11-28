@@ -61,6 +61,8 @@ namespace HypaStories
                 var random = new System.Random();
                 Roll(random);
                 (_draft.username, _draft.displayName) = StoryProfile.FriendlyName(random);
+                // Signing in on this screen can bring the character made on another device (G08): play with that one instead.
+                StoryProfileSync.Updated += ArrivedFromAnotherDevice;
             }
             _oldBackground = _camera.backgroundColor; _oldClear = _camera.clearFlags; _oldMask = _camera.cullingMask;
             _oldAmbient = RenderSettings.ambientLight; _oldAmbientMode = RenderSettings.ambientMode;
@@ -533,6 +535,12 @@ namespace HypaStories
             }
         }
 
-        void OnDestroy() { if (!_closing) { EndInput(); Restore(); } }
+        void ArrivedFromAnotherDevice(StoryProfile profile) { if (profile != null) Close(false); }
+
+        void OnDestroy()
+        {
+            StoryProfileSync.Updated -= ArrivedFromAnotherDevice;
+            if (!_closing) { EndInput(); Restore(); }
+        }
     }
 }

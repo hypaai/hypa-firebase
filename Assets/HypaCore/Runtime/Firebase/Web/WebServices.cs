@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
@@ -63,6 +64,7 @@ namespace HypaCore.Hybrid.Web
                 Rooms = rooms,
                 Progress = new WebProgressStore(),
                 Profiles = new WebProfileStore(),
+                UserData = new WebUserDataStore(),
                 Flags = flags,
                 OnDevice = new ChromeNanoModel(),
                 Cloud = new WebCloudModel(flags),
@@ -92,16 +94,8 @@ namespace HypaCore.Hybrid.Web
         public static bool UsesEmulators(string pageUrl)
         {
             if (!Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri)) return false;
-            if (!IsLocal(uri.Host)) return false;
+            if (!HypaConfig.IsLocalHost(uri.Host)) return false;
             return uri.Query.IndexOf("firebase=live", StringComparison.OrdinalIgnoreCase) < 0;
-        }
-
-        static bool IsLocal(string host)
-        {
-            if (host == "localhost" || host == "127.0.0.1" || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)) return true;
-            if (!System.Net.IPAddress.TryParse(host, out var ip) || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
-            var b = ip.GetAddressBytes();
-            return b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168);
         }
 
         /// <summary>Init arguments for the emulators: placeholder app values (the emulators accept any) and no App Check.</summary>
@@ -177,7 +171,27 @@ namespace HypaCore.Hybrid.Web
 
         public async Task<Progress> LoadAsync() => (await WebBridge.CallAsync("loadProgress") as JObject)?.ToObject<Progress>();
 
-        public Task SaveAsync(Progress p) => WebBridge.CallAsync("saveProgress", JObject.FromObject(p));
+        public Task SaveAsync(Progress p) => WebBridge.CallAsync("saveProgress", JObject.FromObject(p, WebUserDataStore.NoNulls));
+    }
+
+    /// <summary>
+    /// <c>users/{uid}/stories/{storyId}</c> and <c>users/{uid}/words/{wordId}</c> (G08), with the IndexedDB cache on. Saves complete
+    /// once the write is in the local cache. Empty fields are left out, as the security rules only take strings where a field is set.
+    /// </summary>
+    public sealed class WebUserDataStore : IUserDataStore
+    {
+        internal static readonly JsonSerializer NoNulls = JsonSerializer.Create(new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+
+        public async Task<StoryResult> GetStoryAsync(string storyId)
+            => (await WebBridge.CallAsync("getStory", new JObject { ["storyId"] = storyId }) as JObject)?.ToObject<StoryResult>();
+
+        public Task SaveStoryAsync(StoryResult result) => WebBridge.CallAsync("saveStory", JObject.FromObject(result, NoNulls));
+
+        public async Task<IReadOnlyList<SavedWord>> ListWordsAsync()
+            => (await WebBridge.CallAsync("listWords") as JArray)?.ToObject<List<SavedWord>>() ?? new List<SavedWord>();
+
+        public Task SaveWordAsync(SavedWord word)
+            => WebBridge.CallAsync("saveWord", new JObject { ["id"] = word.Id, ["word"] = JObject.FromObject(word, NoNulls) });
     }
 
     public sealed class WebProfileStore : IProfileStore

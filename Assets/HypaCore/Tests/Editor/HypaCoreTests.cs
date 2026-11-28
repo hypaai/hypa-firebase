@@ -118,13 +118,15 @@ namespace HypaCore.Tests
         }
 
         [TestCase("http://public.example")]
+        [TestCase("http://8.8.8.8:5002")]
         [TestCase("ftp://localhost")]
         [TestCase("not-a-url")]
         public void Config_RejectsUnsafeProxyUrls(string url)
             => Assert.Throws<ArgumentException>(() => new HypaConfig(url));
 
-        [Test] public void Config_AllowsLoopbackEmulator()
-            => Assert.IsTrue(new HypaConfig("http://127.0.0.1:5001").HasProxy);
+        [TestCase("http://127.0.0.1:5001"), TestCase("http://192.168.202.218:5002"), TestCase("http://10.0.0.4:5002"), TestCase("http://my-mac.local:5002")]
+        public void Config_AllowsEmulatorsOnThisComputerOrTheLocalNetwork(string url)
+            => Assert.IsTrue(new HypaConfig(url).HasProxy);
 
         [Test] public void Config_DebugIsOff_UnlessSaidTrue()
         {

@@ -3,6 +3,7 @@ using HypaCore.Hybrid;
 #endif
 #if UNITY_WEBGL
 using HypaCore.Hybrid.Web;
+using Newtonsoft.Json.Linq;
 #endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -239,10 +240,11 @@ namespace HypaCore
             Ui.Button("Story Circle", _menu, new Vector3(0, circleY, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => { AppRouter.Request(AppRouter.StoryCircle); Open(HypaScenes.Story); });
 #if UNITY_WEBGL
             BuildOnDeviceRow();
+            BuildSyncRow();
 #elif UNITY_ANDROID && HYPA_FLAT
             BuildPhoneOnDeviceRow();
 #endif
-            _status = Ui.Text(_menu, "", 0.015f, new Vector3(0, -0.18f, 0), Color.white);
+            _status = Ui.Text(_menu, "", 0.015f, new Vector3(0, -0.205f, 0), Color.white);
             _menu.gameObject.SetActive(false);
 
             BuildHelp();
@@ -328,6 +330,43 @@ namespace HypaCore
             try { await nano.DownloadAsync(); }
             catch (System.Exception e) { Debug.LogWarning($"Hypa: on-device model download did not finish ({(e as WebBridgeException)?.Code ?? e.GetType().Name})."); }
             finally { _downloading = false; ShowOnDeviceStatus(); }
+        }
+#endif
+
+#if UNITY_WEBGL
+        PinchTarget _syncRow;
+        bool _linking;
+
+        /// <summary>
+        /// Sign in to sync (G08): links this browser's account to Google, so another device signed in to the same Google account shares
+        /// its progress. Where that Google account already has a player, this browser switches to it. Only with Firebase on the web.
+        /// </summary>
+        void BuildSyncRow()
+        {
+            if (!(HybridServices.Current.Auth is WebAuth auth)) return;
+            _syncRow = Ui.Button("Sign in to sync", _menu, new Vector3(0, -0.17f, 0), new Vector2(0.26f, 0.04f), Ui.Muted, SyncPressed);
+            auth.UidChanged += _ => ShowSyncStatus();
+            ShowSyncStatus();
+        }
+
+        async void ShowSyncStatus()
+        {
+            JToken account = null;
+            try { account = await WebBridge.CallAsync("account"); }
+            catch (WebBridgeException) { } // Firebase did not start: stays "Sign in to sync"
+            if (_syncRow == null) return;
+            Ui.SetLabel(_syncRow, account is JObject a && a["anonymous"]?.Type == JTokenType.Boolean && !(bool)a["anonymous"]
+                ? "Synced with Google" : "Sign in to sync (Google)");
+        }
+
+        async void SyncPressed()
+        {
+            if (_linking) return;
+            _linking = true;
+            // Called from the press itself: the browser only opens the sign-in popup after a user gesture.
+            try { await HybridServices.Current.Auth.LinkGoogleAsync(); }
+            catch (System.Exception e) { Debug.LogWarning($"Hypa: sign-in to sync did not finish ({(e as WebBridgeException)?.Code ?? e.GetType().Name})."); }
+            finally { _linking = false; ShowSyncStatus(); }
         }
 #endif
 

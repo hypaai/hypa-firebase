@@ -21,8 +21,8 @@ namespace HypaCore
         {
             BaseUrl = string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl.Trim().TrimEnd('/');
             if (HasProxy && (!Uri.TryCreate(BaseUrl, UriKind.Absolute, out var uri)
-                || (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback))))
-                throw new ArgumentException("Proxy URL must use HTTPS, or HTTP on loopback for emulators.", nameof(baseUrl));
+                || (uri.Scheme != "https" && !(uri.Scheme == "http" && IsLocalHost(uri.Host)))))
+                throw new ArgumentException("Proxy URL must use HTTPS, or HTTP on this computer or the local network for emulators.", nameof(baseUrl));
             DebugMode = debugMode;
             AuthEmulatorUrl = authEmulatorUrl;
         }
@@ -52,7 +52,7 @@ namespace HypaCore
             string authEmulatorUrl = null;
 #if UNITY_WEBGL && !UNITY_EDITOR
             if (string.IsNullOrWhiteSpace(url) && Uri.TryCreate(Application.absoluteURL, UriKind.Absolute, out var page)
-                && (page.Scheme == "https" || (page.Scheme == "http" && page.IsLoopback)))
+                && (page.Scheme == "https" || (page.Scheme == "http" && IsLocalHost(page.Host))))
                 url = page.GetLeftPart(UriPartial.Authority);
 #endif
             if (Application.isEditor)
@@ -69,6 +69,18 @@ namespace HypaCore
                 }
             }
             return new HypaConfig(url, IsTrue(debug), authEmulatorUrl);
+        }
+
+        /// <summary>
+        /// This computer (localhost, 127.0.0.1) or the local network (a private IPv4 address or a .local name): where the emulators
+        /// run, and where a phone on the same Wi-Fi reaches them.
+        /// </summary>
+        public static bool IsLocalHost(string host)
+        {
+            if (host == "localhost" || host == "127.0.0.1" || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!System.Net.IPAddress.TryParse(host, out var ip) || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+            var b = ip.GetAddressBytes();
+            return b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168);
         }
 
         /// <summary>true / 1 / yes / on, any case.</summary>

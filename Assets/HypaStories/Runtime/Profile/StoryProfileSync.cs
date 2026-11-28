@@ -15,6 +15,9 @@ namespace HypaStories
 
         public static event Action<StoryProfile> Updated;
 
+        /// <summary>The first pull after start-up: a new device waits for it, so a character saved on another device is used, not replaced.</summary>
+        public static Task FirstPull { get; private set; } = Task.CompletedTask;
+
         public static void Start()
         {
             if (_started) return;
@@ -22,7 +25,9 @@ namespace HypaStories
             _main = SynchronizationContext.Current;
             StoryProfileStore.Saved += profile => _ = PushAsync(profile);
             HybridServices.Upgraded += () => OnMain(() => _ = PullAsync());
-            _ = PullAsync();
+            // Sign in to sync can switch this device to an account made elsewhere (G08): that account's character, if newer, comes too.
+            HybridServices.Current.Auth.UidChanged += uid => OnMain(() => _ = PullAsync());
+            FirstPull = PullAsync();
         }
 
         public static UserProfile ToUser(StoryProfile profile, string device)

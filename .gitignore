@@ -89,3 +89,4 @@ Assets/HypaFirebase/Resources/hypa_client_config_local.json.meta
 
 # Burst output from WebGL builds
 /Data/
+.firebase-lan.json

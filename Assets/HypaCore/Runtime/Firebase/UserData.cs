@@ -55,6 +55,7 @@ namespace HypaCore.Hybrid
         public long savedAt;
 
         /// <summary>The same word in the same language gets the same id on every device, so saving it twice is one word. Safe as a document id.</summary>
+        [Newtonsoft.Json.JsonIgnore] // the document's id, not one of its fields
         public string Id => IdFor(text, language);
 
         public static string IdFor(string text, string language)

@@ -21,7 +21,7 @@ namespace HypaStories
     /// Editor: right mouse = look; Enter = choose; arrows = cards / lines; Space = pause; Q = ask; H = raise a hand; T = translate;
     /// 1-3 = suggested question, or a suggested word while translating; V = hide / show the panel; Esc = back (closes Try Hypa first).
     /// </summary>
-    public sealed class StoryApp : MonoBehaviour
+    public sealed partial class StoryApp : MonoBehaviour
     {
         [SerializeField] StoryAssets assets;
         [Tooltip("Eye height assumed for the scene's own camera when it has no rig (and for eye-level tracking origins).")]
@@ -97,8 +97,8 @@ namespace HypaStories
         KitButton _playDrum;
         const string DrumStory = "kings-drum";
         HutVisit _hut;           // the hut's household things, their cards and the old woman who tells you about them
-        // the words she teaches in the hut (G10). G08's Firestore-backed store does not exist yet: this one lives for the session
-        readonly UserDataSync _words = new UserDataSync(new HypaCore.Hybrid.FakeUserDataStore(), () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        // the words she teaches in the hut (G10), saved to the player's account (G08)
+        readonly UserDataSync _words = new UserDataSync(new CurrentUserData(), NowMs);
         bool Playing => (_game != null && _game.Active) || (_hatGame != null && _hatGame.Active) || (_drumGame != null && _drumGame.Active);
         void EndGames() { if (_game != null) _game.End(); if (_hatGame != null) _hatGame.End(); if (_drumGame != null) _drumGame.End(); }
 
@@ -134,6 +134,24 @@ namespace HypaStories
             bool editing = AppRouter.Consume(ProfileCreator.EditRoute);
             if (!editing && StoryProfileStore.Load() != null) { BeginStory(); return; }
             _creatingProfile = true;
+            if (editing) CreateProfile();
+            else StartCoroutine(WaitForSavedProfile());
+        }
+
+        /// <summary>
+        /// No character on this device yet: wait a moment for one saved on another device (G08), then play with it, else make one.
+        /// </summary>
+        IEnumerator WaitForSavedProfile()
+        {
+            var t0 = Time.realtimeSinceStartup;
+            while (!StoryProfileSync.FirstPull.IsCompleted && Time.realtimeSinceStartup - t0 < 3f) yield return null;
+            yield return null; // the pulled profile is stored on the main thread, a frame later
+            if (StoryProfileStore.Load() != null) { _creatingProfile = false; BeginStory(); }
+            else CreateProfile();
+        }
+
+        void CreateProfile()
+        {
             ProfileCreator.Show(assets, saved =>
             {
                 _creatingProfile = false;
@@ -236,6 +254,7 @@ namespace HypaStories
             if (ApplyCampSpot()) { SetVeil(0f); _splash.SetAlpha(0f); }
             else StartCoroutine(Intro());
             if (_openCircle) StartCoroutine(OpenCircleWhenReady());
+            StartSync();
         }
 
         // ---------- places (3F) ----------
@@ -657,7 +676,7 @@ namespace HypaStories
             else
             {
                 if (InCircle) { _circle.AttachStory(_story); _ = _circle.SetStateAsync(RoomStates.Story); }
-                _story.Start(0f);
+                _story.Start(TakeResumeAt());
             }
             _busy = false;
             _screen = Screen.Play;
@@ -1155,6 +1174,7 @@ namespace HypaStories
         void Update()
         {
             if (_creatingProfile || _camp == null) return;
+            UpdateSync();
             if (_away) return; // at another place: the camp waits, hidden
             UpdateNarrationAudio();
             var dt = Time.deltaTime;
@@ -1194,6 +1214,7 @@ namespace HypaStories
                 if (_story.Ended && !_endNoted)
                 {
                     _endNoted = true;
+                    _ = RecordFinishedAsync(_story.StoryId, _story.Story.Timeline.Captions.LastOrDefault()?.Id);
                     _player.SetNote(!InCircle || !HasGame(_story.StoryId) ? "The end. Try Hypa Translate, or replay."
                         : _circle.IsHost ? "The end. Play together: race for the best result." : "The end. The host can start the game for you both.");
                 }
@@ -1310,6 +1331,7 @@ namespace HypaStories
 
         void OnDestroy()
         {
+            StopSync();
             Places.Leaving -= OnLeavingPlace;
             Places.Arrived -= OnArrivedPlace;
             if (Places.InCamp == (System.Func<string, bool>)HoldsPlace) { Places.InCamp = null; Places.TravelInCamp = null; }

@@ -88,6 +88,19 @@ Written against G01's interfaces, so it runs on the Fakes. The screens and devic
 - Tests: `Assets/HypaStories/Tests/Editor/ProgressSyncTests.cs`.
 - Not done: "Sign in to sync", the Continue prompt on screen, Firestore-backed stores, and the device checks.
 
+Connected in the game (web, with G03's bridge):
+
+- The campfire story saves `progress/current` when a line starts (at most every 5 s), and at once on pause, on leaving the camp and on closing (`StoryApp.Sync.cs`).
+- Each device has its own id in `device` (`web:…`, `phone:…` for a phone's browser), so two browsers are two devices and the offer names the right one.
+- On launch, and when another device saves, the campfire shows "Continue *story* where you left off on …?" (`ContinueView`); Continue opens the story at that line and language.
+- Finished stories go to `users/{uid}/stories`, and the hut's words to `users/{uid}/words` (`WebUserDataStore`, bridge `getStory`, `saveStory`, `listWords`, `saveWord`).
+- Home → "Sign in to sync (Google)" links the browser's account to Google; where that Google account already has a player, the browser switches to it, so both devices share one save.
+- `tools/emulators-lan.sh` serves the emulators on the Wi-Fi, so a phone's browser plays against them; the proxy accepts `http://` on the local network for that.
+- A device with no character yet waits for the account's one (`StoryProfileSync.FirstPull`), and signing in on the profile screen closes it, so the second device plays as the same character instead of replacing it.
+- `ProgressSync` keeps one save at a time without `SemaphoreSlim`: in a WebGL build its waiter never woke, and every save after an overlap stalled.
+- Checked on the web build with the emulators: two browsers, one Google test account; the second was offered the first's place, continued at that line, kept saving, and a finished story reached `stories`. Hut words were not checked in the game.
+- Not yet: Android and iOS (they need G02's Firebase), the Quest pairing code's server side (`/pair/claim`, G04).
+
 ## G05 (HYP-200): Hybrid router for the storyteller
 
 Every storyteller answer and Try Hypa translation picks where it runs, says where it ran, and keeps working offline.
