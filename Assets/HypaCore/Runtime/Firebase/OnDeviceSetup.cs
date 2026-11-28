@@ -114,7 +114,8 @@ namespace HypaCore.Hybrid
         /// <summary>Reads the model's status again. Call it at start-up, when the app returns, and after a download.</summary>
         public async Task RefreshAsync()
         {
-            var status = await _model.StatusAsync().ConfigureAwait(false);
+            // No ConfigureAwait(false): in a WebGL build the continuation would go to a thread pool that never runs it.
+            var status = await _model.StatusAsync();
             lock (_gate)
             {
                 if (_busy) return; // a download in progress owns the state
@@ -139,8 +140,8 @@ namespace HypaCore.Hybrid
 
             try
             {
-                await ((IDownloadableOnDeviceModel)_model).DownloadAsync(new ProgressReport(this), ct).ConfigureAwait(false);
-                var status = await _model.StatusAsync().ConfigureAwait(false);
+                await ((IDownloadableOnDeviceModel)_model).DownloadAsync(new ProgressReport(this), ct);
+                var status = await _model.StatusAsync();
                 lock (_gate)
                 {
                     _busy = false;

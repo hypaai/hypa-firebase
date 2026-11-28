@@ -55,7 +55,7 @@ namespace HypaCore.Hybrid
         {
             AsrResponse r;
             var request = new AsrRequest { audio = Convert.ToBase64String(wav ?? new byte[0]), sourceLang = string.IsNullOrEmpty(language) ? null : language };
-            try { r = await AsrAsync(request, ct).ConfigureAwait(false); }
+            try { r = await AsrAsync(request, ct); }
             catch (HypaProxyException e) { throw e.ToHypaException(); }
             return r?.transcript?.Trim() ?? "";
         }
@@ -68,7 +68,7 @@ namespace HypaCore.Hybrid
                 text = text, language = language, voice = string.IsNullOrEmpty(voice) ? null : voice, model = string.IsNullOrEmpty(model) ? null : model,
                 inline = _inBrowser ? true : (bool?)null,
             };
-            try { r = await TtsAsync(request, ct).ConfigureAwait(false); }
+            try { r = await TtsAsync(request, ct); }
             catch (HypaProxyException e) { throw e.ToHypaException(); }
             return new HypaSpeech
             {
@@ -79,11 +79,13 @@ namespace HypaCore.Hybrid
 
         async Task<T> PostAsync<T>(string path, object body, CancellationToken ct)
         {
+            // No ConfigureAwait(false) on the browser path: a WebGL build has no thread pool, so a continuation sent there
+            // never runs and the request is never made. The tokens come from the main thread, so the awaits resume there.
             string idToken, appCheck;
             try
             {
-                idToken = await _auth.IdTokenAsync().ConfigureAwait(false);
-                appCheck = await _auth.AppCheckTokenAsync().ConfigureAwait(false);
+                idToken = await _auth.IdTokenAsync();
+                appCheck = await _auth.AppCheckTokenAsync();
             }
             catch (Exception e) when (!(e is OperationCanceledException))
             {
