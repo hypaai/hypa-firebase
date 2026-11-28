@@ -3,6 +3,8 @@
   "role": "the old woman of the hut",
   "voices": [
     { "model": "openai/gpt-4o-mini-tts", "voice": { "en": "sage" } },
+    { "model": "google/gemini-2.5-pro-tts", "voice": { "fr": "Achernar", "es": "Achernar", "sw": "Achernar" } },
+    { "model": "hypaai/hypa-orpheus-3b-tts-vc-flt", "voice": { "yo": "Eniola", "pcm": "Eniola", "ha": "Juliet", "ig": "Amarachi" } },
     { "model": "openai/gpt-4o-mini-tts", "voice": { "en": "coral" } }
   ],
   "who": [

@@ -183,7 +183,8 @@ namespace HypaCore.Hybrid
                 case ProxyApi.ErrorTooLarge:
                 case ProxyApi.ErrorNotFound:
                 case ProxyApi.ErrorMethodNotAllowed: kind = HypaErrorKind.BadRequest; break;
-                case ProxyApi.ErrorUpstream: kind = Status == 0 ? HypaErrorKind.Offline : HypaErrorKind.Server; break;
+                // tool_error: Hypa ran and refused (e.g. a voice the model doesn't have), not a passing failure
+                case ProxyApi.ErrorUpstream: kind = Status == 0 ? HypaErrorKind.Offline : Details?.reason == "tool_error" ? HypaErrorKind.ToolError : HypaErrorKind.Server; break;
                 default: kind = HypaErrorKind.Server; break;
             }
             return new HypaException(kind, Message, Status, Code, this);

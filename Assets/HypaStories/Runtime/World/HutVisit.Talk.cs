@@ -50,7 +50,8 @@ namespace HypaStories
             // her own voice for the conversation, so an item's story (which starts its voice afresh) never drops its cached lines
             _talkVoice = gameObject.AddComponent<StoryVoice>();
             _talkVoice.Init(mouth);
-            // a woman's voice: Hypa's Auto picks a man's for some languages. Her remarks too (an item's story sets its own, see Play)
+            // a woman's voice: Hypa's Auto picks a man's for English (OpenAI alloy). Her remarks too (an item's story sets its
+            // voices from hers, see Play). Languages she has no voice named for are Auto's pick
             _talkVoice.Voices = _persona.VoicesFor;
             _voice.Voices = _persona.VoicesFor;
 #if !UNITY_WEBGL || UNITY_EDITOR

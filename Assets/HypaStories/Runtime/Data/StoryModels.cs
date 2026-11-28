@@ -73,7 +73,7 @@ namespace HypaStories
         /// <summary>The voice for a language, or null when this model has none for it.</summary>
         public string For(string lang) => lang != null && ByLanguage.TryGetValue(lang, out var v) ? v : Voice;
 
-        public override string ToString() => $"{Model} {Voice}";
+        public override string ToString() => string.IsNullOrEmpty(Model) ? Voice : $"{Model} {Voice}";
     }
 
     /// <summary>
