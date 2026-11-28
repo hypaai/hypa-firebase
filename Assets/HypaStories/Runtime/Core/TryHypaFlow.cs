@@ -58,7 +58,7 @@ namespace HypaStories
     }
 
     /// <summary>
-    /// "Try Hypa", Hypa Translate (hypa-v2/apps/hypa-translate) at the end of a story, voice only. Same behaviour as the app:
+    /// "Try Hypa", Hypa Translate at the end of a story, voice only. Same behaviour as the app:
     ///  - pick a source (or Auto detect) and a target language, swap them; speak into the input (it is typed in) and Translate;
     ///  - the speaker plays the input or the translation (the voice menu is Auto or one of the target language's voices);
     ///  - when the source is a single word, a dictionary icon appears next to the translation. It opens a panel with two tabs, the
@@ -330,7 +330,6 @@ namespace HypaStories
                 live?.SetPartialHandler(null);
                 if (version != _version) return;
                 _session = null; Level = 0f;
-                Debug.Log($"Hypa Stories: translate mic spoke={heard.Spoke} peak={heard.Peak:0.000} live={live != null} heard \"{heard.Transcript}\"");
                 if (!heard.Spoke || string.IsNullOrWhiteSpace(heard.Transcript))
                 {
                     Status = TryStatus.Idle;

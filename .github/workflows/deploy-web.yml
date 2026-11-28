@@ -7,6 +7,9 @@
 #                                                (public web config; kept out of Git because the secret scan rejects it)
 #   FIREBASE_SERVICE_ACCOUNT_HYPA_FIREBASE       JSON key of a hypa-firebase service account with the
 #                                                "Firebase Hosting Admin" role. Never one from another project.
+#                                                It also reads gs://hypa-firebase-restricted-media (Storage Object Viewer on that
+#                                                bucket only): the storyteller and the camp's recorded sounds, licensed media kept
+#                                                out of Git. A build without them would ship the stand-in figure and synthesised sounds.
 name: Deploy web
 on:
   push:
@@ -33,6 +36,19 @@ jobs:
           jq -e '.projectId == "hypa-firebase" and .firebaseWeb.projectId == "hypa-firebase"' \
             Assets/HypaFirebase/Resources/hypa_client_config_local.json > /dev/null \
             || { echo "::error::the web config is not for hypa-firebase"; exit 1; }
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Fetch the restricted media
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HYPA_FIREBASE }}
+        run: |
+          # the key goes outside the checkout, so the build never sees it
+          printf '%s' "$KEY" > "$RUNNER_TEMP/sa.json"
+          jq -e '.project_id == "hypa-firebase"' "$RUNNER_TEMP/sa.json" > /dev/null || { echo "::error::the service account is not from hypa-firebase"; exit 1; }
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet
+          rm -f "$RUNNER_TEMP/sa.json"
+          gcloud storage cp -r gs://hypa-firebase-restricted-media/HypaStories/Local gs://hypa-firebase-restricted-media/HypaStories/Local.meta Assets/HypaStories/
+          test -f Assets/HypaStories/Local/Models/storyteller.glb || { echo "::error::the storyteller model was not fetched"; exit 1; }
+          git status --porcelain | grep . && { echo "::error::fetching the media changed tracked files"; exit 1; } || true
       - uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}

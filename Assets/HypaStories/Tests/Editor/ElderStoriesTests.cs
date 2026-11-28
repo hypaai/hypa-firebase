@@ -185,7 +185,8 @@ namespace HypaStories.Tests
                 Assert.AreEqual(elderSession, camp.RoomWithElder);
                 Assert.AreEqual(elderSession, elder.gameObject.activeInHierarchy);
                 Assert.IsFalse(scenery.gameObject.activeInHierarchy);
-                Assert.AreEqual(0, elder.gameObject.layer);
+                // a fireside room puts the village behind the doors: only a door looking into it draws it, never your own view
+                Assert.AreEqual(elderSession ? 0 : CampWorld.DestLayer, elder.gameObject.layer);
                 Assert.That(Vector3.Distance(elderPosition, elder.position), Is.LessThan(0.0001f));
                 Assert.Less(Quaternion.Angle(elderRotation, elder.rotation), 0.001f);
                 Assert.AreEqual(!elderSession, village.gameObject.activeInHierarchy);
@@ -297,10 +298,10 @@ namespace HypaStories.Tests
                 "the two proximity regions must not overlap");
         }
 
-        [Test] public void StoryCollections_KeepCameroonTalesSeparateFromTheCampfire()
+        [Test] public void StoryCollections_KeepElderTalesSeparateFromTheCampfire()
         {
             CollectionAssert.AreEqual(new[] { "seven-hot-stones", "kings-drum", "eshu-crossroads", "marlow-street" }, StoryLibrary.Campfire.Select(s => s.Id));
-            CollectionAssert.AreEqual(new[] { "death-of-the-rice-farmer", "girl-who-chose-hare" }, StoryLibrary.Elder.Select(s => s.Id));
+            CollectionAssert.AreEqual(new[] { "joromi", "death-of-the-rice-farmer", "girl-who-chose-hare" }, StoryLibrary.Elder.Select(s => s.Id));
             Assert.IsFalse(StoryLibrary.Campfire.Intersect(StoryLibrary.Elder).Any());
             CollectionAssert.AreEquivalent(StoryLibrary.All, StoryLibrary.Campfire.Concat(StoryLibrary.Elder));
         }
@@ -321,18 +322,22 @@ namespace HypaStories.Tests
                 Assert.AreEqual(4, list.Count);
 
                 list.SetStories(StoryLibrary.Elder);
-                Assert.AreEqual(2, list.Count);
+                Assert.AreEqual(3, list.Count);
                 Assert.AreEqual(0, list.Index);
-                Assert.AreEqual(2, list.Root.GetComponentsInChildren<KitPanel>().Count(p => p.name == "Dot"));
+                Assert.AreEqual(3, list.Root.GetComponentsInChildren<KitPanel>().Count(p => p.name == "Dot"));
                 Assert.IsFalse(list.Root.Find("Card seven-hot-stones").gameObject.activeSelf);
                 list.SetReveal(0, 1f);
-                list.Root.Find("Card death-of-the-rice-farmer").GetComponentInChildren<KitButton>().OnPress();
-                Assert.AreEqual("death-of-the-rice-farmer", played);
+                list.Root.Find("Card joromi").GetComponentInChildren<KitButton>().OnPress();
+                Assert.AreEqual("joromi", played);
                 list.Root.Find("Card girl-who-chose-hare/Art").GetComponent<PinchTarget>().OnPinch(PinchKind.Short);
-                Assert.AreEqual(1, list.Index);
-                list.SetReveal(1, 1f);
+                Assert.AreEqual(2, list.Index);
+                list.SetReveal(2, 1f);
                 list.Root.Find("Card girl-who-chose-hare").GetComponentInChildren<KitButton>().OnPress();
                 Assert.AreEqual("girl-who-chose-hare", played);
+                list.Focus(1);
+                list.SetReveal(1, 1f);
+                list.Begin(1);
+                Assert.AreEqual("death-of-the-rice-farmer", played);
 
                 list.SetStories(StoryLibrary.Campfire);
                 Assert.AreEqual(4, list.Count);
@@ -371,6 +376,15 @@ namespace HypaStories.Tests
             Assert.IsTrue(StoryApp.PlaceRowShown(false, true, true, false), "Narrate story returns on the splash");
             Assert.IsFalse(StoryApp.PlaceRowShown(true, true, false, false), "no world rows in the room");
             Assert.IsFalse(StoryApp.PlaceRowShown(false, false, false, false), "not when you are away from that door");
+        }
+
+        [Test] public void GameOffer_StaysOnThePanelForTheWholeStory()
+        {
+            Assert.IsTrue(StoryApp.GameOfferShown(false, true, true, false), "there as soon as the story panel is up");
+            Assert.IsFalse(StoryApp.GameOfferShown(true, true, true, false), "hidden while that game is on screen");
+            Assert.IsFalse(StoryApp.GameOfferShown(false, false, true, false), "not before the panel opens");
+            Assert.IsFalse(StoryApp.GameOfferShown(false, true, false, false), "only that story's own game");
+            Assert.IsFalse(StoryApp.GameOfferShown(false, true, true, true), "not while the panel is still arriving");
         }
 
         [Test] public void LeavingTheElder_StopsAStoryHeIsStillTelling()

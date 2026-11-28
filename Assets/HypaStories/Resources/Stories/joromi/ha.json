@@ -1,0 +1,101 @@
+{
+  "champion": "Tun da dadewa, a kasar mutanen Edo, wani matashin dan kokawa mai suna Joromi ya shahara saboda karfinsa.",
+  "champion-2": "Lokacin da ya shiga dandalin kauye, kowa yana son kallo.",
+  "champion.ask": [
+    "Wanene Joromi?"
+  ],
+  "skill": "Yana da saurin kafa. Yana iya jin lokacin da abokin hamayya ya karkatar da nauyinsa kuma ya san ta wace fuska gwagwarmayar gaba za ta juya.",
+  "skill-2": "Dan kokawa daya bayan daya sun fadi a gabansa.",
+  "pride": "Da farko, Joromi ya godewa mutanen da suka yi murna. Amma tare da kowace nasara girman kansa ya karu.",
+  "pride-2": "Ba a jima ba ya fara gaskata cewa babu kowa, ko a ina, wanda zai iya doke shi.",
+  "pride-2.ask": [
+    "Me yasa Joromi ya zama mai girman kai?"
+  ],
+  "sister": "‘Yar uwarsa ta san jaruntakarsa. Ta kuma san yadda bai son gargadi.",
+  "sister-2": "Lokacin da ta yi magana game da iyaka, kawai kalubale ne da ke jiran a amsa ya ji.",
+  "palm": "Kusa da gidansu akwai wani bishiyar dabino da aka gargade shi da kada ya hau.",
+  "palm-2": "Ga Joromi, har ma da wannan gargadin ya fara yin kamar zagin karfinsa ne.",
+  "climb": "Wata rana ya kama gangar jikin ya hau. ‘Yar uwarsa ta kira shi bayansa.",
+  "climb-2": "Ya ci gaba, ya fi rufin gida, ya fi sanannun sautunan kauyen.",
+  "climb-2.ask": [
+    "Me yasa ‘yar uwarsa ke gargadinsa?"
+  ],
+  "beyond": "Sa'an nan bishiyar ta kai shi bayan duniyar da ya sani. A karkashinsa akwai kasar mutane.",
+  "beyond-2": "A gaban sa ya bude wani wuri, inda iskoki suka taru don yin kokawa.",
+  "challenge": "Joromi ya kalli filin wasansu. Ya doke zakarun duniyar dan adam.",
+  "challenge-2": "Me yasa zai koma baya yanzu? Ya matso gaba ya ba da kalubalensa.",
+  "fly": "‘Yar uwarsa ba za ta yashe shi ba.",
+  "fly-2": "A cikin wannan labarin, ta koma karamar kwaro kuma ta bi shi, tana dauke da muryarta inda kafafunta na dan adam ba za su iya zuwa ba.",
+  "fly-2.ask": [
+    "Ta yaya ‘yar uwarsa ke taimaka masa?"
+  ],
+  "stranger": "Ruhun sun kalli bako.",
+  "stranger-2": "Ga mutum na nama da numfashi, tsaye a wuri wanda ba nasa ba, yana neman ya tabbatar da kansa a kan su.",
+  "two-heads": "Wani ruhu mai kan biyu ya fito gaba. Joromi ya sadu da shi a filin wasa.",
+  "two-heads-2": "Sun yi ta kokawa da juna, babu wanda ya yarda ya ba da kai, yayin da masu kallo suka cika kusa.",
+  "patience": "Gwagwarmayar ta dade sosai fiye da duk wani gasa da Joromi ya sani a gida.",
+  "patience-2": "Karfi kadai bai isa ba. Dole ne ya kalli, jira, da kuma nemo lokacin da zai yi aiki.",
+  "patience-2.ask": [
+    "Me yasa hakuri ke da amfani a cikin yaki?"
+  ],
+  "voice": "Muryar ‘yar uwarsa ta isa gare shi ta cikin hayaniyar.",
+  "voice-2": "Ta kira sunansa kuma ta tunatar da shi nisan da ya zo. Amma kowace nasara ta kuma kai shi nisa da aminci.",
+  "victory": "Daga karshe Joromi ya sha kan wancan abokin hamayyar. Filin wasan ya motsa.",
+  "victory-2": "Ya tabbatar da cewa dan adam zai iya tsayawa a kan ruhu. Duk da haka har yanzu bai yi tunanin komawa gida ba.",
+  "seven-heads": "Wani kalubale ya biyo baya. Yanzu hatsarin da ke gabansa ya fi girma.",
+  "seven-heads-2": "Wani mummunan ruhu mai kan bakwai ya tsaya a shirye don ya yaki, kuma iskar da ke kewaye da ita ta zama kamar tana kone.",
+  "tired": "A karo na farko, Joromi ya ji yadda jikinsa ya gaji. Hannunsa sun yi nauyi.",
+  "tired-2": "Numfashinsa ya gajere. Jaruntaka ce ta kawo shi nan; girman kai ya rike shi anan.",
+  "tired-2.ask": [
+    "Me ke canzawa lokacin da Joromi ya gaji?"
+  ],
+  "struggle": "Duk da haka ya yi yaki. Ruhun ya matse shi sosai, yana ba shi dan lokaci kadan don ya dawo da hankalinsa.",
+  "struggle-2": "‘Yar uwarsa ta tsaya kusa, karamar muryarta ta ki bace a cikin rudani.",
+  "opening": "Joromi ya yi gwagwarmaya kyauta kuma ya sami damar tserewa.",
+  "opening-2": "Wannan ba gasar kauye ba ce ta al'ada, tare da abokai suna jiran su ɗaga shi zuwa kafadunsu lokacin da ta ƙare.",
+  "escape": "Ya juya zuwa hanyar gida. Kasa ya gudu daga duniyar ruhu, ya bar zakarun nata a baya.",
+  "escape-2": "Sananniyar duniya da ke karkashin kafafunsa ta fi wata nasara daraja.",
+  "escape-2.ask": [
+    "Me yasa Joromi ya yanke shawarar tserewa?"
+  ],
+  "home": "‘Yar uwarsa ta dawo tare da shi. Ya shiga wancan filin wasa mai ban mamaki yana da tabbacin cewa karfi zai iya amsa kowane tambaya.",
+  "home-2": "Ya dawo yana sanin cewa akwai tambayoyin da karfi ba zai iya amsawa ba.",
+  "remember": "Wannan shi ne Joromi da aka tuna a cikin wannan labari: jarumi isa ya fuskanci abokin hamayya mai tsoratarwa,",
+  "remember-2": "amma an kawo shi kusa da masifa ta hanyar sha'awar doke kowa.",
+  "lesson": "Kuma idan dattijon ya gama, ya bar wata tambaya kusa da wuta.",
+  "lesson-2": "Shin mutum mafi ƙarfi shine wanda ke ci gaba da yaƙi, ko kuwa ƙarfi na iya nufin sanin lokacin da za a tsaya?",
+  "lesson-2.ask": [
+    "Shin sanin lokacin da za a tsaya zai iya zama wani nau'i na ƙarfi?"
+  ],
+  "words": [
+    "jarunta",
+    "haƙuri",
+    "ƙarfi"
+  ],
+  "game": {
+    "offer": "Fuskanci ruhohin",
+    "intro": "Zauna a wuri guda. Yi amfani da taɓawa mai laushi. Kare gefen da ke haske, karkata daga bugun sama, sannan ka bugi fuskokin.",
+    "flat": "Tsaya a wuri guda. Riƙe gefen hagu ko dama na allo don karewa (ko A da D), riƙe ƙasa don sunkuyawa daga harin ƙasa (ko S), sannan danna fuskarn da ke haskakawa don bugawa (ko Sarari - Space).",
+    "adaptation": "Wasan dambe wanda aka yi wahayi zuwa gare shi daga labarin kokawa.",
+    "start": "Fara",
+    "back": "Koma zuwa labarin",
+    "replay": "Sake kunna wasan",
+    "level": "Ruhu {0} / {1}",
+    "health": "Tsaro {0} / {1}",
+    "mist": "Ruhun Hazo",
+    "ember": "Ruhun Wuta",
+    "wind": "Ruhun Iska",
+    "seven": "Ruhun Mai Kai Bakwai",
+    "approach": "Kalli yadda ruhun ke kusantowa.",
+    "left": "Kare hagu naka",
+    "right": "Kare dama naka",
+    "duck": "Karkata daga bugun sama",
+    "counter": "Lokacinka: bugi fuska",
+    "recover": "Sanya hannaye baya. Kalli tsari na gaba.",
+    "tracking": "Nuna hannaye biyu don ci gaba.",
+    "clear": "An kammala ruhu",
+    "won": "An kammala horo. Sanin lokacin da za a tsaya shine ƙarfi.",
+    "lost": "Ɗauki numfashi. Gwada wannan ruhun kuma.",
+    "progress": "Abubuwan da aka yi niyya {0} / {1}"
+  }
+}

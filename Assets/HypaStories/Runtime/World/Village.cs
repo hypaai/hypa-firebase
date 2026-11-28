@@ -126,23 +126,37 @@ namespace HypaStories
 
         // ---------- the celebration at the campfire (after the Dodo game) ----------
 
-        Transform _party;
+        Transform _party, _partyStage;
+        Vector3 _partyStageAt;
+        float _gatherNear = 5.6f, _gatherFar = 12.5f;
         bool _placeWanted = true;
         readonly List<(Figure f, Vector3 from, Vector3 to)> _celebrants = new List<(Figure, Vector3, Vector3)>();
         float _partyT = -1f, _nextCheer;
         AudioSource _partyDrums, _partyCrowd, _partyCheer;
         AudioClip _murmurClip, _cheerClip;
 
-        /// <summary>The huts and their sounds. Off in your room: the script stays awake so a celebration at the fire can still run.</summary>
+        /// <summary>
+        /// The huts and their sounds. Off in your room: the script stays awake so a celebration at the fire can still run, and the
+        /// place moves to the camp's door layer, so only a door that looks into the village shows it, never your own view.
+        /// </summary>
         public void SetPlaceShown(bool on)
         {
             _placeWanted = on;
-            if (!on && _root != null) _root.gameObject.SetActive(false);
+            if (_root != null)
+            {
+                if (!on) _root.gameObject.SetActive(false);
+                SetLayer(_root, on ? 0 : CampWorld.DestLayer);
+            }
             foreach (var s in GetComponentsInChildren<AudioSource>(true))
             {
                 if (_party != null && s.transform.IsChildOf(_party)) continue;
                 s.mute = !on;
             }
+        }
+
+        static void SetLayer(Transform t, int layer)
+        {
+            foreach (var c in t.GetComponentsInChildren<Transform>(true)) c.gameObject.layer = layer;
         }
 
         CampWorld _camp;
@@ -158,6 +172,34 @@ namespace HypaStories
             return new Vector3(flat.x / m * r, forest.y, flat.y / m * r);
         }
 
+        /// <summary>A campfire point (the crowd stands near 5.6 m and walks in from 12.5 m) pulled onto another ring, keeping its direction.</summary>
+        public static Vector3 Around(Vector3 campfire, float near, float far)
+        {
+            var flat = new Vector2(campfire.x, campfire.z);
+            var m = flat.magnitude;
+            if (m < 1e-3f) return campfire;
+            var r = Mathf.Lerp(near, far, Mathf.InverseLerp(5.6f, 12.5f, m));
+            return new Vector3(flat.x / m * r, campfire.y, flat.y / m * r);
+        }
+
+        /// <summary>
+        /// The same celebration, parented to <paramref name="stage"/> so it plays there while the village stays hidden.
+        /// <paramref name="near"/> is the ring they dance on, <paramref name="far"/> is where they walk in from.
+        /// </summary>
+        public void CelebrateAround(Transform stage, Vector3 at, float near, float far, bool drums = false)
+        {
+            _partyStage = stage; _partyStageAt = at; _gatherNear = near; _gatherFar = far;
+            Celebrate(true, drums);
+        }
+
+        /// <summary>Keeps the away-from-home celebration moving when the village itself is hidden and its own Update does not run.</summary>
+        public void StepParty(float dt)
+        {
+            if (_partyStage == null || _partyT < 0f) return;
+            if (!isActiveAndEnabled) _t += dt;
+            Celebrants(dt);
+        }
+
         /// <summary>
         /// Villagers come out of the trees round the campfire and dance (Dodo is dead). Off: they go. Built once, the first time.
         /// They live at the camp, not in the village, so they show however far away the village is.
@@ -167,8 +209,15 @@ namespace HypaStories
         {
             if (!on)
             {
-                if (_party != null) _party.gameObject.SetActive(false);
-                if (_masq != null && _masq.parent != _root) { _masq.SetParent(_root, false); }   // the masquerade goes home
+                if (_masq != null && _masq.parent != _root) { _masq.SetParent(_root, false); SetLayer(_masq, _root.gameObject.layer); }   // the masquerade goes home
+                if (_party != null)
+                {
+                    _party.SetParent(transform, false);
+                    _party.localPosition = Vector3.zero;
+                    _party.localRotation = Quaternion.identity;
+                    _party.gameObject.SetActive(false);
+                }
+                _partyStage = null;
                 _partyT = -1f;
                 return;
             }
@@ -204,6 +253,13 @@ namespace HypaStories
                 _partyCheer.transform.localPosition = new Vector3(0f, 1.5f, 6f);
                 _cheerClip = ProceduralClips.Clip("cheer", ProceduralClips.CheerSamples(213));
             }
+            if (_partyStage != null)
+            {
+                _party.SetParent(_partyStage, false);
+                _party.localPosition = _partyStageAt;
+                _party.localRotation = Quaternion.identity;
+                SetLayer(_party, _partyStage.gameObject.layer);
+            }
             _party.gameObject.SetActive(true);
             _partyT = 0f;
             _partyDrums.volume = 0.9f; _partyDrums.time = 0f;
@@ -212,7 +268,7 @@ namespace HypaStories
             _partyCheer.PlayOneShot(_cheerClip, 1f);
             _nextCheer = _t + 6f;
             // and the masquerade comes to dance round the campfire
-            if (_masq != null) { _masq.SetParent(_party, false); _masq.gameObject.SetActive(true); }
+            if (_masq != null) { _masq.SetParent(_party, false); SetLayer(_masq, _party.gameObject.layer); _masq.gameObject.SetActive(true); }
         }
 
         void Celebrants(float dt)
@@ -230,11 +286,21 @@ namespace HypaStories
                 _masqAngle += dt * (0.3f + _masqSpin * 0.3f);
                 _masqYaw += dt * _masqSpin * 720f;
                 var arrive = Mathf.Clamp01(_partyT / 2.5f);
-                // back and forth along the far side of the fire, facing you: never close to your seat
-                var swing = Mathf.Sin(_masqAngle * 0.8f) * (InRoom ? 0.65f : 1.15f); // a wide swing at room size would cross the stones
-                var reach = InRoom
-                    ? Mathf.Lerp(GameFit.StoneEdge + 0.9f, GameFit.StoneEdge + 0.45f, Mathf.SmoothStep(0f, 1f, arrive))
-                    : Mathf.Lerp(9f, 2.5f, Mathf.SmoothStep(0f, 1f, arrive));
+                float swing, reach;
+                if (_partyStage != null)
+                {
+                    // inside the villagers' ring, round the arena circle, the same whirl as round the campfire
+                    swing = Mathf.Sin(_masqAngle * 0.8f) * 0.7f;
+                    reach = Mathf.Lerp(_gatherFar * 0.75f, Mathf.Max(1.25f, _gatherNear * 0.68f), Mathf.SmoothStep(0f, 1f, arrive));
+                }
+                else
+                {
+                    // back and forth along the far side of the fire, facing you: never close to your seat
+                    swing = Mathf.Sin(_masqAngle * 0.8f) * (InRoom ? 0.65f : 1.15f); // a wide swing at room size would cross the stones
+                    reach = InRoom
+                        ? Mathf.Lerp(GameFit.StoneEdge + 0.9f, GameFit.StoneEdge + 0.45f, Mathf.SmoothStep(0f, 1f, arrive))
+                        : Mathf.Lerp(9f, 2.5f, Mathf.SmoothStep(0f, 1f, arrive));
+                }
                 var around = new Vector2(Mathf.Sin(swing), Mathf.Cos(swing)) * reach;
                 _masq.localPosition = X0Z(around, Mathf.Abs(Mathf.Sin(loopT * Mathf.PI * 2f)) * 0.08f);
                 _masq.localRotation = Quaternion.Euler(0f, _masqYaw, 0f);
@@ -244,8 +310,8 @@ namespace HypaStories
             {
                 var (f, from, to) = _celebrants[i];
                 var walk = Mathf.Clamp01((_partyT - i * 0.15f) / 3.2f);         // out of the trees, one after another
-                var fromP = InRoom ? NearTheFire(from) : from;
-                var toP = InRoom ? NearTheFire(to) : to;
+                var fromP = _partyStage != null ? Around(from, _gatherNear, _gatherFar) : InRoom ? NearTheFire(from) : from;
+                var toP = _partyStage != null ? Around(to, _gatherNear, _gatherFar) : InRoom ? NearTheFire(to) : to;
                 var at = Vector3.Lerp(fromP, toP, Mathf.SmoothStep(0f, 1f, walk));
                 var bob = walk < 1f ? Mathf.Abs(Mathf.Sin(_t * 8f + i)) * 0.05f : Mathf.Abs(Mathf.Sin(beat + f.Ph)) * 0.07f;
                 f.Root.localPosition = at + Vector3.up * bob;
@@ -1162,7 +1228,7 @@ namespace HypaStories
             var cam = Tick();
             if (cam == null) return;
             var dt = Time.deltaTime;
-            Celebrants(dt);
+            if (_partyStage == null) Celebrants(dt); // an away celebration is stepped by whoever is hosting it
             var dist = Vector2.Distance(Viewer, VillageLayout.Plaza);
             // the drums come clear as you come out of the trees
             _drumsMuffle.cutoffFrequency = Mathf.Lerp(900f, 22000f, Mathf.Pow(Mathf.Clamp01(1f - (dist - 8f) / 26f), 2f));

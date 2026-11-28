@@ -1,0 +1,101 @@
+{
+  "champion": "Zamani za kale, katika nchi ya watu wa Edo, mwanamieleka kijana aliyeitwa Joromi alipata umaarufu kwa nguvu zake.",
+  "champion-2": "Alipoingia kwenye uwanja wa kijiji, kila mtu alitaka kumtazama.",
+  "champion.ask": [
+    "Joromi ni nani?"
+  ],
+  "skill": "Alikuwa mwepesi wa miguu. Aliweza kuhisi mpinzani wake akihamisha uzito wake na kujua ni mwelekeo gani pambano linalofuata lingechukua.",
+  "skill-2": "Mwanamieleka mmoja baada ya mwingine alianguka mbele yake.",
+  "pride": "Mwanzoni, Joromi aliwashukuru watu waliomshangilia. Lakini kwa kila ushindi, kiburi chake kiliongezeka.",
+  "pride-2": "Punde alianza kuamini kwamba hapakuwa na mtu yeyote, popote pale, aliyeweza kumshinda.",
+  "pride-2.ask": [
+    "Kwa nini Joromi anakuwa na kiburi?"
+  ],
+  "sister": "Dada yake alijua ujasiri wake. Pia alijua jinsi alivyochukia kuonywa.",
+  "sister-2": "Alipozungumza juu ya mipaka, yeye alisikia tu changamoto inayosubiri kujibiwa.",
+  "palm": "Karibu na nyumba yao palikuwa na mti wa mnazi ambao alikuwa ameonywa asiupande.",
+  "palm-2": "Kwa Joromi, hata onyo hilo lilianza kuonekana kama tusi kwa nguvu zake.",
+  "climb": "Siku moja alishika shina na kupanda. Dada yake alimwita akimfuata.",
+  "climb-2": "Aliendelea kupanda, juu zaidi kuliko paa za nyumba, juu zaidi kuliko sauti zilizozoeleka za kijiji.",
+  "climb-2.ask": [
+    "Kwa nini dada yake anamwonya?"
+  ],
+  "beyond": "Kisha mti huo ulimbeba hadi nje ya ulimwengu alioujua. Chini yake kulikuwa na nchi ya wanadamu.",
+  "beyond-2": "Mbele yake palifunguka mahali pengine, ambapo mizimu ilikusanyika kufanya mieleka.",
+  "challenge": "Joromi alitazama uwanja wao. Alikuwa amewashinda mabingwa wa ulimwengu wa wanadamu.",
+  "challenge-2": "Kwa nini ageuke sasa? Alipiga hatua mbele na kutoa changamoto yake.",
+  "fly": "Dada yake hakumwacha.",
+  "fly-2": "Katika masimulizi haya, alijigeuza kuwa nzi mdogo na kumfuata, akibeba sauti yake mahali ambapo miguu yake ya kibinadamu isingeweza kufika.",
+  "fly-2.ask": [
+    "Dada yake anamsaidiaje?"
+  ],
+  "stranger": "Mizimu ilimtazama mgeni huyo.",
+  "stranger-2": "Huyu alikuwa mtu wa nyama na pumzi, akisimama mahali pasipokuwa pake, akiomba kujipima nguvu dhidi yao.",
+  "two-heads": "Mzimu wenye vichwa viwili ulijitokeza mbele. Joromi alikabiliana nao uwanjani.",
+  "two-heads-2": "Walikaza misuli dhidi ya mmoja na mwenzake, hakuna aliyekuwa tayari kukata tamaa, huku watazamaji wakisonga karibu.",
+  "patience": "Pambano hilo lilidumu kwa muda mrefu zaidi kuliko shindano lolote ambalo Joromi alikuwa amelifahamu nyumbani.",
+  "patience-2": "Nguvu pekee hazikutosha. Alilazimika kutazama, kusubiri, na kupata wakati mzuri wa kuchukua hatua.",
+  "patience-2.ask": [
+    "Kwa nini uvumilivu ni muhimu katika mapambano?"
+  ],
+  "voice": "Sauti ya dada yake ilimfikia katikati ya kelele. Alimwita jina lake na kumkumbusha jinsi alivyokuwa ametoka mbali.",
+  "voice-2": "Lakini kila ushindi pia ulimpeleka mbali zaidi na usalama.",
+  "victory": "Hatimaye Joromi alimshinda mpinzani huyo. Uwanja ulitaharuki.",
+  "victory-2": "Alikuwa amethibitisha kuwa mwanadamu anaweza kusimama dhidi ya mzimu. Hata hivyo, bado hakufikiria kurejea nyumbani.",
+  "seven-heads": "Changamoto nyingine ilifuata. Sasa hatari iliyokuwa mbele yake ilikuwa kubwa zaidi.",
+  "seven-heads-2": "Mzimu wa kutisha wenye vichwa saba ulikuwa tayari kupigana, na hewa iliyouzunguka ilionekana kuwaka moto.",
+  "tired": "Kwa mara ya kwanza, Joromi alihisi jinsi mwili wake ulivyokuwa umechoka. Mikono yake ilikuwa mizito.",
+  "tired-2": "Pumzi zake zilikuwa fupi. Ujasiri ulikuwa umemleta hapa; kiburi kilikuwa kimemweka hapa.",
+  "tired-2.ask": [
+    "Ni nini kinachobadilika Joromi anapochoka?"
+  ],
+  "struggle": "Hata hivyo alipigana. Mzimu ulimkandamiza sana, ukimpa muda mchache wa kupumzika.",
+  "struggle-2": "Dada yake alikaa karibu, sauti yake ndogo ikikataa kupotea katika vurugu hizo.",
+  "opening": "Joromi alipambana akajiokoa na kupata nafasi ya kutoroka.",
+  "opening-2": "Hili halikuwa shindano la kawaida la kijijini, kukiwa na marafiki wanaosubiri kumbeba begani likiisha.",
+  "escape": "Aligeuka kuelekea njia ya nyumbani. Alikimbia chini kutoka ulimwengu wa mizimu, akiwaacha mabingwa wake nyuma.",
+  "escape-2": "Ardhi anayoijua chini ya miguu yake ilikuwa yenye thamani zaidi kuliko ushindi mwingine.",
+  "escape-2.ask": [
+    "Kwa nini Joromi anaamua kutoroka?"
+  ],
+  "home": "Dada yake alirudi naye. Alikuwa ameingia kwenye uwanja ule wa ajabu akiwa na uhakika kwamba nguvu zingeweza kujibu kila swali.",
+  "home-2": "Alirudi akijua kwamba kuna maswali ambayo nguvu isingeweza kuyajibu.",
+  "remember": "Huyo ndiye Joromi anayekumbukwa katika masimulizi haya: jasiri wa kutosha kukabiliana na mpinzani wa kutisha,",
+  "remember-2": "lakini aliyetarajiwa kupata maafa kwa sababu ya nia ya kumshinda kila mtu.",
+  "lesson": "Na mzee anapomaliza, anaacha swali kando ya moto.",
+  "lesson-2": "Je, mtu mwenye nguvu zaidi huwa ni yule anayeendelea kupigana kila wakati, au nguvu inaweza pia kumaanisha kujua wakati wa kuacha?",
+  "lesson-2.ask": [
+    "Je, kujua wakati wa kuacha kunaweza kuwa aina ya nguvu?"
+  ],
+  "words": [
+    "ujasiri",
+    "uvumilivu",
+    "nguvu"
+  ],
+  "game": {
+    "offer": "Kabiliana na mizimu",
+    "intro": "Baki katika eneo moja. Tumia ngumi nyepesi. Linda upande unaong'aa, inama kukwepa pigo la juu, kisha piga nyuso.",
+    "flat": "Kaa sehemu moja. Shikilia upande wa kushoto au wa kulia wa skrini ili kujikinga (au A na D), shikilia chini ili kuinama na kukwepa shambulio la juu (au S), kisha gusa uso unaong'aa ili kupiga ngumi (au Space).",
+    "adaptation": "Mchezo wa ngumi uliotiwa msukumo na hadithi ya mieleka.",
+    "start": "Anza",
+    "back": "Rudi kwenye hadithi",
+    "replay": "Cheza tena",
+    "level": "Mzimu {0} / {1}",
+    "health": "Linda {0} / {1}",
+    "mist": "Mzimu wa Ukungu",
+    "ember": "Mzimu wa Kaa la Moto",
+    "wind": "Mzimu wa Upepo",
+    "seven": "Mzimu wenye Vichwa Saba",
+    "approach": "Tazama mzimu ukikaribia.",
+    "left": "Linda upande wako wa kushoto",
+    "right": "Linda upande wako wa kulia",
+    "duck": "Inama kukwepa pigo la juu",
+    "counter": "Zamu yako: piga uso",
+    "recover": "Rudisha mikono nyuma. Tazama mtindo unaofuata.",
+    "tracking": "Onyesha mikono yote miwili ili kuendelea.",
+    "clear": "Mzimu umekamilika",
+    "won": "Mazoezi yamekamilika. Kujua wakati wa kuacha ni nguvu.",
+    "lost": "Vuta pumzi. Jaribu mzimu huu tena.",
+    "progress": "Shabaha {0} / {1}"
+  }
+}

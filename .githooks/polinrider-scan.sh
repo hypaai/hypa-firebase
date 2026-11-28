@@ -1,6 +1,6 @@
 #!/bin/sh
 # Scans a commit's whole tree (default HEAD) for the PolinRider loader. Used by hypa-push and the pre-push hook.
-# Copied from hypa-v2/.githooks; the only change is that Git LFS pointer files are allowed as fonts.
+# Shared with Hypa's other repositories; the only change is that Git LFS pointer files are allowed as fonts.
 rev=${1:-HEAD}
 git cat-file -e "$rev^{tree}" 2>/dev/null || { echo "::error::cannot read $rev"; exit 2; }
 found=0

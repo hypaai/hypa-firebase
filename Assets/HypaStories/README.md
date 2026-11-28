@@ -25,8 +25,8 @@ Under the shell, the shell's rig is used instead (`StandaloneOnly`).
 | Click a card, arrows, `<` `>`, Enter | Pinch | Focus a card, **Begin story** |
 | Language buttons | Pinch | Narration, questions and answers in English / Français / Español |
 | Space, ← → | Pause, `<<` `>>` | Pause / resume / replay, previous / next line |
-| **H** | Raise a hand above your head | Interrupt and ask |
-| **Q** | Raise a hand above your head | Ask; **Done** / **Skip** = done talking / skip the line being said |
+| **H** | Raise a hand above your head | Interrupt and ask; while the storyteller thinks or answers, ask again (that answer stops) |
+| **Q** | Raise a hand above your head | Ask; **Done** / **Skip** = done talking / skip the answer line being said (never the "let me think") |
 | **T**, after the story ends | Pinch **Try Hypa Translate** | Opens Hypa Translate in the story panel (see [Try Hypa](#try-hypa)); Esc / **x** closes it. The corner button becomes **Speak** |
 | 1-3, suggestion buttons | Pinch a suggestion | Ask a suggested question, or translate a suggested word |
 | Esc, **Back** | Pinch Back | Cancel the question / back to the list / back to start |
@@ -35,11 +35,11 @@ Under the shell, the shell's rig is used instead (`StandaloneOnly`).
 
 ### Stories beside the elder
 
-Walk close to the elder inside the village, or use **Meet the locals** at the gate. Within 2.2 metres, the same place-button row appears with **Narrate story** as its main action. It opens the existing floating story list with **The Death of the Rice Farmer** and **The Girl Who Chose Hare** only. The fireside continues to offer its original four stories.
+Walk close to the elder inside the village, or use **Meet the locals** at the gate. Within 2.2 metres, the same place-button row appears with **Narrate story** as its main action. It opens the existing floating story list with **Joromi and the Spirit Wrestlers**, **The Death of the Rice Farmer** and **The Girl Who Chose Hare** only. The fireside continues to offer its original four stories.
 
-The list, language controls, narration, Ask, replay, and Try Hypa Translate are shared with the fireside. Opening or backing out of the elder's list does not recenter the world. Normal completion leaves the player panel and its existing ending options in place; Back returns to the two-story list. The elder is unchanged, and narration uses the existing voice source. Enter/Space near the elder opens the same list in the editor. The hut door and the village gate keep their buttons while a story is open. Narrate story hides once the elder's list or story is open. Walk far from him outdoors, or step back through the village door, and a story he is still telling stops. Stepping back then returns to the campfire room. In your room he stays with you, and that doorway is put away.
+The list, language controls, narration, Ask, replay, and Try Hypa Translate are shared with the fireside. Opening or backing out of the elder's list does not recenter the world. Normal completion leaves the player panel and its existing ending options in place; Back returns to the elder's list. The elder is unchanged, and narration uses the existing voice source. Enter/Space near the elder opens the same list in the editor. The hut door and the village gate keep their buttons while a story is open. Narrate story hides once the elder's list or story is open. Walk far from him outdoors, or step back through the village door, and a story he is still telling stops. Stepping back then returns to the campfire room. In your room he stays with you, and that doorway is put away.
 
-Both new stories include English plus French, Spanish, Hausa, Igbo, Pidgin, Swahili, and Yoruba scripts, suggested questions, and three practice words per language. See [story sources and attribution](Resources/Stories/SOURCES.md) for the source accounts and adaptation notes.
+All three elder stories include English plus French, Spanish, Hausa, Igbo, Pidgin, Swahili, and Yoruba scripts, suggested questions, and three practice words per language. See [story sources and attribution](Resources/Stories/SOURCES.md) for the source accounts and adaptation notes.
 
 `Places.GoTo("camp" | "hut" | "gathering")` (`Runtime/Core/Places.cs`) fades through the warm veil, switches place and fades back.
 Each place is its own scene: `HypaStory` (the camp), `HypaStoryHut`, `HypaStoryGathering`.
@@ -98,7 +98,7 @@ the fire changes.
 - **You walk for yourself:** in the room the thumbsticks don't move the fire, the walk limits are off, and the trail panels stay.
   A place button (the hut, the village) puts the forest back first; leaving the camp does too.
 - **Seams:** `Core/StoryRoom` holds the headset hooks (`Scan`, `Depth`, `Passthrough`), set by `HypaStories.Quest` (Depth,
-  `HypaCore.Quest/PassthroughKeep.Active`) and `HypaStories.Quest.Mruk` (needs the MR Utility Kit). Without them the camp still
+  `HypaCore.Quest/PassthroughKeep.CanRun`) and `HypaStories.Quest.Mruk` (needs the MR Utility Kit). Without them the camp still
   goes into the room, fire in front, no hiding. `CampWorld.SetRoom` is the scene side.
 - **Needs** a Quest 3 with the room permission (`USE_SCENE`; the manifest has it) and passthrough (kept on by `PassthroughKeep`).
   Re-run **Hypa > Stories > Create Story Scene** once if the **StoryAssets** asset doesn't show `depthLit`.
@@ -220,8 +220,8 @@ Each story is a folder in `Resources/Stories/{id}/`, listed in card order in `St
 
 - `story.json`: the card (`theme`, `accent`, `eyebrow`, `title`, `description`), the `models` that answer questions
   (`"provider/model"`, in order: every question starts with the first, and a model that fails hands the same question to the
-  next at once, within the 12 s the storyteller waits; one the service says it doesn't have is skipped for the session. All three
-  stories use Meta's `meta/meta-models/Muse-Spark-Open-816B-A42B:baseten`, then `google/gemini-3.5-flash`, then
+  next at once, within the 12 s the storyteller waits; one the service says it doesn't have is skipped for the session. Every
+  story that lists models uses Meta's `meta/meta-models/Muse-Spark-Open-816B-A42B:baseten`, then `google/gemini-3.5-flash`, then
   `meta/meta-models/Muse-Glimmer-30B:deepinfra`, then `meta/muse-wonder-1.0` (last until the service can reach it again); an older single
   `model` still works), the storyteller's `voices` (`[{ "model", "voice" }]`, as Hypa
   `list_voices` names them; `voice` is one name for every language or `{ "language code": name }`, since Hypa's voices are per
@@ -253,7 +253,7 @@ the translations are matched on.
 ## Hypa API use
 
 - **TTS** (`text_to_speech`, verified schema): every line the storyteller says: the narration of both stories in every language,
-  fillers, answers. Both stories use Hypa's Auto routing (no `voices`): hypa-v2 ranks the speech models for the language by its
+  fillers, answers. Both stories use Hypa's Auto routing (no `voices`): Hypa ranks the speech models for the language by its
   benchmarks, uses the top model's first voice and fails over to the next model on the server (on 2026-11-14: English OpenAI `alloy`,
   Spanish Google `Achernar`, French / Hausa / Igbo / Pidgin / Yoruba Hypa Orpheus `Adaugo` / `Juliet` / `Amarachi` / `Prince` /
   `Eniola`; 2.7-8 s a line). Auto routes every request on its own, so its first pick in a language (the provider/model and voice
@@ -291,7 +291,7 @@ the translations are matched on.
 - The "Voice" cue toggle (say "pause" / "question"): needs an on-device wake-word recogniser (Meta Voice SDK); raise a hand instead.
 - Typed questions: replaced by suggested-question buttons in VR. Try Hypa takes a tap on a word, or your voice.
 - Loader, grain, bloom, adaptive quality, debug panel: desktop-preview features. On Quest use OVR fixed foveation and the
-  Immersive Debugger; the Q&A timing log goes to the console (and the player's note line in the editor).
+  Immersive Debugger; each question's timings are kept in `AskFlow.Log`.
 - An Animator with Idle / Talking clips for the storyteller (the bones are driven directly, as in the prototype without clips).
 
 ## UI
@@ -303,9 +303,13 @@ The player sits just below eye level so the storyteller stays in view above it.
 
 ## Quest performance notes
 
-No shadows, no post, one real-time point light, two mist bands, halved particle counts, 3-octave noise. Still to measure on a
-headset: the glTF props (grass and rock sets have many sub-meshes; merge or instance them if draw calls are high), the card shader
-(full-screen-ish fbm on two cards), and the fire light's per-pixel cost.
+No shadows, no post, two mist bands, halved particle counts, 3-octave noise. The fire light is vertex-only: as a per-pixel
+light it redrew the ground, rocks and storyteller and cost about 3 ms of GPU a frame (measured on a Quest 3, Nov 2026), enough
+to drop the campfire to 70% resolution. The camp gives it a subdivided patch of floor (`StoryMeshes.FirelitGround`) so the
+flicker still lands on the dirt. Still to measure: the glTF props (grass and rock sets have many sub-meshes) and the card shader.
+
+To read GPU cost on the headset: `adb logcat -s VrApi` (`App=` is GPU ms, `GPU%` how busy, `SF` the resolution scale; dynamic
+resolution lowers `SF` before frames drop).
 
 ## The Dodo game (after *Seven Hot Stones*)
 
@@ -391,3 +395,15 @@ Profiles use a versioned local PlayerPrefs record (`hypa.stories.local-profile.v
 with a stable generated ID. There are no passwords, email collection, remote calls, uniqueness guarantees or online accounts. This
 supplies local identity/appearance data for a later multiplayer implementation. Data is per device/browser and may be cleared with
 local app storage.
+
+## Joromi: spirit practice
+
+**Joromi and the Spirit Wrestlers** is the first village elder card. The independently written Edo/Bini retelling is about four minutes in English (627 words across 44 short narration paragraphs; TTS controls actual pacing). It uses the same eight languages, line-by-line TTS, suggested questions, Ask flow, narration billing, and end-of-story translation practice as the other elder stories. See `Resources/Stories/SOURCES.md` for the escape variant and adaptation notes. The seven non-English scripts and game labels were translated with Hypa's `translate_message` MCP tool; native-speaker review is pending.
+
+At the end, **Face the spirits** opens an optional boxing fight. This is a game adaptation of a wrestling legend, not a traditional Edo boxing demonstration. The spirits are original procedural meshes: only floating ivory masks and two carved ivory fists, with no body, under a starry night dome that hides the camp. **In my room** (on the fight's panel between bouts, as on the drum and Dodo games) puts the dome, ground and palms away so the spirits fight in your real room, with the headset's depth sensing on so your furniture can hide them; **Back to the forest** brings the clearing back. The fight holds still while the room switches. Their ivory masks borrow the look of Benin pendant masks (a crown of small heads, a netted cap, two forehead bars, a braided jaw band) in the game's simple shapes. No third-party art or music is used.
+
+- Four levels: Mist (left/right guards), Ember (a longer side pattern), Wind (a high sweep to duck), and a seven-headed final spirit combining the patterns. Each spirit floats in before attacking. It has no arms: two floating hands coil, then fly at the side you must guard, or sweep across at head height. After its pattern its heads drop to chin height and you punch a face. On a one-headed spirit that face is the only target. On a spirit with more than one head, one standing head is picked at random and a glow sits behind it: only that head counts, and a punch that misses it and lands in another head does not count. One fist then flies in and you lose a guard point. After every punch that lands another standing head is picked, a different one while there is one. A head goes down once it has taken its share of punches, the spirit's total divided by its heads (8 on the one-headed spirit, then 4, 3, and 2 on each of the seven heads), and the picks go on among the heads left. The spirit is beaten when its last head goes down. From the second spirit on the pattern shuffles each round, the tell shortens a little each round, and each counter allows one punch more than the spirit just threw (3, 4, 4, then 5) within four seconds.
+- The spirits take 8, 8, 9, then 14 punches. Five missed defenses exhaust the guard meter. After a clear or a loss the next spirit (or the same one again) floats in by itself after three seconds. Begin is pressed once; Play again appears only after the final spirit.
+- Gentle forward hand motion through the target counts as a punch; resting hands, backward motion, and tracking discontinuities do not. Both tracked hands are needed to Begin on Quest; during the fight a lost hand just cannot guard or punch; controllers use the existing hand-position fallback. Hands are read as left and right by handedness, not by the order the rig lists them, and a hand object more than a metre from your eyes is ignored (the rig can keep a second, still one at its floor origin that still reports tracking). Guard the indicated side near the face, or meet the incoming fist with either hand (within 20 cm), or lower the head slightly for a sweep. A small glow follows each hand where the game sees it and turns green while it counts as a guard.
+- The spirit follows you as you step and turn, a little behind. Taking the headset off or opening the system menu freezes the fight, and it carries on by itself when you return. No movement controls operate during combat. Back and the room button show only between bouts (before Begin, in the pause after a spirit is cleared or lost, and after the last one), so a raised fist mid-fight never points the hand's ray at them; Back returns to the finished story without restarting narration or making extra API calls.
+- Quest plays it with tracked hands. Phones, tablets and the web play it on the screen: hold the left or right half to guard, hold the bottom third to duck, and tap the glowing face to punch (a tap on another head of a many-headed spirit counts against you, as a wrong punch does). Keyboards: A/D or ←/→ guard, S or ↓ ducks, J, L or Space punches. The same keys work in the Unity editor. Rules, swept-hit geometry, language coverage, level progression, and the game lifecycle are covered by `SpiritBoxingTests`.

@@ -219,6 +219,9 @@ namespace HypaStories
             var body = Node("Body", null, _wood); body.SetParent(d.Root, false);
             d.Body = body.GetComponent<MeshFilter>();
             d.Skin = Node("Skin", DrumVisuals.Skin(r, tone == Tone.Low), _hide); d.Skin.SetParent(d.Root, false);
+            // a pinch aimed at the skin from further off plays it, so the ray shows there; a hand at the drum is striking it and draws none
+            var zone = d.Skin.gameObject.AddComponent<PointerZone>();
+            zone.Radius = r; zone.MinReach = 0.6f;
             // the skin's lights, just above it: the middle, and a ring of small ones round the edge
             d.Mid = new Material(_a.additive) { mainTexture = _glow, color = col };
             var mid = Node("Middle Glow", StoryMeshes.Quad(r * 1.5f, r * 1.5f), d.Mid);

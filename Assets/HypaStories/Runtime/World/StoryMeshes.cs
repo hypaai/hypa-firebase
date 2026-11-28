@@ -21,6 +21,45 @@ namespace HypaStories
         }
 
         /// <summary>
+        /// The ground under the fire, in the floor quad's own space (XY, facing -Z, tilted flat by the camp). The floor is one
+        /// 140 m quad, so a vertex light only reaches its corners and the dirt stays dark. This patch reaches past the light (its
+        /// vertex falloff never quite hits zero, so a 12 m edge would show as a square), with a
+        /// vertex every 0.8 m, and uses the floor's UVs so the texture doesn't seam. <paramref name="floorZ"/> is the
+        /// floor's position on the camp's z; the fire sits at the origin.
+        /// </summary>
+        public static Mesh FirelitGround(float floorSize, float floorZ, float half = 20f, float step = 0.8f)
+        {
+            var n = Mathf.Max(1, Mathf.CeilToInt(half * 2f / step));
+            var count = n + 1;
+            var v = new Vector3[count * count];
+            var uv = new Vector2[v.Length];
+            var normals = new Vector3[v.Length];
+            var originY = -floorZ;
+            for (var iy = 0; iy < count; iy++)
+            for (var ix = 0; ix < count; ix++)
+            {
+                var x = Mathf.Lerp(-half, half, ix / (float)n);
+                var y = originY + Mathf.Lerp(-half, half, iy / (float)n);
+                var i = iy * count + ix;
+                v[i] = new Vector3(x, y, -0.008f); // -Z becomes up once the floor quad is tilted
+                uv[i] = new Vector2(x / floorSize + 0.5f, y / floorSize + 0.5f);
+                normals[i] = Vector3.back;
+            }
+            var tris = new int[n * n * 6];
+            var t = 0;
+            for (var iy = 0; iy < n; iy++)
+            for (var ix = 0; ix < n; ix++)
+            {
+                var a = iy * count + ix; // same winding as Quad: facing -Z
+                tris[t++] = a; tris[t++] = a + count; tris[t++] = a + 1;
+                tris[t++] = a + count; tris[t++] = a + count + 1; tris[t++] = a + 1;
+            }
+            var m = new Mesh { name = "Firelit Ground", vertices = v, uv = uv, normals = normals, triangles = tris };
+            m.RecalculateBounds();
+            return m;
+        }
+
+        /// <summary>
         /// Camera-facing particle quads for the HypaStories/Particles shader: four vertices per particle at its home position,
         /// uv0 = corner, uv1 = random seed. The shader moves them, so the bounds are padded.
         /// </summary>

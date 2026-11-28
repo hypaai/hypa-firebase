@@ -94,13 +94,21 @@ namespace HypaStories
         KitButton _turnHat;
         const string EshuStory = "eshu-crossroads";
         DrumGame _drumGame;      // the playable scene after The King's Magic Drum
+        SpiritBoxingGame _spiritGame;
+        KitButton _fightSpirits;
         KitButton _playDrum;
         const string DrumStory = "kings-drum";
         HutVisit _hut;           // the hut's household things, their cards and the old woman who tells you about them
         // the words she teaches in the hut (G10). G08's Firestore-backed store does not exist yet: this one lives for the session
         readonly UserDataSync _words = new UserDataSync(new HypaCore.Hybrid.FakeUserDataStore(), () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-        bool Playing => (_game != null && _game.Active) || (_hatGame != null && _hatGame.Active) || (_drumGame != null && _drumGame.Active);
-        void EndGames() { if (_game != null) _game.End(); if (_hatGame != null) _hatGame.End(); if (_drumGame != null) _drumGame.End(); }
+        bool Playing => (_game != null && _game.Active) || (_hatGame != null && _hatGame.Active) || (_drumGame != null && _drumGame.Active) || (_spiritGame != null && _spiritGame.Active);
+        void EndGames() { if (_game != null) _game.End(); if (_hatGame != null) _hatGame.End(); if (_drumGame != null) _drumGame.End(); if (_spiritGame != null) _spiritGame.End(); }
+        bool _resumeAfterGame;
+        int _resumeLine = -1;
+
+        /// <summary>A story's game button is on its panel from the moment that panel opens until you leave. It hides only while the game itself is on screen.</summary>
+        public static bool GameOfferShown(bool playingGame, bool storyLive, bool thisStory, bool busy)
+            => !playingGame && storyLive && thisStory && !busy;
 
         bool _creatingProfile;
 
@@ -224,6 +232,7 @@ namespace HypaStories
             BuildHatGame();
             BuildDrumGame();
             BuildRace();
+            BuildSpiritGame();
             BuildHutVisit();
             Places.EnsureRunner();
             Places.Leaving += OnLeavingPlace;
@@ -259,6 +268,8 @@ namespace HypaStories
             _audio.enabled = false; // no wolves or crickets from the camp while you're in the hut
             _away = true;
             if (Playing) { EndGames(); _player.Root.gameObject.SetActive(true); }
+            _resumeAfterGame = false;
+            _resumeLine = -1;
             _world.gameObject.SetActive(false);
             _ui.gameObject.SetActive(false);
             foreach (var d in _doorRows) { d.Row.gameObject.SetActive(false); d.Shown = 0f; }
@@ -425,43 +436,22 @@ namespace HypaStories
             At(3.4f, () => { _busy = false; _screen = target; });
         }
 
-        // ---------- the Dodo game (after Seven Hot Stones) ----------
+        // ---------- the Dodo game (Seven Hot Stones) ----------
 
         void BuildDodoGame()
         {
             _game = gameObject.AddComponent<DodoGame>();
-            _game.Init(_camp, assets, _audio, StoryMeshes.Glow(), transform, DodoLine, Say, () =>
-            {
-                // the story once more, from the start
-                _player.Root.gameObject.SetActive(true);
-                _player.Follow.Snap();
-                _story.Live = true;
-                _endNoted = false;
-                _story.Start(0f);
-            }, () =>
+            _game.Init(_camp, assets, _audio, StoryMeshes.Glow(), transform, DodoLine, Say, ReplayStoryFromGame, () =>
             {
                 _player.Root.gameObject.SetActive(true);
                 ExitPlay();
-            }, () =>
-            {
-                _voice.StopAll();
-                _player.Root.gameObject.SetActive(true);
-                _player.Follow.Snap();
-            }, ToggleRoom);
-            // above the player panel when Seven Hot Stones ends: step in as Auta
+            }, ReturnFromStoryGame, ToggleRoom);
+            // above the player panel for the whole story: step in as Auta
             _faceDodo = Kit.Button(_player.Body, new Vector3(0f, 0.255f, -0.01f), new Vector2(0.22f, 0.064f), "Face Dodo", "flame", KitStyle.Primary, FaceDodo, null, 0.022f);
             _faceDodo.gameObject.SetActive(false);
         }
 
-        void FaceDodo()
-        {
-            if (_busy || Playing || _screen != Screen.Play) return;
-            _ask.Cancel();
-            _audio.Tap();
-            _player.Root.gameObject.SetActive(false);
-            _game.Fit(CurrentFit());
-            _game.Begin();
-        }
+        void FaceDodo() => OpenStoryGame(() => { _game.Fit(CurrentFit()); _game.Begin(); });
 
         // ---------- the hut's household things ----------
 
@@ -508,76 +498,98 @@ namespace HypaStories
             if (_screen == Screen.List && i >= 0) Play(i);
         }
 
-        // ---------- the hat game (after Eshu at the Crossroads) ----------
+        // ---------- the hat game (Eshu at the Crossroads) ----------
 
         void BuildHatGame()
         {
             _hatGame = gameObject.AddComponent<HatGame>();
-            _hatGame.Init(_camp, assets, _audio, StoryMeshes.Glow(), transform, () =>
-            {
-                _player.Root.gameObject.SetActive(true);
-                _player.Follow.Snap();
-                _story.Live = true;
-                _endNoted = false;
-                _story.Start(0f);
-            }, () =>
+            _hatGame.Init(_camp, assets, _audio, StoryMeshes.Glow(), transform, ReplayStoryFromGame, () =>
             {
                 _player.Root.gameObject.SetActive(true);
                 ExitPlay();
-            }, () =>
-            {
-                _voice.StopAll();
-                _player.Root.gameObject.SetActive(true);
-                _player.Follow.Snap();
-            }, ToggleRoom);
+            }, ReturnFromStoryGame, ToggleRoom);
             _turnHat = Kit.Button(_player.Body, new Vector3(0f, 0.255f, -0.01f), new Vector2(0.22f, 0.064f), "Turn the hat", "rotate-ccw", KitStyle.Primary, TurnHat, null, 0.022f);
             _turnHat.gameObject.SetActive(false);
         }
 
-        void TurnHat()
-        {
-            if (_busy || Playing || _screen != Screen.Play) return;
-            _ask.Cancel();
-            _audio.Tap();
-            _player.Root.gameObject.SetActive(false);
-            _hatGame.Fit(CurrentFit());
-            _hatGame.Begin();
-        }
+        void TurnHat() => OpenStoryGame(() => { _hatGame.Fit(CurrentFit()); _hatGame.Begin(); });
 
-        // ---------- the drum game (after The King's Magic Drum) ----------
+        // ---------- the drum game (The King's Magic Drum) ----------
 
         void BuildDrumGame()
         {
             _drumGame = gameObject.AddComponent<DrumGame>();
-            _drumGame.Init(_camp, assets, _audio, StoryMeshes.Glow(), transform, () =>
-            {
-                _player.Root.gameObject.SetActive(true);
-                _player.Follow.Snap();
-                _story.Live = true;
-                _endNoted = false;
-                _story.Start(0f);
-            }, () =>
+            _drumGame.Init(_camp, assets, _audio, StoryMeshes.Glow(), transform, ReplayStoryFromGame, () =>
             {
                 _player.Root.gameObject.SetActive(true);
                 ExitPlay();
-            }, () =>
-            {
-                _voice.StopAll();
-                _player.Root.gameObject.SetActive(true);
-                _player.Follow.Snap();
-            }, ToggleRoom);
+            }, ReturnFromStoryGame, ToggleRoom);
             _playDrum = Kit.Button(_player.Body, new Vector3(0f, 0.255f, -0.01f), new Vector2(0.22f, 0.064f), "Play the drum", "hand", KitStyle.Primary, PlayDrum, null, 0.022f);
             _playDrum.gameObject.SetActive(false);
         }
 
-        void PlayDrum()
+        void PlayDrum() => OpenStoryGame(() => { _drumGame.Fit(CurrentFit()); _drumGame.Begin(); });
+
+        /// <summary>Hide the story panel and hold the telling where it is. Coming back continues it; a story that had already ended stays ended.</summary>
+        void OpenStoryGame(Action begin)
         {
             if (_busy || Playing || _screen != Screen.Play) return;
-            _ask.Cancel();
+            if (_tryOpen) HideTryNow();
             _audio.Tap();
+            ++_sayGen;
+            if (_ask.State != AskState.Idle)
+            {
+                _resumeLine = _story.LineIndex;
+                _ask.Cancel();
+                _resumeAfterGame = _story.Live && !_story.Ended;
+            }
+            else
+            {
+                _resumeLine = -1;
+                _resumeAfterGame = _story.Live && _story.Running && !_story.Ended && !_story.Paused;
+                if (_resumeAfterGame) _story.Pause();
+                else _voice.StopAll();
+            }
             _player.Root.gameObject.SetActive(false);
-            _drumGame.Fit(CurrentFit());
-            _drumGame.Begin();
+            begin();
+        }
+
+        /// <summary>Dodo's challenge uses the storyteller's voice. Drop it before the story speaks again.</summary>
+        void StopGameSpeech() { ++_sayGen; _voice.StopAll(); }
+
+        void ReturnFromStoryGame()
+        {
+            StopGameSpeech();
+            _player.Root.gameObject.SetActive(true);
+            _player.Follow.Snap();
+            if (!_resumeAfterGame || !_story.Live || _story.Ended) { _resumeAfterGame = false; _resumeLine = -1; return; }
+            _resumeAfterGame = false;
+            if (_resumeLine >= 0) { var line = _resumeLine; _resumeLine = -1; _story.Resume(line); }
+            else _story.TogglePause();
+        }
+
+        void ReplayStoryFromGame()
+        {
+            StopGameSpeech();
+            _resumeAfterGame = false;
+            _resumeLine = -1;
+            _player.Root.gameObject.SetActive(true);
+            _player.Follow.Snap();
+            _story.Live = true;
+            _endNoted = false;
+            _story.Start(0f);
+        }
+
+        void BuildSpiritGame()
+        {
+            _spiritGame = gameObject.AddComponent<SpiritBoxingGame>();
+            _spiritGame.Init(_camp, assets, _audio, transform, ReturnFromStoryGame, () => _room, ToggleRoom, () => _roomBusy);
+            _fightSpirits = Kit.Button(_player.Body, new Vector3(0f, 0.255f, -0.01f), new Vector2(0.3f, 0.064f), "Face the spirits", "hand", KitStyle.Primary, () =>
+            {
+                if (_story.StoryId != SpiritBoxingGame.StoryId) return;
+                OpenStoryGame(() => _spiritGame.Begin(StoryLibrary.Find(SpiritBoxingGame.StoryId), _story.Language ?? _lang));
+            }, null, 0.02f);
+            _fightSpirits.gameObject.SetActive(false);
         }
 
         /// <summary>A line of Seven Hot Stones in the listener's language (Dodo's challenge, Auta's "I am."), by its id.</summary>
@@ -666,6 +678,8 @@ namespace HypaStories
 
         void ExitPlay()
         {
+            _resumeAfterGame = false;
+            _resumeLine = -1;
             if (_busy || _screen != Screen.Play) return;
             if (Playing) { EndGames(); _voice.StopAll(); _player.Root.gameObject.SetActive(true); }
             _busy = true;
@@ -1147,7 +1161,7 @@ namespace HypaStories
         {
             _voice.SetOrigin(_elderSession ? _camp.Village.ElderMouth : _camp.Teller.Mouth);
             if (_room && _elderSession) _camp.Village.UpdateRoomElder(_cam, Time.deltaTime);
-            _camp.Village.SetNarrationFocus(NeedsVillageQuiet(_elderSession, _story.Live, _story.Ended,
+            _camp.Village.SetNarrationFocus((_spiritGame != null && _spiritGame.Active) || NeedsVillageQuiet(_elderSession, _story.Live, _story.Ended,
                 _voice.IsSpeaking, _ask.State != AskState.Idle,
                 _tryOpen && (_tryFlow.Status != TryStatus.Idle || _tryFlow.ActiveAudio != null)));
         }
@@ -1177,10 +1191,17 @@ namespace HypaStories
                 VillageLayout.LeftElder(ViewerOnGround), _room))
                 EndElderVisit();
 
-            // in a Story Circle the host gets Play together instead of the game on your own (G11)
-            if (_hatGame != null) _turnHat.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == EshuStory && !_busy);
-            if (_game != null) _faceDodo.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == DodoStory && !_busy);
-            if (_drumGame != null) _playDrum.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == DrumStory && !_busy);
+            // a story's own game is offered on its panel; in a Story Circle the host gets Play together instead (G11)
+            if (_hatGame != null) _turnHat.gameObject.SetActive(!InCircle && GameOfferShown(Playing, _story.Live, _story.StoryId == EshuStory, _busy));
+            if (_game != null) _faceDodo.gameObject.SetActive(!InCircle && GameOfferShown(Playing, _story.Live, _story.StoryId == DodoStory, _busy));
+            if (_drumGame != null) _playDrum.gameObject.SetActive(!InCircle && GameOfferShown(Playing, _story.Live, _story.StoryId == DrumStory, _busy));
+            if (_spiritGame != null)
+            {
+                var available = !InCircle && GameOfferShown(Playing, _story.Live, _story.StoryId == SpiritBoxingGame.StoryId, _busy)
+                    && (StoryInput.Hand != null || Application.isEditor || !UnityEngine.XR.XRSettings.isDeviceActive); // tracked hands, or a screen
+                _fightSpirits.gameObject.SetActive(available);
+                if (available) _fightSpirits.SetLabel(StoryLibrary.Find(SpiritBoxingGame.StoryId).GameText("offer", (_story.Language ?? _lang).Code));
+            }
             if (_playTogether != null) _playTogether.gameObject.SetActive(InCircle && _circle.IsHost && !Playing && _story.Live && _story.Ended && HasGame(_story.StoryId)
                 && !_busy && _race != null && _race.CanStart);
             if (_story.Live && !Playing)
@@ -1214,7 +1235,7 @@ namespace HypaStories
             }
             UpdatePortal(dt);
             var raised = RaiseHand.Probe != null && RaiseHand.Probe();
-            if (_raise.Update(raised, dt) && _screen == Screen.Play && !_busy && !_tryOpen && _ask.State == AskState.Idle && !Playing && !InHutTelling()) StartAsk();
+            if (_raise.Update(raised, dt) && _screen == Screen.Play && !_busy && !_tryOpen && (InCircle ? _ask.State == AskState.Idle : _ask.CanBegin) && !Playing && !InHutTelling()) StartAsk();
             if (Application.isEditor) EditorKeys();
         }
 
@@ -1267,13 +1288,13 @@ namespace HypaStories
                     }
                     if (Playing)
                     {
-                        if (Input.GetKeyDown(KeyCode.Escape)) { EndGames(); _voice.StopAll(); _player.Root.gameObject.SetActive(true); _player.Follow.Snap(); }
+                        if (Input.GetKeyDown(KeyCode.Escape)) { EndGames(); ReturnFromStoryGame(); }
                         break; // Space is the shout; P, T and M belong to the fight
                     }
                     if (Input.GetKeyDown(KeyCode.Space)) _story.TogglePause();
                     if (Input.GetKeyDown(KeyCode.RightArrow)) _story.Jump(1);
                     if (Input.GetKeyDown(KeyCode.LeftArrow)) _story.Jump(-1);
-                    if (Input.GetKeyDown(KeyCode.H) && _ask.State == AskState.Idle && !InHutTelling()) StartAsk();
+                    if (Input.GetKeyDown(KeyCode.H) && (InCircle ? _ask.State == AskState.Idle : _ask.CanBegin) && !InHutTelling()) StartAsk();
                     if (Input.GetKeyDown(KeyCode.T)) OpenTry();
                     if (Input.GetKeyDown(KeyCode.Q)) { _qDown = Time.time; AskTap(); }
                     if (Input.GetKeyUp(KeyCode.Q) && Time.time - _qDown > 0.5f && _ask.State == AskState.Listening) _ask.StopListening(); // hold-to-talk
@@ -1357,9 +1378,11 @@ namespace HypaStories
         IEnumerator EnterRoom()
         {
             _roomBusy = true;
+            // Check see-through can run without turning it on: it comes on behind the veil, once the forest goes. Toggling it
+            // here would flicker it, and turning it off would blank a door that still looks back into the room.
             if (StoryRoom.Passthrough != null && !StoryRoom.Passthrough())
             {
-                ShowRoomNote("The headset's see-through view isn't running, so your room can't show.", 5f);
+                ShowRoomNote("This headset can't show see-through here, so your room can't show.", 5f);
                 _roomBusy = false;
                 yield break;
             }
@@ -1416,12 +1439,14 @@ namespace HypaStories
             Run(0f, 0.45f, u => SetVeil(u), In);
             yield return new WaitForSeconds(0.5f);
             if (_away) { SetVeil(0f); _roomBusy = false; yield break; }
+            StoryRoom.SetPassthrough?.Invoke(true);
             _room = true;
             _outdoorPosition = _world.position; _outdoorRotation = _world.rotation;
             _returnToRoom = false;
             _roomPlan = plan;
             _roomFloorY = floorY;
             _voice.SetOrigin(_elderSession ? _camp.Village.ElderMouth : _camp.Teller.Mouth);
+            _spiritGame?.LetGoOfWorld(); // a fight going on hands the camp back first, then takes it again for the room
             _camp.SetRoom(true, _elderSession);
             StoryRoom.Depth?.Invoke(true);
             PlaceInRoom();
@@ -1461,7 +1486,9 @@ namespace HypaStories
             if (!_room) return;
             if (!keepPortal) DestroyDoors();
             _room = false;
+            _spiritGame?.LetGoOfWorld();
             _camp.SetRoom(false);
+            if (!keepPortal) StoryRoom.SetPassthrough?.Invoke(false);
             if (_elderSession) _world.SetPositionAndRotation(_outdoorPosition, _outdoorRotation);
             StoryRoom.Depth?.Invoke(false);
             SetRoomButtons(false);
@@ -1475,6 +1502,7 @@ namespace HypaStories
             _game?.SetInRoom(inRoom);
             _hatGame?.SetInRoom(inRoom);
             _drumGame?.SetInRoom(inRoom);
+            _spiritGame?.SetInRoom(inRoom);
         }
 
         /// <summary>Place the fire and its storyteller on the scanned room floor.</summary>
@@ -1627,6 +1655,7 @@ namespace HypaStories
             foreach (var d in _doors) if (d.Portal != null) Destroy(d.Portal.gameObject);
             _doors.Clear();
             _camp?.SetViewer(null);
+            if (!_room) StoryRoom.SetPassthrough?.Invoke(false); // no door looks back into the room any more: the forest draws its own sky
         }
 
         /// <summary>The door nearest your head.</summary>
@@ -1772,6 +1801,7 @@ namespace HypaStories
             if (_away) { SetVeil(0f); _roomBusy = false; yield break; }
             _returnToRoom = false;
             _room = true;
+            StoryRoom.SetPassthrough?.Invoke(true);
             _camp.SetRoom(true);
             StoryRoom.Depth?.Invoke(true);
             PlaceInRoom();
@@ -2009,6 +2039,7 @@ namespace HypaStories
                 if (showUi) SnapPanels();
             }
             // The list and player may follow an elder session; Gather round still belongs to the clearing.
+            _splash.PromptAway = far;
             // shown with the floating title, and under the Story Circle lobby (which fades the title away)
             _splash.Prompt.gameObject.SetActive(!far && (_splash.Brand.gameObject.activeSelf || (_circleView != null && _circleView.Shown)));
             // a place's row, at its door

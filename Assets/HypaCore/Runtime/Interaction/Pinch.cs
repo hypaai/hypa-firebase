@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace HypaCore
@@ -81,6 +82,47 @@ namespace HypaCore
             if (!pinching) _pressed = null;
             _was = pinching;
             return kind;
+        }
+    }
+
+    /// <summary>
+    /// Somewhere the hand's ray should show although nothing under it is pinchable: a whole panel round its buttons, or a
+    /// thing a game aims at with its own ray (a drum skin). No Collider: it is found by ray maths, so it never takes a
+    /// pinch from a button. Active zones count; disabled or hidden ones do not.
+    /// </summary>
+    public sealed class PointerZone : MonoBehaviour
+    {
+        internal static readonly List<PointerZone> All = new List<PointerZone>();
+        /// <summary>0: the object's local unit square (x and y from -0.5 to 0.5, scaled with it). Above 0: a ball of this many metres.</summary>
+        public float Radius;
+        /// <summary>Null = always. Otherwise only while this says the zone can be seen (a panel faded out does not count).</summary>
+        public Func<bool> Shown;
+        /// <summary>Metres the ray must start from the zone: a hand right at a drum is striking it, not aiming, and draws no ray.</summary>
+        public float MinReach;
+
+        void OnEnable() => All.Add(this);
+        void OnDisable() => All.Remove(this);
+
+        internal bool Hit(Ray ray, float max, out Vector3 point)
+        {
+            point = default;
+            if (Shown != null && !Shown()) return false;
+            if ((transform.position - ray.origin).sqrMagnitude < MinReach * MinReach) return false;
+            if (Radius > 0f)
+            {
+                var along = Vector3.Dot(transform.position - ray.origin, ray.direction);
+                if (along < 0f || along > max) return false;
+                point = ray.GetPoint(along);
+                return (point - transform.position).sqrMagnitude <= Radius * Radius;
+            }
+            var n = transform.forward;
+            var facing = Vector3.Dot(n, ray.direction);
+            if (Mathf.Abs(facing) < 1e-4f) return false;
+            var t = Vector3.Dot(transform.position - ray.origin, n) / facing;
+            if (t < 0f || t > max) return false;
+            point = ray.GetPoint(t);
+            var local = transform.InverseTransformPoint(point);
+            return Mathf.Abs(local.x) <= 0.5f && Mathf.Abs(local.y) <= 0.5f;
         }
     }
 
@@ -202,6 +244,9 @@ namespace HypaCore
         /// </summary>
         public float BackReach = 0.25f;
         const float IdleRayLength = 1.2f;
+        /// <summary>Seconds the ray stays after it leaves a button, so it does not flicker at a button's edge.</summary>
+        const float Linger = 0.3f;
+        float _lastOnTarget = float.NegativeInfinity;
         readonly PinchRouter<PinchTarget> _router = new PinchRouter<PinchTarget>();
         PinchTarget _hover;
         LineRenderer _line; Transform _cursor; Renderer _cursorR;
@@ -249,7 +294,20 @@ namespace HypaCore
                     hitPoint = h.point; hitSomething = true;
                 }
             }
-            DrawPointer(device && hasRay, ray, hitSomething, hitPoint, hit != null, input.IsPinching);
+            // The ray only shows where it can be used: on a button, over a panel (see PointerZone), on something a game aims at,
+            // or holding a pinch that started on a button. Resting hands, punches and drum strikes draw nothing.
+            var zone = false;
+            if (hasRay && hit == null && _router.Pressed == null)
+            {
+                var back = device ? BackReach : 0f;
+                var cast = new Ray(ray.origin - ray.direction * back, ray.direction);
+                var near = hitSomething ? Vector3.Distance(cast.origin, hitPoint) : MaxDistance + back;
+                foreach (var z in PointerZone.All)
+                    if (z.Hit(cast, near, out var at)) { zone = true; near = Vector3.Distance(cast.origin, at); hitPoint = at; hitSomething = true; }
+            }
+            if (hit != null || zone || _router.Pressed != null) _lastOnTarget = Time.unscaledTime;
+            var useful = Time.unscaledTime - _lastOnTarget <= Linger;
+            DrawPointer(device && hasRay && useful, ray, hitSomething, hitPoint, hit != null, input.IsPinching);
 
             if (hit != _hover)
             {
@@ -271,7 +329,7 @@ namespace HypaCore
 
         bool _wasPinching;
 
-        // ---------- Visible pointer (hands and controllers; the mouse has its own cursor) ----------
+        // ---------- Visible pointer (hands and controllers, only near something pinchable; the mouse has its own cursor) ----------
 
         void DrawPointer(bool show, Ray ray, bool hitSomething, Vector3 hitPoint, bool onTarget, bool pinching)
         {

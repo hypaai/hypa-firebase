@@ -1,0 +1,101 @@
+{
+  "champion": "Il y a bien longtemps, au pays du peuple Edo, un jeune lutteur nommé Joromi devint célèbre pour sa force.",
+  "champion-2": "Lorsqu'il entrait sur la place du village, tout le monde voulait le regarder.",
+  "champion.ask": [
+    "Qui est Joromi ?"
+  ],
+  "skill": "Il était vif sur ses pieds. Il pouvait sentir un adversaire déplacer son poids et savoir de quel côté tournerait la prochaine lutte.",
+  "skill-2": "L'un après l'autre, les lutteurs tombaient devant lui.",
+  "pride": "Au début, Joromi remerciait les gens qui l'acclamaient. Mais à chaque victoire, son orgueil grandissait.",
+  "pride-2": "Bientôt, il commença à croire que personne, nulle part, ne pouvait le vaincre.",
+  "pride-2.ask": [
+    "Pourquoi Joromi devient-il orgueilleux ?"
+  ],
+  "sister": "Sa sœur connaissait son courage. Elle savait aussi à quel point il n'aimait pas qu'on l'avertisse.",
+  "sister-2": "Lorsqu'elle parlait de limites, il n'entendait qu'un défi qui n'attendait qu'une réponse.",
+  "palm": "Près de chez eux se dressait un palmier qu'on lui avait interdit de gravir.",
+  "palm-2": "Pour Joromi, même cet avertissement commença à résonner comme une insulte à sa force.",
+  "climb": "Un jour, il saisit le tronc et y grimpa. Sa sœur l'appela.",
+  "climb-2": "Il continua de monter, plus haut que les toits, plus haut que les bruits familiers du village.",
+  "climb-2.ask": [
+    "Pourquoi sa sœur l'avertit-elle ?"
+  ],
+  "beyond": "Puis l'arbre l'emporta au-delà du monde qu'il connaissait. Sous lui s'étendait le pays des hommes.",
+  "beyond-2": "Devant lui s'ouvrait un autre lieu, où les esprits se rassemblaient pour lutter.",
+  "challenge": "Joromi regarda leur arène. Il avait vaincu les champions du monde des humains.",
+  "challenge-2": "Pourquoi devrait-il faire demi-tour maintenant ? Il s'avança et lança son défi.",
+  "fly": "Sa sœur ne l'abandonna pas.",
+  "fly-2": "Dans ce récit, elle se transforma en une petite mouche et le suivit, portant sa voix là où ses pieds d'humaine ne pouvaient aller.",
+  "fly-2.ask": [
+    "Comment sa sœur l'aide-t-elle ?"
+  ],
+  "stranger": "Les esprits observaient l'étranger.",
+  "stranger-2": "C'était un homme de chair et de souffle, debout dans un lieu qui n'était pas le sien, demandant à se mesurer à eux.",
+  "two-heads": "Un esprit à deux têtes s'avança. Joromi le rejoignit dans l'arène.",
+  "two-heads-2": "Ils luttèrent de toutes leurs forces l'un contre l'autre, aucun ne voulant céder, tandis que les spectateurs se pressaient tout près.",
+  "patience": "La lutte dura bien plus longtemps que n'importe quel combat que Joromi avait connu chez lui.",
+  "patience-2": "La force seule ne suffisait pas. Il devait observer, attendre et trouver le moment d'agir.",
+  "patience-2.ask": [
+    "Pourquoi la patience est-elle utile dans un combat ?"
+  ],
+  "voice": "La voix de sa sœur lui parvint à travers le bruit.",
+  "voice-2": "Elle l'appela par son nom et lui rappela le chemin qu'il avait parcouru. Mais chaque victoire l'éloignait aussi un peu plus de la sécurité.",
+  "victory": "Finalement, Joromi terrassa cet adversaire. L'arène frémit. Il avait prouvé qu'un humain pouvait tenir tête à un esprit.",
+  "victory-2": "Pourtant, il ne songeait toujours pas à rentrer chez lui.",
+  "seven-heads": "Un autre défi suivit. À présent, le danger devant lui était plus grand.",
+  "seven-heads-2": "Un terrible esprit à sept têtes se tenait prêt à combattre, et l'air autour de lui semblait brûler.",
+  "tired": "Pour la première fois, Joromi sentit à quel point son corps était fatigué. Ses bras étaient lourds.",
+  "tired-2": "Son souffle était court. Le courage l'avait mené jusqu'ici ; l'orgueil l'y avait maintenu.",
+  "tired-2.ask": [
+    "Qu'est-ce qui change quand Joromi est fatigué ?"
+  ],
+  "struggle": "Il continua pourtant à se battre. L'esprit le pressait durement, lui laissant peu de temps pour récupérer.",
+  "struggle-2": "Sa sœur restait près de lui, sa petite voix refusant de s'éteindre dans le tumulte.",
+  "opening": "Joromi se dégagea et trouva une occasion de s'échapper.",
+  "opening-2": "Ce n'était pas un combat de village ordinaire, où des amis l'attendaient pour le porter sur leurs épaules une fois le combat terminé.",
+  "escape": "Il prit le chemin du retour. Il redescendit en courant du monde des esprits, laissant ses champions derrière lui.",
+  "escape-2": "La terre familière sous ses pieds était plus précieuse qu'une autre victoire.",
+  "escape-2.ask": [
+    "Pourquoi Joromi décide-t-il de s'échapper ?"
+  ],
+  "home": "Sa sœur revint avec lui. Il était entré dans cette arène étrange avec la certitude que la force pouvait répondre à toutes les questions.",
+  "home-2": "Il en revint en sachant qu'il y avait des questions auxquelles la force ne pouvait pas répondre.",
+  "remember": "C'est de ce Joromi-là que l'on se souvient dans ce récit : assez courageux pour affronter un adversaire terrifiant,",
+  "remember-2": "mais mené au bord du gouffre par le désir de vaincre tout le monde.",
+  "lesson": "Et lorsque l'aîné termine, il laisse une question près du feu.",
+  "lesson-2": "La personne la plus forte est-elle toujours celle qui continue à se battre, ou la force peut-elle aussi consister à savoir quand s'arrêter ?",
+  "lesson-2.ask": [
+    "Savoir quand s'arrêter peut-il être une forme de force ?"
+  ],
+  "words": [
+    "courage",
+    "patience",
+    "force"
+  ],
+  "game": {
+    "offer": "Affronter les esprits",
+    "intro": "Reste sur place. Donne des coups de poing légers. Protège le côté lumineux, esquive le balayage haut, puis frappe les visages.",
+    "flat": "Restez sur place. Maintenez le côté gauche ou droit de l'écran enfoncé pour vous protéger (ou A et D), maintenez vers le bas pour esquiver le balayage haut (ou S), puis appuyez sur le visage brillant pour donner un coup de poing (ou Espace).",
+    "adaptation": "Un jeu de boxe inspiré du conte de lutte.",
+    "start": "Commencer",
+    "back": "Retour à l'histoire",
+    "replay": "Rejouer",
+    "level": "Esprit {0} / {1}",
+    "health": "Garde {0} / {1}",
+    "mist": "Esprit de la brume",
+    "ember": "Esprit de la braise",
+    "wind": "Esprit du vent",
+    "seven": "Esprit à sept têtes",
+    "approach": "Regarde l'esprit approcher.",
+    "left": "Protège ton côté gauche",
+    "right": "Protège ton côté droit",
+    "duck": "Esquive le balayage haut",
+    "counter": "À ton tour : frappe un visage",
+    "recover": "Ramène tes mains. Observe le motif suivant.",
+    "tracking": "Montre tes deux mains pour continuer.",
+    "clear": "Esprit vaincu",
+    "won": "Entraînement terminé. Savoir quand s'arrêter est une force.",
+    "lost": "Reprends ton souffle. Réessaie cet esprit.",
+    "progress": "Cibles {0} / {1}"
+  }
+}

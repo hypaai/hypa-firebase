@@ -1,0 +1,101 @@
+{
+  "champion": "Hace mucho tiempo, en la tierra del pueblo edo, un joven luchador llamado Joromi se hizo famoso por su fuerza.",
+  "champion-2": "Cuando entraba en la plaza de la aldea, todos querían verlo.",
+  "champion.ask": [
+    "¿Quién es Joromi?"
+  ],
+  "skill": "Era ágil. Podía sentir cuando un rival desplazaba su peso y saber hacia qué lado se inclinaría el siguiente forcejeo.",
+  "skill-2": "Un luchador tras otro caía ante él.",
+  "pride": "Al principio, Joromi daba las gracias a quienes lo vitoreaban. Pero con cada victoria aumentaba su orgullo.",
+  "pride-2": "Pronto empezó a creer que no había nadie, en ningún lugar, que pudiera derrotarlo.",
+  "pride-2.ask": [
+    "¿Por qué se vuelve orgulloso Joromi?"
+  ],
+  "sister": "Su hermana conocía su valentía. También sabía lo poco que le gustaban las advertencias.",
+  "sister-2": "Cuando ella le hablaba de límites, él solo oía un desafío que debía aceptar.",
+  "palm": "Cerca de su casa había una palmera a la que le habían advertido que no subiera.",
+  "palm-2": "Para Joromi, incluso aquella advertencia empezó a sonar como un insulto a su fuerza.",
+  "climb": "Un día agarró el tronco y trepó. Su hermana lo llamó.",
+  "climb-2": "Él siguió subiendo, por encima de los tejados, por encima de los sonidos familiares de la aldea.",
+  "climb-2.ask": [
+    "¿Por qué le advierte su hermana?"
+  ],
+  "beyond": "Entonces el árbol lo llevó más allá del mundo que conocía. Debajo de él se extendía la tierra de los humanos.",
+  "beyond-2": "Ante él se abrió otro lugar, donde los espíritus se reunían para luchar.",
+  "challenge": "Joromi contempló su arena. Había derrotado a los campeones del mundo humano.",
+  "challenge-2": "¿Por qué habría de regresar ahora? Dio un paso al frente y lanzó su desafío.",
+  "fly": "Su hermana no lo abandonaría.",
+  "fly-2": "En esta versión, se transformó en una pequeña mosca y lo siguió, llevando su voz adonde sus pies humanos no podían llegar.",
+  "fly-2.ask": [
+    "¿Cómo lo ayuda su hermana?"
+  ],
+  "stranger": "Los espíritus observaron al desconocido.",
+  "stranger-2": "Allí había un hombre de carne y hueso, de pie en un lugar que no le pertenecía, pidiendo demostrar su valía contra ellos.",
+  "two-heads": "Un espíritu de dos cabezas se adelantó. Joromi se enfrentó a él en la arena.",
+  "two-heads-2": "Forcejearon, ninguno dispuesto a ceder, mientras los espectadores se agolpaban a su alrededor.",
+  "patience": "La lucha duró mucho más que cualquier combate que Joromi hubiera conocido en su tierra.",
+  "patience-2": "La fuerza por sí sola no bastaba. Tenía que observar, esperar y encontrar el momento para actuar.",
+  "patience-2.ask": [
+    "¿Por qué es útil la paciencia en una lucha?"
+  ],
+  "voice": "La voz de su hermana llegó hasta él a través del ruido.",
+  "voice-2": "Lo llamó por su nombre y le recordó lo lejos que había llegado. Pero cada victoria también lo alejaba más de la seguridad.",
+  "victory": "Finalmente, Joromi venció a aquel adversario. La arena se agitó.",
+  "victory-2": "Había demostrado que un humano podía enfrentarse a un espíritu. Sin embargo, todavía no pensaba en volver a casa.",
+  "seven-heads": "Siguió otro desafío. Ahora el peligro que tenía ante él era mayor.",
+  "seven-heads-2": "Un espíritu terrible de siete cabezas estaba listo para luchar, y el aire a su alrededor parecía arder.",
+  "tired": "Por primera vez, Joromi sintió lo cansado que estaba su cuerpo. Tenía los brazos pesados.",
+  "tired-2": "Le faltaba el aliento. La valentía lo había llevado hasta allí; el orgullo lo había retenido allí.",
+  "tired-2.ask": [
+    "¿Qué cambia cuando Joromi se cansa?"
+  ],
+  "struggle": "Aun así, luchó. El espíritu lo atacó con dureza, dándole poco tiempo para recuperarse.",
+  "struggle-2": "Su hermana permaneció cerca, y su débil voz se negaba a desaparecer entre la confusión.",
+  "opening": "Joromi logró liberarse y encontró una oportunidad para escapar.",
+  "opening-2": "Aquello no era un combate común de la aldea, con amigos esperando para alzarlo sobre sus hombros cuando terminara.",
+  "escape": "Se dirigió hacia el camino de regreso a casa. Bajó a toda velocidad desde el mundo de los espíritus, dejando atrás a sus campeones.",
+  "escape-2": "La tierra conocida bajo sus pies era más valiosa que otra victoria.",
+  "escape-2.ask": [
+    "¿Por qué decide escapar Joromi?"
+  ],
+  "home": "Su hermana regresó con él. Había entrado en aquella extraña arena convencido de que la fuerza podía responder a todas las preguntas.",
+  "home-2": "Regresó sabiendo que había preguntas que la fuerza no podía responder.",
+  "remember": "Este es el Joromi que se recuerda en esta versión: lo bastante valiente como para enfrentarse a un adversario aterrador,",
+  "remember-2": "pero llevado al borde del desastre por el deseo de derrotar a todos.",
+  "lesson": "Y cuando el anciano termina, deja una pregunta junto al fuego.",
+  "lesson-2": "¿La persona más fuerte es siempre la que sigue luchando, o la fuerza también puede significar saber cuándo detenerse?",
+  "lesson-2.ask": [
+    "¿Saber cuándo detenerse puede ser una forma de fortaleza?"
+  ],
+  "words": [
+    "valentía",
+    "paciencia",
+    "fuerza"
+  ],
+  "game": {
+    "offer": "Enfréntate a los espíritus",
+    "intro": "Quédate en un solo lugar. Da golpes suaves. Protege el lado brillante, agáchate ante el barrido alto y luego golpea las caras.",
+    "flat": "Quédate en un solo lugar. Mantén pulsado el lado izquierdo o derecho de la pantalla para protegerte (o A y D), mantén pulsada la parte inferior para agacharte y esquivar el barrido alto (o S), y luego toca la cara luminosa para golpear (o la barra espaciadora).",
+    "adaptation": "Un juego de boxeo inspirado en la leyenda de lucha libre.",
+    "start": "Comenzar",
+    "back": "Volver a la historia",
+    "replay": "Jugar de nuevo",
+    "level": "Espíritu {0} / {1}",
+    "health": "Defensa {0} / {1}",
+    "mist": "Espíritu de la niebla",
+    "ember": "Espíritu de las brasas",
+    "wind": "Espíritu del viento",
+    "seven": "Espíritu de siete cabezas",
+    "approach": "Observa cómo se acerca el espíritu.",
+    "left": "Protege tu lado izquierdo",
+    "right": "Protege tu lado derecho",
+    "duck": "Agáchate ante el barrido alto",
+    "counter": "Tu turno: golpea una cara",
+    "recover": "Retira las manos. Observa el siguiente patrón.",
+    "tracking": "Muestra ambas manos para continuar.",
+    "clear": "Espíritu completado",
+    "won": "Práctica completada. Saber cuándo detenerse es una fortaleza.",
+    "lost": "Respira. Intenta este espíritu de nuevo.",
+    "progress": "Objetivos {0} / {1}"
+  }
+}

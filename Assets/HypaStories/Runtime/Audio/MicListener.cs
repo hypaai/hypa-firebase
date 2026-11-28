@@ -236,7 +236,6 @@ namespace HypaStories
                 var tEnd = Now;
                 _source.End();
                 _onLevel?.Invoke(0f);
-                Debug.Log($"Hypa Stories: mic '{Name}' heard {_samples.Count / (float)Rate:0.0}s, peak level {_peak:0.000} (speech threshold {_silence.Threshold})");
                 // a quiet voice may never cross the speech threshold: still transcribe when something other than silence arrived
                 if (!_silence.Spoke && _peak < 0.004f)
                 {
@@ -270,7 +269,6 @@ namespace HypaStories
                     else if (_live != null) { _live.Dispose(); _live = null; }
                     var wav = WavEncoder.Encode16(_samples.ToArray(), _samples.Count, 1, Rate);
                     var text = await _transcribe(wav, _lang, _ct);
-                    Debug.Log($"Hypa Stories: heard “{text}” from {Name} ({_samples.Count / (float)Rate:0.0} s, {Now - tEnd:0} ms to transcribe)");
                     _result.TrySetResult(new ListenResult { Transcript = text ?? "", TEnd = tEnd, TTranscript = Now, Spoke = true, Peak = _peak });
                 }
                 catch (Exception e) { _result.TrySetException(e); }

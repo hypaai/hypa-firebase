@@ -17,15 +17,14 @@ namespace HypaStories
     public static class StoryLibrary
     {
         /// <summary>Card order. Each id is a folder under Resources/Stories.</summary>
-        static readonly string[] Ids = { "seven-hot-stones", "kings-drum", "eshu-crossroads", "marlow-street", "death-of-the-rice-farmer", "girl-who-chose-hare" };
+        static readonly string[] Ids = { "seven-hot-stones", "kings-drum", "eshu-crossroads", "marlow-street", "death-of-the-rice-farmer", "girl-who-chose-hare", "joromi" };
 
         const float WordsPerSecond = 2.6f, Start = 0.4f, Gap = 0.45f, Tail = 1.5f;
 
-        /// <summary>Answers questions when a story.json names no model.</summary>
         /// <summary>
-        /// Who answers questions when a story doesn't say: Meta's open Muse Spark first, then Gemini Flash (fast and steady), then
-        /// Meta's Muse Glimmer (about 3–5 s), then Meta's Muse Wonder (last: on 2026-11-15 the service answered "model not found"
-        /// for it, so it couldn't be timed; a "not found" costs under a second and the app then skips it for the session).
+        /// Who answers questions when a story doesn't say: Meta's open Muse Spark first, then Gemini Flash (the fast backup when
+        /// Spark fails), then Meta's Muse Glimmer (about 3–5 s), then Meta's Muse Wonder (last: on 2026-11-15 the service answered
+        /// "model not found" for it, so it couldn't be timed; a "not found" costs under a second and the app then skips it for the session).
         /// </summary>
         public static readonly string[] DefaultModels =
         {
@@ -37,12 +36,12 @@ namespace HypaStories
         public static readonly StoryInfo[] All = Ids.Select(Load).ToArray();
 
         public static readonly StoryInfo[] Campfire = { Find("seven-hot-stones"), Find("kings-drum"), Find("eshu-crossroads"), Find("marlow-street") };
-        public static readonly StoryInfo[] Elder = { Find("death-of-the-rice-farmer"), Find("girl-who-chose-hare") };
+        public static readonly StoryInfo[] Elder = { Find("joromi"), Find("death-of-the-rice-farmer"), Find("girl-who-chose-hare") };
 
         public static StoryInfo Find(string id) => All.FirstOrDefault(s => s.Id == id);
 
         /// <summary>
-        /// A story from its folder under Resources/Stories. The campfire's cards are <see cref="All"/>; other cards (the hut's
+        /// A story from its folder under Resources/Stories. <see cref="All"/> holds the campfire and elder cards; other cards (the hut's
         /// household items, <see cref="HutItems"/>) load theirs here, in the same format, without joining the campfire's row.
         /// </summary>
         public static StoryInfo Load(string id)
@@ -100,7 +99,8 @@ namespace HypaStories
                     foreach (var kv in cues)
                         foreach (var at in (kv.Value as JArray) ?? new JArray()) sounds.Add(new SoundCue { T = c.At + (float)at, Name = kv.Key });
                 foreach (var f in (line["flashes"] as JArray) ?? new JArray()) flashes.Add(c.At + (float)f);
-                t = c.Until + Gap;
+                // A caption split can continue immediately, keeping the original paragraph's total pause and duration.
+                t = c.Until + Mathf.Max(0f, (float?)line["pauseAfter"] ?? Gap);
             }
 
             var info = new StoryInfo
@@ -114,7 +114,7 @@ namespace HypaStories
                     .Where(v => !string.IsNullOrEmpty(v.Model) && (!string.IsNullOrEmpty(v.Voice) || v.ByLanguage.Count > 0)).ToArray(),
                 Timeline = new StoryTimeline
                 {
-                    Duration = Mathf.Ceil(t - Gap + Tail),
+                    Duration = Mathf.Ceil((caps.Count > 0 ? caps[caps.Count - 1].Until : Start) + Tail),
                     Captions = caps.ToArray(),
                     Flashes = flashes.ToArray(),
                     Rain = rain.Keys.ToArray(),
@@ -128,7 +128,11 @@ namespace HypaStories
             {
                 var w = Strings(kv.Value["words"]);
                 if (w.Length > 0) info.WordsTr[kv.Key] = w;
+                if (kv.Value["game"] is JObject labels)
+                    info.GameLabelsTr[kv.Key] = labels.Properties().ToDictionary(p => p.Name, p => (string)p.Value);
             }
+            if (o["game"] is JObject game)
+                foreach (var p in game.Properties()) info.GameLabels[p.Name] = (string)p.Value;
             return info;
         }
 

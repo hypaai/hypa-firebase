@@ -1,0 +1,101 @@
+{
+  "champion": "Long time ago, for Edo land, one young wrestler wey dem dey call Joromi come popular well well because of im strength.",
+  "champion-2": "When he enter village square, everybody wan watch am.",
+  "champion.ask": [
+    "Na who be Joromi?"
+  ],
+  "skill": "Im legs sharp gidigba. E dey feel when opponent shift body and e dey know where next struggle dey go.",
+  "skill-2": "One wrestler after another begin fall for im front.",
+  "pride": "At first, Joromi dey thank di people wey dey hail am. But as im win dey plenty, na so im pride dey grow.",
+  "pride-2": "E no take time, e begin think say nobody dey for anywhere wey fit win am.",
+  "pride-2.ask": [
+    "Why Joromi come get pride like dat?"
+  ],
+  "sister": "Im sister know say e get liver. But e still know say Joromi no like person wey dey advise am.",
+  "sister-2": "When sister talk about limit, na as challenge e dey hear am.",
+  "palm": "Near dia house, one palm tree dey wey dem warn am make e no climb.",
+  "palm-2": "To Joromi, dat warning even sound like insult to im power.",
+  "climb": "One day, e hold body of di tree and start to climb. Im sister shout call am.",
+  "climb-2": "E no gree stop, e climb pass roof level, pass all di normal noise of village.",
+  "climb-2.ask": [
+    "Why im sister come dey warn am?"
+  ],
+  "beyond": "Na so di tree carry am go pass di world wey e know. Di land of human beings dey down.",
+  "beyond-2": "Another place open for im front, na where spirits dey gather to do wrestling.",
+  "challenge": "Joromi look di arena. E don win all di strong men for human world.",
+  "challenge-2": "Why e go turn back now? Eot step front and throw challenge.",
+  "fly": "Im sister no gree abandon am.",
+  "fly-2": "For dis story, e transform to small fly and follow am, carry im voice go where human leg no fit reach.",
+  "fly-2.ask": [
+    "How im sister take help am?"
+  ],
+  "stranger": "Di spirits come dey look di stranger.",
+  "stranger-2": "See man wey carry flesh and breath, wey stand for place wey no be im own, dey ask to fight spirits.",
+  "two-heads": "One spirit wey get two heads come front. Joromi meet am for arena.",
+  "two-heads-2": "Dem push each other gidigba, none of them gree give up, as all di spirits gather close.",
+  "patience": "Di fight take time pass any match wey Joromi don ever play for house.",
+  "patience-2": "Ordinary strength no reach again. E must to watch, wait, and find correct time to move.",
+  "patience-2.ask": [
+    "Why patience good for fight?"
+  ],
+  "voice": "Im sister voice reach am inside all di noise. E call im name and remind am how far e don travel.",
+  "voice-2": "But as e dey win, na so e dey enter more danger.",
+  "victory": "Finally, Joromi win dat opponent. Di arena shake. E show say human being fit stand fight with spirit.",
+  "victory-2": "But e still no think say make e go back house.",
+  "seven-heads": "Another challenge come again. Di danger now big pass before.",
+  "seven-heads-2": "One wicked spirit wey get seven heads ready to fight, and di air around am hot like fire.",
+  "tired": "Na dat time Joromi first feel say im body don tire. Im hands heavy.",
+  "tired-2": "E dey breathe hard hard. Na courage carry am come here; na pride make am stay.",
+  "tired-2.ask": [
+    "Wetin dey change when Joromi body tire?"
+  ],
+  "struggle": "E still fight. Di spirit press am tight, no give am space to breathe well.",
+  "struggle-2": "Im sister still dey near, im small voice dey speak inside all di confusion.",
+  "opening": "Joromi struggle come out and see chance to run.",
+  "opening-2": "Dis one no be ordinary village match where friends go carry am for shoulder when e win.",
+  "escape": "E turn face back to house. E run come down from spirit world, leave all di champions behind.",
+  "escape-2": "Di ground wey e know for body sweet pass another victory.",
+  "escape-2.ask": [
+    "Why Joromi come decide to run away?"
+  ],
+  "home": "Im sister come back with am. E carry mind enter dat strange arena, think say na strength be answer to everything.",
+  "home-2": "E come back now know say some question pass strength.",
+  "remember": "Na di Joromi be dat wey people still remember for dis story: get liver to face dangerous enemy,",
+  "remember-2": "but pride almost carry am go enter big trouble because e wan win everybody.",
+  "lesson": "And when di papa finish, e leave one question near di fire.",
+  "lesson-2": "Na di person wey dey continue fight always strong pass, abi strength dey mean sef when person know wen make e stop?",
+  "lesson-2.ask": [
+    "E fit be say to know wen make person stop na another kind strength?"
+  ],
+  "words": [
+    "courage",
+    "patience",
+    "strength"
+  ],
+  "game": {
+    "offer": "Face di spirits",
+    "intro": "Stand for one place. Use soft punch. Cover di side wey dey shine, bend down pass di high sweep, den punch di faces.",
+    "flat": "Stay for one spot. Hold the left or right side of the screen make you guard (or A and D), hold down small to duck the high sweep (or S), then tap the face wey dey glow make you punch (or Space).",
+    "adaptation": "One boxing game wey dem get inspiration from di wrestling story.",
+    "start": "Start",
+    "back": "Go back to di story",
+    "replay": "Play again",
+    "level": "Spirit {0} / {1}",
+    "health": "Guard {0} / {1}",
+    "mist": "Mist Spirit",
+    "ember": "Ember Spirit",
+    "wind": "Wind Spirit",
+    "seven": "Seven-headed Spirit",
+    "approach": "Watch as di spirit dey come.",
+    "left": "Guard your left side",
+    "right": "Guard your right side",
+    "duck": "Bend down for di high sweep",
+    "counter": "Your turn: punch one face",
+    "recover": "Carry your hand come back. Watch di next style.",
+    "tracking": "Show your two hands make you fit continue.",
+    "clear": "Spirit don finish",
+    "won": "Practice don finish. To know wen make you stop na strength.",
+    "lost": "Draw breath. Try dis spirit again.",
+    "progress": "Targets {0} / {1}"
+  }
+}

@@ -112,21 +112,47 @@ namespace HypaCore
 
         // ---------- Loading ----------
 
+        /// <summary>
+        /// The speech as a clip. Unpacking the base64 and the WAV runs off the main thread; only the clip itself is made on it,
+        /// one per frame, so a batch of lines arriving together (a story's opening line, the next lines and its fillers) never
+        /// stalls a frame. Must be awaited from the main thread.
+        /// </summary>
         public static async Task<AudioClip> LoadClipAsync(HypaSpeech s, CancellationToken ct)
         {
             if (s == null) return null;
             byte[] bytes = s.AudioBytes;
-            if (bytes == null && !string.IsNullOrEmpty(s.AudioBase64)) bytes = Convert.FromBase64String(s.AudioBase64);
+            var base64 = s.AudioBase64;
+            if (bytes == null && !string.IsNullOrEmpty(base64)) bytes = await OffMain(() => Convert.FromBase64String(base64), ct);
             if (bytes == null && !string.IsNullOrEmpty(s.AudioUrl)) bytes = await HypaHttp.GetBytesAsync(s.AudioUrl, ct); // off main thread
             if (bytes == null || bytes.Length == 0) return null;
 
-            if (WavDecoder.TryDecode(bytes, out var samples, out var ch, out var rate))
+            (float[] samples, int ch, int rate) pcm = await OffMain(() => WavDecoder.TryDecode(bytes, out var samples, out var ch, out var rate) ? (samples, ch, rate) : ((float[])null, 0, 0), ct);
+            if (pcm.samples != null)
             {
-                var clip = AudioClip.Create("hypa-tts", samples.Length / ch, ch, rate, false);
-                clip.SetData(samples, 0);
+                await OneClipPerFrame(ct);
+                var clip = AudioClip.Create("hypa-tts", pcm.samples.Length / pcm.ch, pcm.ch, pcm.rate, false);
+                clip.SetData(pcm.samples, 0);
                 return clip;
             }
             return await DecodeCompressedAsync(bytes, s.Mime, ct);
+        }
+
+        /// <summary>Runs <paramref name="work"/> on a worker thread; inline on the web, which has none.</summary>
+        static Task<T> OffMain<T>(Func<T> work, CancellationToken ct) =>
+            Application.platform == RuntimePlatform.WebGLPlayer ? Task.FromResult(work()) : Task.Run(work, ct);
+
+        static int _clipFrame = -1;
+
+        /// <summary>Waits until no clip has been made this frame (in play; the editor's tests run with no frames).</summary>
+        static async Task OneClipPerFrame(CancellationToken ct)
+        {
+            if (!Application.isPlaying) return;
+            while (Time.frameCount == _clipFrame)
+            {
+                ct.ThrowIfCancellationRequested();
+                await Task.Yield();
+            }
+            _clipFrame = Time.frameCount;
         }
 
         static async Task<AudioClip> DecodeCompressedAsync(byte[] bytes, string mime, CancellationToken ct)

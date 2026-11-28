@@ -5,7 +5,8 @@ namespace HypaStories
     /// <summary>
     /// A bonfire: a teepee of bark logs over a bed of glowing coals, with flames that read as a volume (port of the prototype's
     /// fire.js): six flame cards crossed at 30° steps (not billboards, so it has depth from any angle and in stereo), a slow swirl,
-    /// a soft halo, and a point light that jitters and shifts colour. No shadows: on Quest the fire light stays real-time without them.
+    /// a soft halo, and a point light that jitters and shifts colour. The light is vertex-only, so it does not redraw everything
+    /// in range; the camp gives it a subdivided patch of floor to land on. No shadows.
     /// </summary>
     public sealed class StoryFire
     {
@@ -73,7 +74,7 @@ namespace HypaStories
             _light.range = 12f;
             _light.intensity = LightIntensity;
             _light.shadows = LightShadows.None;
-            _light.renderMode = LightRenderMode.ForcePixel;
+            _light.renderMode = LightRenderMode.ForceVertex; // a pixel light here redraws the ground, the rocks and the storyteller
         }
 
         /// <summary>Six logs leaning into an open teepee (the flames show between them), plus three lying across the coals.</summary>

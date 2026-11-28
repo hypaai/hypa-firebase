@@ -1,0 +1,101 @@
+{
+  "champion": "Ní ọjọ́ pípẹ́ sẹ́yìn, ní ilẹ̀ àwọn ará Edo, ọ̀dọ́mọkùnrin eléré-ìjàkadì kan tí orúkọ rẹ̀ ń jẹ́ Joromi di olókìíkí fún agbára rẹ̀.",
+  "champion-2": "Nígbà tí ó bá wọ agbo nínú abúlé, gbogbo ènìyàn ni ó máa ń fẹ́ láti wò ó.",
+  "champion.ask": [
+    "Ta ni Joromi?"
+  ],
+  "skill": "Ó yára lórí ẹsẹ̀ rẹ̀. Ó lè mọ̀ nígbà tí alatako rẹ̀ bá yí ipò rẹ̀ padà, kí ó sì mọ ibi tí ìjàkadì tí ń bọ̀ yóò yí sí.",
+  "skill-2": "Alágbára kọ̀ọ̀kan lẹ́yìn òmíràn ni ó ń ṣubú níwájú rẹ̀.",
+  "pride": "Ní àkọ́kọ́, Joromi máa ń dúpẹ́ lọ́wọ́ àwọn ènìyàn tí ń hó fún un. Sùgbọ́n pẹ̀lú ìṣẹ́gun kọ̀ọ̀kan, ìgbéraga rẹ̀ ń pọ̀ sí i.",
+  "pride-2": "Láìpẹ́, ó bẹ̀rẹ̀ sí í gbàgbọ́ pé kò sí ẹnì kankan, níbikíbi, tí ó lè ṣẹ́gun rẹ̀.",
+  "pride-2.ask": [
+    "Kí n díẹ̀ nìyí tí Joromi fi di agbéraga?"
+  ],
+  "sister": "Arábìnrin rẹ̀ mọ ìgboyà rẹ̀. Ó tún mọ̀ pé kò fẹ́ràn ìkìlọ̀ rárá.",
+  "sister-2": "Nígbà tí ó bá sọ̀rọ̀ nípa ààlà, ìpèníjà tí ń dúró de ìdáhùn nìkan ni Joromi ń gbọ́.",
+  "palm": "Nítòsí ilé wọn, igi ọ̀pẹ kan wà nibẹ̀ tí wọ́n ti kìlọ̀ fún un pé kí ó má ṣe gùn ùn.",
+  "palm-2": "Fún Joromi, sísọ ọ̀rọ̀ ìkìlọ̀ yẹn pàápàá bẹ̀rẹ̀ sí í dún mọ́ ọn bí àbùkù sí agbára rẹ̀.",
+  "climb": "Lọ́jọ́ kan, ó dìmú mọ́ kùkùté igi náà, ó sì gùn ún. Arábìnrin rẹ̀ kígbe mọ́ ọn látẹ̀yìn.",
+  "climb-2": "Ó tẹ̀síwájú, ó ga ju àwọn òrùlé lọ, ó ga ju àwọn ohùn mímọ̀ tí ń jáde ní abúlé lọ.",
+  "climb-2.ask": [
+    "Kí n díẹ̀ nìyí tí arábìnrin rẹ̀ fi kìlọ̀ fún un?"
+  ],
+  "beyond": "Lẹ́yìn náà, igi náà gbé e kọjá lọ sí ayé tí kò mọ̀ rí. Nísàlẹ̀ rẹ̀ ni ilẹ̀ àwọn ènìyàn wà.",
+  "beyond-2": "Níwájú rẹ̀, ibòmíràn ṣí sílẹ̀, níbi tí àwọn ẹ̀mí ti ń pé jọ láti jàkadì.",
+  "challenge": "Joromi wo agbo ìjàkadì wọn. Ó ti ṣẹ́gun àwọn ògá nínú ayé ènìyàn.",
+  "challenge-2": "Kí n díẹ̀ nìyí tí yóò fi padà sẹ́yìn nísinsìnyí? Ó gbé ìgbésẹ̀ síwájú, ó sì pè wọ́n níjà.",
+  "fly": "Arábìnrin rẹ̀ kò kọ̀ ọ́ sílẹ̀.",
+  "fly-2": "Nínú ìtàn yìí, ó yí padà di kòkòrò kékeré kan, ó sì tẹ̀lé e lọ, ó ń gbé ohùn rẹ̀ lọ sí ibi tí ẹsẹ̀ ènìyàn rẹ̀ kò lè dé.",
+  "fly-2.ask": [
+    "Báwo ni arábìnrin rẹ̀ ṣe ràn án lọ́wọ́?"
+  ],
+  "stranger": "Àwọn ẹ̀mí wo àjèjì náà.",
+  "stranger-2": "Àtòjọ ènìyàn ẹlẹ́ran-ara àti èémí ni yìí, tí ó dúró ní ibi tí kì í ṣe tirẹ̀, tí ó sì ń fẹ́ láti fi ara rẹ̀ hàn sí wọn.",
+  "two-heads": "Ẹ̀mí kan tí ó ní orí méjì jáde wá síwájú. Joromi pàdé rẹ̀ nínú agbo.",
+  "two-heads-2": "Wọ́n dúpò mọ́ ara wọn, kò sí ẹni tí ó fẹ́ juwọ́ sílẹ̀, bí àwọn olùwòran ṣe sún mọ́ wọn pẹ́kípẹ́ki.",
+  "patience": "Ìjàkadì náà gùn gan-an ju ìjàkadì èyíkéyí tí Joromi ti mọ̀ rí nílé. Agbára nìkan kò tó.",
+  "patience-2": "Ó ní láti máa wòran, kí ó dúró, kí ó sì wá àkókò tí ó tọ́ láti gbé ìgbésẹ̀.",
+  "patience-2.ask": [
+    "Kí n díẹ̀ nìyí tí sùúrù fi wúlò nínú ìjà?"
+  ],
+  "voice": "Ohùn arábìnrin rẹ̀ dé ọ̀dọ̀ rẹ̀ láàárín ariwo náà. Ó pe orúkọ rẹ̀, ó sì rán an létí bí ó ṣe rìn jìnnà tó.",
+  "voice-2": "Sùgbọ́n ìṣẹ́gun kọ̀ọ̀kan tún ń gbé e lọ jìnnà sí ibi ààbò.",
+  "victory": "Nígbẹ̀yìn-gbẹ́yín, Joromi ṣẹ́gun alatako yẹn. Agbo mì tìtì.",
+  "victory-2": "Ó ti fihàn pé ènìyàn lè dúró láti jà pẹ̀lú ẹ̀mí. Síbẹ̀, kò rò láti padà sí ilé.",
+  "seven-heads": "Ìpèníjà mìíràn tẹ̀lé e. Nísinsìnyí, ewu tí ó wà níwájú rẹ̀ ti pọ̀ sí i.",
+  "seven-heads-2": "Ẹ̀mí burúkú kan tí ó ní orí méje dúró tán láti jà, afẹ́fẹ́ tí ó yí i ká sì dà bí èyí tí ń jó fòfò.",
+  "tired": "Fún ìgbà àkọ́kọ́, Joromi nímọ̀lára rírẹ tí ara rẹ̀ ti rẹ̀. Apá rẹ̀ ti wúwo. Ìmí rẹ̀ kò gùn mọ́.",
+  "tired-2": "Ìgboyà ni ó gbé e dé ibi; ìgbéraga ni ó sì pa á mọ́ sí ibi yìí.",
+  "tired-2.ask": [
+    "Kí n dídàpọ̀ nínú nǹkan nígbà tí ara Joromi bá rẹ̀?"
+  ],
+  "struggle": "Síbẹ̀ ó jà. Ẹ̀mí náà fún un ní ààyè rárá, kò fún un ní àkókò láti sọjí.",
+  "struggle-2": "Arábìnrin rẹ̀ wà nítòsí, ohùn rẹ̀ kékeré kọ̀ láti parun nínú ìdàrúdàpọ̀ náà.",
+  "opening": "Joromi ja ara rẹ̀ gbà, ó sì rí àǹfààní láti sálọ.",
+  "opening-2": "Èyí kì í ṣe ìjàkadì abúlé lásán, tí àwọn ọ̀rẹ́ ń dúró láti gbé e sí èjìká wọn nígbà tí ó bá parí.",
+  "escape": "Ó yí padà sí ọ̀nà ilé. Ó yára sálọ láti ayé àwọn ẹ̀mí, ó sì fi àwọn akọni rẹ̀ sílẹ̀ sẹ́yìn.",
+  "escape-2": "Ilẹ̀ mímọ̀ tí ó wà lábẹ́ ẹsẹ̀ rẹ̀ ṣe iyebíye ju ìṣẹ́gun mìíràn lọ.",
+  "escape-2.ask": [
+    "Kí n díẹ̀ nìyí tí Joromi fi pinnu láti sálọ?"
+  ],
+  "home": "Arábìnrin rẹ̀ tẹ̀lé e padà. Ó ti wọ agbo àjèjì yẹn pẹ̀lú ìdánilójú pé agbára lè dáhùn gbogbo ìbéèrè.",
+  "home-2": "Ó padà wá pẹ̀lú mímọ̀ pé àwọn ìbéèrè wà tí agbára kò lè dáhùn.",
+  "remember": "Èyí ni Joromi tí a rántí nínú ìtàn yìí: ó ní ìgboyà tó láti doju kọ alatako tí ń dẹ́rùbàni,",
+  "remember-2": "sùgbọ́n ìfẹ́ láti ṣẹ́gun gbogbo ènìyàn fẹ́rẹ̀ gbé e lọ síbi ìparun.",
+  "lesson": "Nígbà tí àgbàlagbà bá sì parí, ó fi ìbéèrè kan sílẹ̀ lẹ́bàá iná náà.",
+  "lesson-2": "Ǹjẹ́ ẹni tó lágbára jù lọ máa ń jẹ́ ẹni tó ń bá a lọ láti jà nígbà gbogbo, tàbí agbára tún lè túmọ̀ sí mímọ ìgbà tí a óò dúró?",
+  "lesson-2.ask": [
+    "Ǹjẹ́ mímọ ìgbà tí a óò dúró lè jẹ́ irúfẹ́ agbára kan?"
+  ],
+  "words": [
+    "ìgboyà",
+    "sùúrù",
+    "agbára"
+  ],
+  "game": {
+    "offer": "Do jú kọ àwọn ẹ̀mí",
+    "intro": "Dúró sí ojú kan. Lo ẹ̀ṣẹ́ jẹ́jẹ́. Dínà ẹgbẹ́ tó ń tàn, tẹríba fún gbígbá gíga, lẹ́yìn náà kan ojú wọn lẹ́ṣẹ́.",
+    "flat": "Wà lójú kan náà. Di apá òsì tàbí ọ̀tún ojú ìbòjú mú láti dábòbò ara rẹ (tàbí A àti D), tẹ́ rẹlẹ̀ láti yẹra fún nàgúdù gíga (tàbí S), lẹ́yìn náà tẹ ojú tó ń tàn yòò láti kàn lẹ́sẹ́ (tàbí Space).",
+    "adaptation": "Eré ìjàfara tí a gbé kà lórí ìtàn ìjàkadì.",
+    "start": "Bẹ̀rẹ̀",
+    "back": "Padà sí ìtàn náà",
+    "replay": "Ṣeré lẹ́ẹ̀kan sí i",
+    "level": "Ẹ̀mí {0} / {1}",
+    "health": "Dínà {0} / {1}",
+    "mist": "Ẹ̀mí Ìkùùkuu",
+    "ember": "Ẹ̀mí Ẹyin-Iná",
+    "wind": "Ẹ̀mí Afẹ́fẹ́",
+    "seven": "Ẹ̀mí Olórí-Méje",
+    "approach": "Wò bí ẹ̀mí náà ṣe ń sún mọ́ tòfò.",
+    "left": "Dínà ẹgbẹ́ òsì rẹ",
+    "right": "Dínà ẹgbẹ́ ọ̀tún rẹ",
+    "duck": "Tẹríba fún gbígbá gíga",
+    "counter": "Àkókò rẹ: kan ojú kan lẹ́ṣẹ́",
+    "recover": "Mú ọwọ́ padà. Wo bí nǹkan ṣe ń tẹ̀léra lọ.",
+    "tracking": "Fi ọwọ́ méjèèjì hàn láti tẹ̀síwájú.",
+    "clear": "Ẹ̀mí parí",
+    "won": "Ìfọwọ́dánwò parí. Mímọ ìgbà tí a óò dúró jẹ́ agbára.",
+    "lost": "Gba afẹ́fẹ́ sínú. Tún dán ẹ̀mí yìí wò lẹ́ẹ̀kan sí i.",
+    "progress": "Ibi àfojúsùn {0} / {1}"
+  }
+}

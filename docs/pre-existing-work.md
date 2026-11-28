@@ -13,3 +13,17 @@
 The new work is the selection, the slider shape keys and blink, the clothing masks, texture processing (normalised and greyscale
 variants for tinting), the thumbnails, and the runtime that uses them. MPFB and Blender (GPL-3.0) are build tools only and are
 not included. See `THIRD_PARTY_NOTICES.md`.
+
+## Hypa Stories updates from the Quest app (Nov 22–27)
+
+Brought in from Hypa's own Quest version of Hypa Stories, where this work was done first:
+
+- **Joromi and the Spirit Wrestlers**: the story in eight languages (`Resources/Stories/joromi`), first in the village elder's list,
+  and its spirit-boxing game (`SpiritBoxingGame`, `SpiritBoxingRules`, `SpiritBoxingTests`). Sources in `Resources/Stories/SOURCES.md`.
+- Asking: the last 3 questions and what was heard of their answers go with a new question, and a player can ask again mid-answer.
+- Games stay on their story's panel; the game voice stops before the story speaks again; the village stays behind the doors in your room.
+- The fire light is vertex-only with a firelit ground patch; speech audio is decoded off the main thread, one clip per frame.
+- Quest: punches read the right hand by handedness; see-through is checked without toggling it; the hand's ray shows only where it can be used.
+
+Not brought in: the Quest store build (store signing and a baked Hypa key, which this project never ships), the privacy panel and its
+model-provider wording, Meta-only question models, and the Quest frame-rate and OpenXR settings.

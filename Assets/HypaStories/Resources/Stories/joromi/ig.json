@@ -1,0 +1,101 @@
+{
+  "champion": "N'oge ochie, n'ala ndị Edo, otu nwa okorobịa mgba aha ya bụ Joromi ghọrọ onye ama ama n'ihi ike ya.",
+  "champion-2": "Mgbe ọ bụla o banyere n'ogige obodo, onye ọ bụla na-achọ ikiri ya.",
+  "champion.ask": [
+    "Onye bụ Joromi?"
+  ],
+  "skill": "Ụkwụ ya dị nnọọ mfe. Ọ na-anụ mmegharị ahụ onye ọ na-agba mgba ma mara ebe ọgụ na-esote ga-atụgharị.",
+  "skill-2": "Ndị mgba niile dara n'ihu ya ibe n'ibe.",
+  "pride": "Na mbụ, Joromi na-ekele ndị na-anụrị ọṅụ n'ihi ya. Mana ka ọ na-enwetakwu mmeri, ka mpako ya na-eto.",
+  "pride-2": "N'oge na-adịghị anya, ọ malitere ikwere na ọ dịghị onye ọ bụla, n'ebe ọ bụla, pụrụ imeri ya.",
+  "pride-2.ask": [
+    "Gịnị mere Joromi ji na-enwe mpako?"
+  ],
+  "sister": "Nwanne ya nwaanyị maara obi ike ya. Ọ makwaara na ọ naghị amasị ya ka a dọọ ya aka ná ntị.",
+  "sister-2": "Mgbe ọ bụla o kwuru banyere ebe ike ya ruru, ọ na-anụ naanị na ọ bụ ihe ịma aka ọ na-eche azịza ya.",
+  "palm": "Nso n'ụlọ ha, otu osisi nkwu guzo ebe ahụ nke a dọrọ ya aka ná ntị na ọ gaghị arị ya.",
+  "palm-2": "Maka Joromi, ọbụna aka ná ntị ahụ malitere ịda ka mkparị n'ike ya.",
+  "climb": "Otu ụbọchị, o gburu aka n'osisi ahụ wee rịgoro. Nwanne ya nwaanyị kpọrọ ya n'azụ.",
+  "climb-2": "Ọ nọgidere na-arị, rịfee ụlọ niile, rịfee ebe ụda olu obodo na-anụkarị.",
+  "climb-2.ask": [
+    "Gịnị mere nwanne ya nwaanyị ji dọọ ya aka ná ntị?"
+  ],
+  "beyond": "Mgbe ahụ, osisi ahụ buuru ya gaa n'ofee ụwa ọ maara.",
+  "beyond-2": "N'okpuru ya bụ ala nke ụmụ mmadụ. N'ihu ya mepere ebe ọzọ, ebe ndị mmụọ zukọtara ịgba mgba.",
+  "challenge": "Joromi lere ogige mgba ha anya. Ọ meriela ndị mmeri nke ụwa mmadụ.",
+  "challenge-2": "Gịnị mere ọ ga-eji laghachi azụ ugbu a? Ọ gbadara n'ihu wee nye ha ihe ịma aka ya.",
+  "fly": "Nwanne ya nwaanyị arapụghị ya.",
+  "fly-2": "N'akụkọ a, ọ gbanwere ghọọ obere ijiji wee soro ya gaa, na-eburu olu ya gaa ebe ụkwụ mmadụ ya na-enweghị ike iru.",
+  "fly-2.ask": [
+    "Olee otú nwanne ya nwaanyị si enyere ya aka?"
+  ],
+  "stranger": "Ndị mmụọ lere onye ọbịa ahụ anya.",
+  "stranger-2": "Nke a bụ mmadụ nwere anụ ahụ na ume, guzo n'ebe na-abụghị nke ya, na-achọ igosi onwe ya megide ha.",
+  "two-heads": "Otu mmụọ nwere isi abụọ bịara n'ihu. Joromi zutere ya n'ogige mgba.",
+  "two-heads-2": "Ha gbara mgba siri ike, ọ dịghị onye chọrọ ịda, ka ndị na-ekiri ya gbakọtara nso.",
+  "patience": "Ọgụ ahụ gbatịrị ogologo oge karịa mgba ọ bụla Joromi gbarala n'ụlọ. Naanị ike ezughị.",
+  "patience-2": "Ọ ghọrọ ka ọ na-ekiri, na-eche, ma na-achọ oge kwesịrị ekwesị ọ ga-eji mee ihe.",
+  "patience-2.ask": [
+    "Gịnị mere ndidi ji baa uru n'ọgụ?"
+  ],
+  "voice": "Olu nwanne ya nwaanyị ruru ya nso site n'etiti mkpọtụ ahụ. Ọ kpọrọ aha ya wee chetara ya ebe o siri bịa.",
+  "voice-2": "Mana mmeri ọ bụla na-ebugakwa ya n'ebe dị anya site n'ebe nchekwa.",
+  "victory": "N'ikpeazụ, Joromi meriri onye mgba ahụ. Ogige mgba ahụ gbakasịrị ahụ.",
+  "victory-2": "O gosila na mmadụ nwere ike iguzo megide mmụọ. Ma ọ ka cheghị echiche ịlaghachi ụlọ.",
+  "seven-heads": "Ihe ịma aka ọzọ sochiri ya. Ugbu a, ihe ize ndụ dị n'ihu ya ka ukwuu.",
+  "seven-heads-2": "Otu mmụọ na-atụ egwu nwere isi asaa guzo njikere ịlụ ọgụ, ikuku gbara ya gburugburu dịkwa ka ọ na-ere ọkụ.",
+  "tired": "Maka oge mbụ, Joromi nwere mmetụta otú ike siri gwụ ahụ ya. Aka ya tọrọ arọ.",
+  "tired-2": "Ume ya dị mkpụmkpụ. Obi ike butere ya ebe a; mpako mere ka ọ nọgide ebe a.",
+  "tired-2.ask": [
+    "Gịnị na-agbanwe mgbe ike gwụrụ Joromi?"
+  ],
+  "struggle": "Ma ọ nọgidere na-alụ ọgụ. Mmụọ ahụ gbachiri ya gburugburu, n'enyeghị ya oge ọ bụla ọ ga-eji nwetaghachi onwe ya.",
+  "struggle-2": "Nwanne ya nwaanyị nọgidere nso, obere olu ya jụrụ ịla n'iyi n'etiti ọgụ ahụ.",
+  "opening": "Joromi gbakasịrị ahụ pụọ wee hụ ohere ọ ga-eji gbanahụ.",
+  "opening-2": "Nke a abụghị mgba obodo nkịtị, ebe ndị enyi na-eche ka ha bulie ya n'ubu ha mgbe ọ gachara.",
+  "escape": "Ọ tụgharịrị gawa n'ụzọ na-ala ụlọ. Ọ gbaara ọsọ gbadaa site n'ụwa ndị mmụọ, hapụ ndị mmeri ha n'azụ.",
+  "escape-2": "Ala ọ maara nke ọma n'okpuru ụkwụ ya dị oke ọnụ ahịa karịa mmeri ọzọ.",
+  "escape-2.ask": [
+    "Gịnị mere Joromi ji kpebie ịgbanahụ?"
+  ],
+  "home": "Nwanne ya nwaanyị na ya laghachiri. O banyela n'ogige mgba dị iche ahụ na-atụ anya na ike nwere ike ịza ajụjụ niile.",
+  "home-2": "Ọ batara ọzọ na-amata na e nwere ajụjụ ndị ike na-enweghị ike ịza.",
+  "remember": "Ọ bụ Joromi ahụ ka a na-echeta n'akụkọ a: nwee obi ike ịgbaso onye iro na-atụ egwu,",
+  "remember-2": "mana ọ fọrọ nke nta ka ọ banye na mbibi n'ihi ọchịchọ imeri onye ọ bụla.",
+  "lesson": "Ma mgbe okenye ahụ gbachara, ọ hapụrụ ajụjụ n'akụkụ ọkụ ahụ.",
+  "lesson-2": "Ọ bụ onye kachasị ike bụ mgbe niile onye na-aga n'ihu na-alụ ọgụ, ka ike ọ nwere ike pụtara ịma mgbe a ga-akwụsị?",
+  "lesson-2.ask": [
+    "Ịma mgbe a ga-akwụsị ọ nwere ike ịbụ ụdị ike?"
+  ],
+  "words": [
+    "obi ike",
+    "ndidi",
+    "ike"
+  ],
+  "game": {
+    "offer": "Chee ihu na mụọ ndị ahụ",
+    "intro": "Nọgide n'otu ebe. Jiri nwayọọ kụọ ọkpọ. Chebe akụkụ ahụ na-enwu gbaa, gbanarị ihe nfe dị elu, wee kụọ ihu ha ọkpọ.",
+    "flat": "Guzo n'otu ebe. Sụgide aka n'akụkụ aka ekpe ma ọ bụ aka nri nke ihuenyo ahụ iji nchebe (ma ọ bụ A na D), sụgide aka ala iji zere iwu ụkwụ dị elu (ma ọ bụ S), emesịa pịa ihu ahụ na-enwu ọkụ iji sụọ ọkpọ (ma ọ bụ Space).",
+    "adaptation": "Egwuregwu ọkpọ nke akụkọ mgba kpaliri.",
+    "start": "Malite",
+    "back": "Laghachi n'akụkọ ahụ",
+    "replay": "Gwuo ọzọ",
+    "level": "Mụọ {0} / {1}",
+    "health": "Chebe {0} / {1}",
+    "mist": "Mụọ Alụlụ",
+    "ember": "Mụọ Icheku Ọkụ",
+    "wind": "Mụọ Ikuku",
+    "seven": "Mụọ nwere isi asaa",
+    "approach": "Lelee ka mụọ ahụ na-abịa.",
+    "left": "Chebe akụkụ aka ekpe gị",
+    "right": "Chebe akụkụ aka nri gị",
+    "duck": "Gbanarị ihe nfe dị elu",
+    "counter": "Oge gị: kụọ ihu ọkpọ",
+    "recover": "Weghachite aka gị azụ. Lelee usoro ọzọ.",
+    "tracking": "Gosi aka abụọ gị ka ị gaa n'ihu.",
+    "clear": "Mụọ agwụla",
+    "won": "Omume agwụla. Ịma mgbe a ga-akwụsị bụ ike.",
+    "lost": "Kuuru ume. Nwaa mụọ a ọzọ.",
+    "progress": "Ebe {0} / {1}"
+  }
+}

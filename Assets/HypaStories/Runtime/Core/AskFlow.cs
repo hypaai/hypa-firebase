@@ -105,7 +105,9 @@ namespace HypaStories
         sealed class Session
         {
             public int Line;
-            public string Context;
+            public string Context, Question;
+            /// <summary>The answer's sentences that started playing: what the listener heard.</summary>
+            public readonly List<string> Heard = new List<string>();
             public readonly CancellationTokenSource Cts = new CancellationTokenSource();
             public bool Cancelled;
             public int Unclear;
@@ -115,6 +117,10 @@ namespace HypaStories
 
         Session _s;
         Task _queue = Task.CompletedTask;
+        /// <summary>Earlier questions in this telling, oldest first, sent with the next one so follow-ups make sense.</summary>
+        readonly List<QaTurn> _history = new List<QaTurn>();
+        string _historyStory;
+        const int MaxHistory = 3;
         string _lastFiller, _lastResume;
 
         /// <param name="onAsking">true when a question starts (duck the ambience, fireflies gather, storyteller turns), false when it ends.</param>
@@ -170,23 +176,52 @@ namespace HypaStories
                     var line = await prepared;
                     onReady?.Invoke(_clockMs());
                     if (s.Cancelled) return;
-                    await _speech.PlayAsync(line, t => { if (answer) _view.SetAnswer(text); onStart?.Invoke(t); }, s.Cts.Token);
+                    await _speech.PlayAsync(line, t => { if (answer) { s.Heard.Add(text); _view.SetAnswer(text); } onStart?.Invoke(t); }, s.Cts.Token);
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception e) { Debug.LogWarning("Hypa Stories: couldn't speak a line: " + e.Message); }
             }
         }
 
-        /// <summary>Raise a hand / Ask. No-op unless the story is playing and nothing is being asked.</summary>
+        /// <summary>
+        /// True when a raised hand can start a question: with nothing being asked (the story playing), or while the storyteller
+        /// thinks, answers or is getting back to the story, which a new question cuts into.
+        /// </summary>
+        public bool CanBegin => State == AskState.Idle ? _narration.CanAsk
+            : State == AskState.Thinking || State == AskState.Answering || State == AskState.Resuming;
+
+        /// <summary>
+        /// Raise a hand / Ask. With the story playing it stops the story and listens. While the storyteller thinks or answers,
+        /// that answer stops and a new question starts, at the same place in the story. No-op otherwise.
+        /// </summary>
         public async Task BeginAsync()
         {
-            if (State != AskState.Idle || !_narration.CanAsk) return;
+            if (!CanBegin) return;
+            if (State != AskState.Idle) { await AskAgainAsync(); return; }
             var s = _s = new Session { Line = _narration.LineIndex, Context = _narration.StorySoFar };
             _view.SetSuggestions(Suggestions = _narration.Suggestions ?? new string[0]);
             Set(AskState.Interrupt, L.Listening);
             _onAsking?.Invoke(true);
             _view.SetQuestion(""); _view.SetAnswer("");
             _narration.Interrupt();
+            await Loop(s);
+        }
+
+        /// <summary>A question cutting into the answer: drop that answer and listen again, keeping the story's place and context.</summary>
+        async Task AskAgainAsync()
+        {
+            var old = _s;
+            if (old == null) return;
+            Remember(old);
+            old.Cancelled = true;
+            old.Cts.Cancel();
+            old.Rec?.Cancel();
+            old.Typed?.TrySetResult(new ListenResult());
+            _speech.StopAll();
+            _queue = Task.CompletedTask;
+            var s = _s = new Session { Line = old.Line, Context = old.Context };
+            _view.SetQuestion(""); _view.SetAnswer("");
+            Set(AskState.Interrupt, L.Listening);
             await Loop(s);
         }
 
@@ -238,6 +273,7 @@ namespace HypaStories
                 At = DateTime.UtcNow.ToString("o"), Lang = lang.Code, Line = s.Line, Typed = r.Typed, Question = r.Transcript, Mode = _qa.Mode,
                 Transcript = r.Typed ? 0 : r.TTranscript - r.TEnd,
             };
+            s.Question = r.Transcript;
             _view.SetQuestion($"{L.You}: “{r.Transcript}”");
             Set(AskState.Thinking, L.Thinking);
             var answered = false;
@@ -261,7 +297,8 @@ namespace HypaStories
 
             try
             {
-                var req = new QaRequest { Question = r.Transcript, StoryId = _narration.StoryId, StorySoFar = s.Context, Language = lang, LineIndex = s.Line };
+                var req = new QaRequest { Question = r.Transcript, StoryId = _narration.StoryId, StorySoFar = s.Context, Language = lang, LineIndex = s.Line,
+                    History = HistoryAt(s.Line) };
                 await _qa.AnswerAsync(req, (text, i, last) =>
                 {
                     if (s.Cancelled) return;
@@ -301,12 +338,36 @@ namespace HypaStories
             if (!failed) { back = Pick(L.Resume, _lastResume); _lastResume = back; }
             await Say(s, back);
             if (s.Cancelled) return;
+            Remember(s);
             Cleanup();
             _narration.Resume(s.Line);
             Ended?.Invoke();
             if (entry == null) return;
             Log.Add(entry);
             Logged?.Invoke(entry);
+        }
+
+        /// <summary>
+        /// The questions asked so far in this telling, oldest first. A new story, or going back before a question's line (a restart),
+        /// forgets them.
+        /// </summary>
+        List<QaTurn> HistoryAt(int line)
+        {
+            if (_historyStory != _narration.StoryId) { _history.Clear(); _historyStory = _narration.StoryId; }
+            _history.RemoveAll(t => t.Line > line);
+            return new List<QaTurn>(_history);
+        }
+
+        /// <summary>Keeps a finished, cut-off or cancelled question with what was heard of its answer. Unanswered ones are dropped.</summary>
+        void Remember(Session s)
+        {
+            if (s.Question != null && s.Heard.Count > 0)
+            {
+                HistoryAt(s.Line);
+                _history.Add(new QaTurn { Question = s.Question, Answer = string.Join(" ", s.Heard), Line = s.Line });
+                if (_history.Count > MaxHistory) _history.RemoveAt(0);
+            }
+            s.Question = null;
         }
 
         void Cleanup()
@@ -323,6 +384,7 @@ namespace HypaStories
         {
             var s = _s;
             if (State == AskState.Idle || s == null) return;
+            Remember(s);
             s.Cancelled = true;
             s.Cts.Cancel();
             s.Rec?.Cancel();
@@ -332,10 +394,13 @@ namespace HypaStories
             Ended?.Invoke();
         }
 
-        /// <summary>"Stop talking" while the storyteller is mid-line: skips the current line.</summary>
+        /// <summary>
+        /// "Stop talking" while the storyteller is mid-answer: skips the current line. Not while thinking: the corner button
+        /// turns from Done to Skip as the question ends, and a Done pinch landing a moment late must not cut the "let me think".
+        /// </summary>
         public void Skip()
         {
-            if (State == AskState.Idle || State == AskState.Listening) return;
+            if (State != AskState.Answering && State != AskState.Resuming) return;
             _speech.SkipCurrent();
         }
 

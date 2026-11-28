@@ -190,3 +190,18 @@ After a story with a game, the two players in a Story Circle race at it, each on
 - Fix to G09: `RestRoomSync` read `game` updates wrongly when only one player's entry changed.
 - Tests: `GameRaceTests` (count, live scores, winner and ties, leaving, forfeit, rematch, old rounds, scores).
 - Not yet run on a device.
+
+## Hypa Stories updates from the Quest app, on every platform
+
+The updates listed in `docs/pre-existing-work.md` were merged three ways onto this project's own changes (the Firebase proxy, the
+hybrid router, Story Circle, the old woman), keeping both. New here:
+
+- The spirit-boxing game plays on phones, tablets and the web, not only with tracked hands: hold the left or right half of the
+  screen to guard, the bottom third to duck, and tap the glowing face to punch (a tap on the wrong head counts against you, as a wrong
+  punch does). Keys: A/D or arrows, S or down, J, L or Space. The on-screen instruction (`flat`) is in all eight languages, translated
+  through this project's `/hypa/translate` (native-speaker review pending, as for the rest of Joromi).
+- In a Story Circle, a story's own game stays hidden (the host's Play together is the game there), and asking again mid-answer is
+  only for a player on their own, so two players' questions never overlap.
+- `AskFlow.Logged` stays (the Quest app removed it for its store build; this project's logs use it).
+- Tests: Unity EditMode 659/659 pass locally (6000.6.8f1). Not yet played on a device.
+- `deploy-web.yml` fetches the storyteller and the camp's recorded sounds (licensed, kept out of Git) from a private hypa-firebase bucket, `gs://hypa-firebase-restricted-media`, before it builds; only the deploy service account can read it.
