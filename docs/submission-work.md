@@ -60,6 +60,7 @@ A profile card for Stories with a realistic character the player shapes. Code in
 - Web profile fields use the physical or system keyboard. The in-game keyboard remains available on Quest.
 - Tests: `Assets/HypaStories/Tests/Editor/StoryProfileTests.cs`.
 - Not yet synced through Firebase.
+- Follow-up: a first profile opens finished, with a random look and a friendly name such as "Brave Lion", and one "Your name" field. The handle is generated from that name. Phone and headset screens were not checked.
 
 ## G03: Firebase web bridge (HYP-198)
 
