@@ -38,6 +38,7 @@ namespace HypaFirebase.Rest
         readonly RoomInfo _info = new RoomInfo();
         readonly Dictionary<string, RtdbTree> _trees = new Dictionary<string, RtdbTree>();
         readonly Dictionary<string, long> _poseSeen = new Dictionary<string, long>();
+        readonly Dictionary<string, string> _gameSeen = new Dictionary<string, string>();
         IReadOnlyDictionary<string, RoomPlayer> _players = new Dictionary<string, RoomPlayer>();
         bool _answersPrimed;
         int _nextAnswer, _answerSeen = -1;
@@ -254,7 +255,7 @@ namespace HypaFirebase.Rest
         void Start()
         {
             _cts = new CancellationTokenSource();
-            _trees.Clear(); _poseSeen.Clear();
+            _trees.Clear(); _poseSeen.Clear(); _gameSeen.Clear();
             _answersPrimed = false; _nextAnswer = 0; _lastPlayersKey = null;
             var ct = _cts.Token;
             foreach (var child in new[] { "host", "state", "clock", "players", "poses", "answers", "game" })
@@ -334,8 +335,7 @@ namespace HypaFirebase.Rest
         void Apply(string child, RtdbEvent evt)
         {
             if (Code == null || !_trees.TryGetValue(child, out var tree)) return;
-            JToken changedRoot;
-            try { changedRoot = tree.Apply(evt.Name, evt.Data); }
+            try { tree.Apply(evt.Name, evt.Data); }
             catch (Exception e) { Debug.LogWarning("Hypa rooms: unreadable " + child + " update (" + e.GetType().Name + ")."); return; }
             switch (child)
             {
@@ -392,10 +392,16 @@ namespace HypaFirebase.Rest
                     }
                     break;
                 case "game":
-                    if (!(changedRoot is JObject games)) return;
+                    // an event carries only what changed (one player's entry, or one field of it): read the whole map, raise the entries that differ
+                    if (!(tree.Root is JObject games)) return;
                     foreach (var pair in games)
-                        if (pair.Value is JObject g)
-                            GameResultReceived?.Invoke(pair.Key, new GameResult { startedAt = (long?)g["startedAt"] ?? 0, finishedMs = (long?)g["finishedMs"] ?? 0, score = (int?)g["score"] ?? 0 });
+                    {
+                        if (!(pair.Value is JObject g)) continue;
+                        var seen = g.ToString(Newtonsoft.Json.Formatting.None);
+                        if (_gameSeen.TryGetValue(pair.Key, out var before) && before == seen) continue;
+                        _gameSeen[pair.Key] = seen;
+                        GameResultReceived?.Invoke(pair.Key, new GameResult { startedAt = (long?)g["startedAt"] ?? 0, finishedMs = (long?)g["finishedMs"] ?? 0, score = (int?)g["score"] ?? 0 });
+                    }
                     break;
             }
         }

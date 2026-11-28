@@ -111,6 +111,12 @@ namespace HypaStories
         Task _circleCreate;
         float _poseClock;
         bool InCircle => _circle != null && _circle.Code != null;
+        // ---------- the race after the story (G11) ----------
+        GameRace _race;
+        RaceView _raceView;
+        KitButton _playTogether;
+        float _raceT0;
+        string _raceStory;
         bool CircleGuest => InCircle && !_circle.IsHost;
 
         void Start()
@@ -186,7 +192,7 @@ namespace HypaStories
             _ask.Logged += e => Debug.Log("Hypa Stories " + e);
             _ask.Sentence += (i, text, last) => _circle?.OnLocalSentence(i, text, last);
             _ask.Ended += () => _circle?.OnLocalAskEnded();
-            _circleView = new CircleView(_ui, CreateCircle, code => _ = JoinCircleAsync(code), () => _circleView.Show(false));
+            _circleView = new CircleView(_ui, CreateCircle, code => _ = JoinCircleAsync(code), HideCircleLobby);
 
             var prep = new GameObject("Preparing").transform;
             prep.SetParent(_ui, false);
@@ -215,6 +221,7 @@ namespace HypaStories
             BuildDodoGame();
             BuildHatGame();
             BuildDrumGame();
+            BuildRace();
             BuildHutVisit();
             Places.EnsureRunner();
             Places.Leaving += OnLeavingPlace;
@@ -764,14 +771,24 @@ namespace HypaStories
         {
             if (_busy || _screen != Screen.Splash || InCircle) return;
             _audio.Tap();
+            // the raised card sits where the floating "Hypa Stories" title is: fade the title (switching it off would also take away the
+            // campfire's row, which TrailPanels shows only while the title is active)
+            _splash.Brand.Set(0f);
             _circleView.Show(true);
             _circleView.ShowMenu();
             if (code != null) { _circleView.ShowPad(code); _ = JoinCircleAsync(code); }
         }
 
-        void CreateCircle()
+        /// <summary>Closes the lobby and brings the floating title back.</summary>
+        void HideCircleLobby()
         {
             _circleView.Show(false);
+            _splash.Brand.Set(1f);
+        }
+
+        void CreateCircle()
+        {
+            HideCircleLobby();
             _circlePick = true;
             ShowRoomNote("Story Circle: pick the story to tell together", 0f);
             OpenStories(false);
@@ -799,6 +816,9 @@ namespace HypaStories
             s.PlayersChanged += OnCirclePlayers;
             s.PoseReceived += (who, pose) => { if (_peer != null && who == _peerUid) _peer.Track.Push(pose); };
             s.Closed += OnCircleClosed;
+            _race = new GameRace(s.Room, uid);
+            _race.Go += StartRaceGame;
+            _race.StateChanged += OnRaceState;
             _circle = s;
             return s;
         }
@@ -855,7 +875,7 @@ namespace HypaStories
                 if (index < 0) { _circleView.SetStatus("That story isn't in this version of the app."); await s.LeaveAsync(); EndCircle(); return; }
                 var lang = StoryLanguages.Find(info.language);
                 if (lang != null) PickLanguage(lang); // one language per room: the host's
-                _circleView.Show(false);
+                HideCircleLobby();
                 OpenStories(false);
                 StartCoroutine(PlayWhenListReady(index));
             }
@@ -923,10 +943,142 @@ namespace HypaStories
             var s = _circle;
             _circle = null;
             if (s != null) { s.Closed -= OnCircleClosed; s.Dispose(); }
+            if (_race != null) { _race.Dispose(); _race = null; _raceView?.Hide(); }
             if (_peer != null) { Destroy(_peer.gameObject); _peer = null; _peerUid = null; }
             if (_camp != null) _camp.Teller.AttendTarget = null;
             _circlePick = false;
             _player?.SetNote("");
+        }
+
+        // ---------- the race after the story (G11) ----------
+
+        bool HasGame(string storyId) => storyId == DodoStory || storyId == EshuStory || storyId == DrumStory;
+
+        void BuildRace()
+        {
+            _raceView = new RaceView(_ui, RaceRematch, RaceBack);
+            // where the story's own game button sits when the story ends
+            _playTogether = Kit.Button(_player.Body, new Vector3(0f, 0.255f, -0.01f), new Vector2(0.26f, 0.064f), "Play together", "users", KitStyle.Primary, PlayTogether, null, 0.022f);
+            _playTogether.gameObject.SetActive(false);
+        }
+
+        void PlayTogether()
+        {
+            if (_race == null || !_race.CanStart || _busy || Playing || _screen != Screen.Play) return;
+            _audio.Tap();
+            _race.Start();
+        }
+
+        void RaceRematch()
+        {
+            if (_race == null || !_race.CanStart) return;
+            _audio.Tap();
+            _race.Start();
+        }
+
+        void RaceBack()
+        {
+            _audio.Tap();
+            _race?.Leave();
+            _raceView.Hide();
+            EndGames();
+            _voice.StopAll();
+            _player.Root.gameObject.SetActive(true);
+            _player.Follow.Snap();
+        }
+
+        /// <summary>The count reached zero on this device: play the story's game here, on its own (no physics is shared).</summary>
+        void StartRaceGame()
+        {
+            if (_screen != Screen.Play) { _race.Leave(); return; }
+            EndGames(); // a rematch restarts the game
+            _ask.Cancel();
+            if (_tryOpen) HideTryNow();
+            _raceStory = _story.StoryId;
+            _player.Root.gameObject.SetActive(false);
+            if (_raceStory == DodoStory) { _game.Fit(CurrentFit()); _game.Begin(); }
+            else if (_raceStory == EshuStory) { _hatGame.Fit(CurrentFit()); _hatGame.Begin(); }
+            else if (_raceStory == DrumStory) { _drumGame.Fit(CurrentFit()); _drumGame.Begin(); }
+            else { _player.Root.gameObject.SetActive(true); _race.Leave(); return; }
+            _raceT0 = Time.realtimeSinceStartup;
+            _raceView.SetCount("Go!");
+            At(0.8f, () => { if (_race != null && _race.State != RaceState.Countdown) _raceView.SetCount(null); });
+        }
+
+        void OnRaceState(RaceState state)
+        {
+            switch (state)
+            {
+                case RaceState.Countdown: _raceView.HideResult(); _player.SetNote(""); break;
+                case RaceState.Idle: _raceView.Hide(); break;
+                case RaceState.Result: ShowRaceResult(); break;
+            }
+        }
+
+        /// <summary>The game's points so far and whether it is over, from its own rules (never from the network).</summary>
+        (int score, bool over) RaceProgress()
+        {
+            if (_raceStory == DodoStory) return (RaceScore.Dodo(_game.Rules), RaceScore.DodoOver(_game.Rules));
+            if (_raceStory == EshuStory) return (RaceScore.Hat(_hatGame.Rules), RaceScore.HatOver(_hatGame.Rules));
+            if (_raceStory == DrumStory) return (RaceScore.Drum(_drumGame.Rules), RaceScore.DrumOver(_drumGame.Rules));
+            return (0, false);
+        }
+
+        void UpdateRace()
+        {
+            if (_race == null) return;
+            _race.Tick();
+            switch (_race.State)
+            {
+                case RaceState.Countdown:
+                    var n = _race.CountdownSeconds;
+                    _raceView.SetCount(n > 0 ? n.ToString() : null);
+                    break;
+                case RaceState.Playing:
+                    // Back, Stories, or Escape ends the game without a result. That is a forfeit, the same as Back to the fire.
+                    if (!Playing) { _race.Leave(); break; }
+                    var (score, over) = RaceProgress();
+                    if (over) _race.Finish(score, (long)((Time.realtimeSinceStartup - _raceT0) * 1000f));
+                    else _race.Report(score);
+                    break;
+            }
+            if (_race.State == RaceState.Playing || _race.State == RaceState.Waiting) _raceView.SetBar(RaceBar());
+            else if (_race.State != RaceState.Result) _raceView.SetBar(null);
+        }
+
+        /// <summary>"Ada 12 · You 9": the other player first, then you; a tick for a finished game.</summary>
+        string RaceBar()
+        {
+            var s = _race.Standings();
+            string One(RaceStanding r, bool you) => (you ? "You" : r.Name) + " " + r.Score + (r.Finished ? " ✓" : r.Left ? " (left)" : "");
+            return s.Count > 1 ? One(s[1], false) + "  ·  " + One(s[0], true) : One(s[0], true);
+        }
+
+        void ShowRaceResult()
+        {
+            var r = _race.Result;
+            if (r == null) return;
+            var s = _race.Standings();
+            string Secs(long ms) => (ms / 1000f).ToString(ms < 10000 ? "0.0" : "0") + " s";
+            var title = r.Draw ? "A draw: " + Secs(r.WinnerMs) : (r.YouWon ? "You win" : r.WinnerName + " wins") + ": " + Secs(r.WinnerMs);
+            var sub = r.ByDefault ? "Your friend left the race." : s.Count > 1 ? $"{s[1].Name} {s[1].Score} · You {s[0].Score}" : "";
+            _raceView.SetBar(null);
+            _raceView.ShowResult(title, sub);
+            _ = RecordBestAsync(_raceStory, s[0].Score);
+        }
+
+        /// <summary>The best result goes to stories/{id}.bestGameScore (G08: the higher is kept).</summary>
+        async Task RecordBestAsync(string storyId, int score)
+        {
+            try
+            {
+                var caps = _story.Story?.Timeline.Captions;
+                var last = caps != null && caps.Length > 0 ? caps[caps.Length - 1].Id : null;
+                var saved = await new UserDataSync(HybridServices.Current.UserData, () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                    .RecordStoryAsync(storyId, true, score, last, playedGame: true);
+                Debug.Log($"Hypa Stories: race over, {score} points (best {saved.bestGameScore}, {saved.gamePlays} plays).");
+            }
+            catch (Exception e) { Debug.LogWarning("Hypa Stories: couldn't save the game result (" + e.GetType().Name + ")."); }
         }
 
         void ShowCircleHint() => _player.SetNote($"Circle {_circle.Code} · raise a hand to ask");
@@ -1001,9 +1153,12 @@ namespace HypaStories
                 VillageLayout.LeftElder(ViewerOnGround), _room))
                 EndElderVisit();
 
-            if (_hatGame != null) _turnHat.gameObject.SetActive(!Playing && _story.Live && _story.Ended && _story.StoryId == EshuStory && !_busy);
-            if (_game != null) _faceDodo.gameObject.SetActive(!Playing && _story.Live && _story.Ended && _story.StoryId == DodoStory && !_busy);
-            if (_drumGame != null) _playDrum.gameObject.SetActive(!Playing && _story.Live && _story.Ended && _story.StoryId == DrumStory && !_busy);
+            // in a Story Circle the host gets Play together instead of the game on your own (G11)
+            if (_hatGame != null) _turnHat.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == EshuStory && !_busy);
+            if (_game != null) _faceDodo.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == DodoStory && !_busy);
+            if (_drumGame != null) _playDrum.gameObject.SetActive(!InCircle && !Playing && _story.Live && _story.Ended && _story.StoryId == DrumStory && !_busy);
+            if (_playTogether != null) _playTogether.gameObject.SetActive(InCircle && _circle.IsHost && !Playing && _story.Live && _story.Ended && HasGame(_story.StoryId)
+                && !_busy && _race != null && _race.CanStart);
             if (_story.Live && !Playing)
             {
                 var s = _story.Update(dt);
@@ -1015,7 +1170,8 @@ namespace HypaStories
                 if (_story.Ended && !_endNoted)
                 {
                     _endNoted = true;
-                    _player.SetNote("The end. Try Hypa Translate, or replay.");
+                    _player.SetNote(!InCircle || !HasGame(_story.StoryId) ? "The end. Try Hypa Translate, or replay."
+                        : _circle.IsHost ? "The end. Play together: race for the best result." : "The end. The host can start the game for you both.");
                 }
                 if (!_story.Ended) _endNoted = false;
                 _player.SetTryOffer(_story.Ended && !_tryOpen && _ask.State == AskState.Idle);
@@ -1025,6 +1181,7 @@ namespace HypaStories
             _camp.Teller.Level = _voice.Level;
             _camp.Teller.Attend = _ask.State != AskState.Idle || (_circle != null && _circle.Turn != null) ? 1f : 0f;
             UpdateCircle(dt);
+            UpdateRace();
 
             if (_tryOpen)
             {
@@ -1039,6 +1196,8 @@ namespace HypaStories
 
         void LateUpdate()
         {
+            // the lobby card covers the floating title: keep it faded while the lobby is open (the campfire's intro fades it back in)
+            if (_circleView != null && _circleView.Shown && _splash != null) _splash.Brand.Set(0f);
             if (_camp == null || _camp.Village == null || _voice == null) return;
             var speaking = _elderSession && !_away && _voice.IsSpeaking
                 && _ask.State != AskState.Listening && !(_tryOpen && _tryFlow.Listening);
@@ -1826,7 +1985,8 @@ namespace HypaStories
                 if (showUi) SnapPanels();
             }
             // The list and player may follow an elder session; Gather round still belongs to the clearing.
-            _splash.Prompt.gameObject.SetActive(!far && _splash.Brand.gameObject.activeSelf);
+            // shown with the floating title, and under the Story Circle lobby (which fades the title away)
+            _splash.Prompt.gameObject.SetActive(!far && (_splash.Brand.gameObject.activeSelf || (_circleView != null && _circleView.Shown)));
             // a place's row, at its door
             var elderUiOpen = _elderSession && (_screen != Screen.Splash || _busy);
             foreach (var d in _doorRows)

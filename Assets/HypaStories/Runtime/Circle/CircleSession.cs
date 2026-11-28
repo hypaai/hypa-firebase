@@ -79,6 +79,8 @@ namespace HypaStories
         public IReadOnlyDictionary<string, RoomPlayer> Players => _players;
         public bool IsHost => _room.IsHost;
         public string Code => _room.Code;
+        /// <summary>The room itself, for a race (<see cref="GameRace"/>).</summary>
+        public IRoomSync Room => _room;
 
         /// <summary>Who the storyteller should face: a player's uid during their question, null for the fire.</summary>
         public event Action<string> AttendChanged;

@@ -54,7 +54,9 @@ namespace HypaStories
             Kit.Button(_pad, new Vector3(0.135f, -0.14f, 0f), new Vector2(0.11f, 0.044f), "Join", "check", KitStyle.Primary, Submit, em: 0.016f);
 
             Follow = Root.gameObject.AddComponent<FollowView>();
-            Follow.Distance = 0.9f; Follow.Height = -0.12f;
+            // above the campfire's row (SplashView: 0.95 m away, 0.34 m below eye level, its "Pinch the fire, or" line just over it):
+            // the same distance, raised so the card's bottom edge clears that line and the row stays visible underneath
+            Follow.Distance = 0.95f; Follow.Height = 0.0f;
             Group = Root.gameObject.AddComponent<KitGroup>();
             Group.Refresh();
             ShowMenu();

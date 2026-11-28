@@ -101,10 +101,15 @@ namespace HypaCore.EditorTools
             var androidMinSdk = PlayerSettings.Android.minSdkVersion;
             var androidGraphics = PlayerSettings.GetGraphicsAPIs(BuildTarget.Android);
             var phone = target == Target.Android;
+            // HYPA_WEB_LAN=1: a web build for phones on the same Wi-Fi, served over plain http by the emulators. Browsers take Brotli
+            // only over https or from localhost, so Unity decompresses in the page instead (docs/story-circle.md).
+            var lan = target == Target.Web && Environment.GetEnvironmentVariable("HYPA_WEB_LAN") == "1";
+            var fallback = PlayerSettings.WebGL.decompressionFallback;
             Flat = target != Target.Quest;
             try
             {
                 if (Flat) foreach (var loader in loaders) manager.TryRemoveLoader(loader);
+                if (lan) { PlayerSettings.WebGL.decompressionFallback = true; Debug.Log("Hypa: web build for the local network (decompression in the page)."); }
                 if (phone)
                 {
                     PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, PhoneId);
@@ -119,6 +124,7 @@ namespace HypaCore.EditorTools
             finally
             {
                 if (Flat) foreach (var loader in loaders) manager.TryAddLoader(loader);
+                if (lan) PlayerSettings.WebGL.decompressionFallback = fallback;
                 if (phone)
                 {
                     PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, androidId);
