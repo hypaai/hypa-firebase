@@ -22,7 +22,7 @@ namespace HypaStories
     /// fixed anchor in the hut, not from its item, so it stays over the item's place whatever happens to the item, and it can
     /// still be pinched while the item is held or lies somewhere else. An item that leaves the room goes back to its place.
     /// </summary>
-    public sealed class HutVisit : MonoBehaviour
+    public sealed partial class HutVisit : MonoBehaviour
     {
         const float FloorY = 0.017f, CardScale = 0.9f, NearMetres = 7f, BuiltMetres = 46f, LostSeconds = 2.5f, LetGoSeconds = 0.3f;
 
@@ -103,13 +103,16 @@ namespace HypaStories
         /// <summary>True while the old woman is telling you about an item (or its panel is open).</summary>
         public bool Telling => _current >= 0;
         public bool DuckAmbience => (_voice != null && _voice.IsSpeaking) || (_ask != null && _ask.State != AskState.Idle) ||
-            (_tryOpen && _tryFlow.Listening);
+            (_tryOpen && _tryFlow.Listening) || Talking;
 
         /// <param name="qa">Who answers a question about an item (the story's chat model, or the campfire's stand-in).</param>
         /// <param name="pauseCamp">Called when an item's card is pinched: the story by the fire, if one is being told, waits.</param>
-        public void Init(CampWorld camp, StoryAssets a, MicListener mic, IStoryQa qa, Func<StoryLanguage> lang, Action<StoryLanguage> pickLanguage, Action pauseCamp, Action toggleSound)
+        /// <param name="words">Where the words she teaches are saved (G08).</param>
+        /// <param name="goToStory">Walks the player to the fire and starts that story (her offer, <c>suggest_story</c>).</param>
+        public void Init(CampWorld camp, StoryAssets a, MicListener mic, IStoryQa qa, Func<StoryLanguage> lang, Action<StoryLanguage> pickLanguage, Action pauseCamp, Action toggleSound,
+            UserDataSync words = null, Action<string> goToStory = null)
         {
-            _lang = lang; _pickLanguage = pickLanguage; _pauseCamp = pauseCamp;
+            _lang = lang; _pickLanguage = pickLanguage; _pauseCamp = pauseCamp; _words = words; _goToStory = goToStory;
             _hut = camp.Trail != null ? camp.Trail.HutRoot : null;
             if (_hut == null) { Debug.LogWarning("Hypa Stories: no hut to furnish."); enabled = false; return; }
             _distanceCull = camp.GetComponent<DistanceCull>();
@@ -150,6 +153,7 @@ namespace HypaStories
             _try = new TryHypaView(_panel.Body, _tryFlow, CloseTry);
             _try.Root.gameObject.SetActive(false);
             _panel.Root.gameObject.SetActive(false);
+            BuildTalk(_woman != null && _woman.Mouth != null ? _woman.Mouth : _inside);
             BuildLanguages();
 
             var cardMat = StoryCard.NewMaterial(a);
@@ -316,6 +320,9 @@ namespace HypaStories
                 btn.OnPress = () => _pickLanguage?.Invoke(lang);
                 _langChips.Add((lang, btn));
             }
+            // talk with her (G10): shown only inside the hut (see TalkUpdate)
+            if (_talkView != null)
+                _talkButton = Kit.Button(root, new Vector3(0f, -extra - 0.075f, 0f), new Vector2(0.26f, 0.056f), "Talk with her", "mic", KitStyle.Primary, StartTalk, null, 0.018f);
             SetLanguage(_lang());
             _langBar = root.gameObject;
             _langBar.SetActive(false);
@@ -347,8 +354,16 @@ namespace HypaStories
             CancelRemarks();
             _ask.Cancel();
             HideTryNow();
+            if (Talking && !_heldForStory)
+            {
+                // she tells it (asked, or its card pinched mid-conversation): the conversation waits, and carries on after
+                _talk.Hold(true);
+                _heldForStory = true;
+                _talkView.Root.gameObject.SetActive(false);
+            }
             _current = i;
             _endNoted = false;
+            if (item.Story.Voices.Length == 0 && _persona != null) item.Story.Voices = _persona.Voices; // her things, in her voice
             _story.Load(item.Story, _lang());
             _panel.Load(item.Story, _story.Language);
             _panel.SetNote(""); // the panel's own hint: raise a hand to ask
@@ -451,7 +466,7 @@ namespace HypaStories
             if (cam == null || _hut == null) return;
             var dt = Time.deltaTime;
             _t += dt;
-            if (!_hut.gameObject.activeInHierarchy) { Close(); ShowLanguages(false); return; } // the camp is put away (another place)
+            if (!_hut.gameObject.activeInHierarchy) { Close(); EndTalkNow(); ShowLanguages(false); return; } // the camp is put away (another place)
 
             var eye = ViewerWorld(cam);
             var dist = ViewerDistance(eye);
@@ -463,9 +478,9 @@ namespace HypaStories
                 if (built)
                     foreach (var r in _inside.GetComponentsInChildren<Renderer>(true)) r.enabled = true;
             }
-            if (!built) { Close(); ShowLanguages(false); return; }
+            if (!built) { Close(); EndTalkNow(); ShowLanguages(false); return; }
             if (_current >= 0 && dist > HutTrailLayout.HutRadius + 3f) Close(); // you walked away
-            ShowLanguages(ViewerDistance(cam.position) < NearMetres && _current < 0);
+            ShowLanguages(ViewerDistance(cam.position) < NearMetres && _current < 0 && !Talking);
 
             // the cards: there when you come near, hovering over their places, turned to you
             var shown = Approach(_shown, dist < NearMetres ? 1f : 0f, 4f, dt);
@@ -513,6 +528,7 @@ namespace HypaStories
             if (_raise.Update(raised, dt) && _current >= 0 && _story.Live && !_tryOpen && _ask.State == AskState.Idle) _ = _ask.BeginAsync();
             if (Application.isEditor && _current >= 0 && Input.GetKeyDown(KeyCode.H) && !_tryOpen && _ask.State == AskState.Idle) _ = _ask.BeginAsync();
 
+            TalkUpdate(cam, dt, dist);
             HutInterior.Tick(_fire, cam, _t);
             Flames(cam, dt);
             Sweeping(dt);
@@ -529,7 +545,7 @@ namespace HypaStories
             var dir = Quaternion.Inverse(_woman.Root.localRotation) * to;
             var yaw = Mathf.Clamp(Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg, -65f, 65f);
             var pitch = Mathf.Clamp(-Mathf.Atan2(dir.y - 0.75f, new Vector2(dir.x, dir.z).magnitude) * Mathf.Rad2Deg, -22f, 18f);
-            var talk = _voice.Level;
+            var talk = Mathf.Max(_voice.Level, TalkLevel);
             _woman.Head.localRotation = Quaternion.Slerp(_woman.Head.localRotation,
                 Quaternion.Euler(pitch + Mathf.Sin(_t * 5f) * 1.5f * talk, yaw, 0f), 1f - Mathf.Exp(-3f * dt));
             _woman.Torso.localRotation = Quaternion.Euler(9f + Mathf.Sin(_t * 1.1f) * 1.2f, yaw * 0.2f, 0f); // a little bent with her years
@@ -540,6 +556,7 @@ namespace HypaStories
             _woman.ArmL.localRotation = _woman.ArmR.localRotation = Quaternion.Euler(-28f - lift * 10f, 0f, 0f);
             _woman.ForeL.localRotation = Quaternion.Euler(-55f - lift * 22f, 0f, -14f);
             _woman.ForeR.localRotation = Quaternion.Euler(-55f - lift * 30f, 0f, 14f);
+            PointAtShown(dt);
         }
 
         /// <summary>
@@ -568,7 +585,7 @@ namespace HypaStories
         void LateUpdate()
         {
             if (_woman == null || _woman.Mouth == null || _inside == null || !_inside.gameObject.activeInHierarchy) return;
-            var talk = _voice != null ? _voice.Level : 0f;
+            var talk = Mathf.Max(_voice != null ? _voice.Level : 0f, TalkLevel);
             _open = Approach(_open, Mathf.Min(1f, talk * 1.2f), 22f, Time.deltaTime);
             _woman.Mouth.localScale = Vector3.one;
             _woman.Mouth.localPosition = _jawRest + new Vector3(0f, -_open * 0.024f, _open * 0.005f);
@@ -735,7 +752,7 @@ namespace HypaStories
             var (text, code) = HutLines.For(kind, lang.Code, prop, last, UnityEngine.Random.value);
             _lastSaid[kind] = text;
             ShowCaption(text);
-            if (_ask.State != AskState.Idle || _tryOpen || _resumeAfterRemark) return;
+            if (_ask.State != AskState.Idle || _tryOpen || _resumeAfterRemark || Talking) return; // in a conversation she only shows it
             var gen = ++_sayGen;
             try
             {
@@ -803,6 +820,7 @@ namespace HypaStories
 
         void OnDestroy()
         {
+            EndTalkNow();
             CancelRemarks();
             _cts.Cancel();
             _cts.Dispose();

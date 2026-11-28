@@ -152,7 +152,7 @@ namespace HypaStories
         }
 
         /// <summary>{ "model", "voice" }: voice is one name for every language, or { language code: name }.</summary>
-        static VoiceOption Voice(JObject v)
+        internal static VoiceOption Voice(JObject v)
         {
             var o = new VoiceOption { Model = (string)v["model"] };
             if (v["voice"] is JObject byLang)

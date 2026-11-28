@@ -14,6 +14,7 @@ Firebase SDK's own `Firebase` namespace). Every feature in the hackathon build r
 | Two-player rooms | Realtime Database | SDK | JS SDK | REST API + server-sent events |
 | Flags | Remote Config | SDK | JS SDK | Remote Config fetch API |
 | Cloud Gemini | Firebase AI Logic | SDK | JS SDK | Through a Cloud Function |
+| Talking with the old woman (Gemini Live) | Firebase AI Logic Live API | WebSocket from C# (`RestLiveModel`) | JS SDK `getLiveGenerativeModel` | WebSocket from C# (`RestLiveModel`) |
 | Hypa (Yorùbá, Hausa, Igbo, Pidgin, Swahili) | Cloud Functions + Secret Manager (the Hypa key) | proxy | proxy | proxy |
 | Room cleanup, quotas | Cloud Functions (scheduled) + Firestore | | | |
 | The web build | Hosting | | | |
@@ -26,7 +27,7 @@ outside development: debug tokens skip the check.
 ## 1. Platform services
 
 `IHypaAuth`, `IProgressStore`, `IProfileStore`, `IRemoteFlags`, `IRoomSync`, `IOnDeviceModel`, `ICloudModel`, `IRouteLog`
-(`Interfaces.cs`).
+(`Interfaces.cs`), and `ILiveModel` / `ILiveSession` for the Live API (G10, `Live.cs`; `NoLiveModel` until a platform sets one).
 
 - Three real implementations: **Native** (Firebase Unity SDK; Android, iOS, and Quest if the spike passes; G02), **Rest**
   (Firebase REST APIs; Quest if the SDK fails there; G02, in `Assets/HypaFirebase/Runtime/Rest`) and **Web** (`.jslib` + Firebase JS SDK; G03). **Fake** (in-memory) for the editor and tests
@@ -122,15 +123,17 @@ routes/{uid}/events/{eventId}    { kind: "answer"|"translate", route: "onDevice"
 ```
 rooms/{code}                 { host, storyId, language, state: "lobby"|"story"|"game", createdAt }
 rooms/{code}/clock           { lineIndex, startedAtServerMs, paused }          // host writes
-rooms/{code}/players/{uid}   { name, platform, seat: 0|1, online, handUp }     // onDisconnect → online = false
+rooms/{code}/players/{uid}   { name, platform, seat: 0|1, online, handUp, lastSeen? } // onDisconnect → online = false
 rooms/{code}/poses/{uid}     { h: [x,y,z,qx,qy,qz,qw], l: [...], r: [...], t } // ≤ 10 Hz, head + hands; an untracked hand is left out
+rooms/{code}/answers/{n}     { uid, q, i, text, last? }                         // one sentence of an answer; n counts up from 0
 rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
 ```
 
 - `IRoomSync` (`Interfaces.cs`) is the contract G09 implements; the types are in `Rooms.cs`. Create a room (you take seat 0), join
-  (seat 1; `RoomException` NotFound, Full or Expired), leave (the host leaving closes the room), host-only state and clock, your own
-  entry and hand, poses (fire and forget, at most 10 a second), game results, and events for each. `ServerTimeMs` estimates the
-  server clock (`.info/serverTimeOffset`); `RoomClock.ElapsedMs(serverNow)` says how far into the line both players are.
+  (seat 1; `RoomException` NotFound, Full or Expired), leave, host-only state and clock, your own
+  entry and hand, poses (fire and forget, at most 10 a second), answer sentences, game results, and events for each. `ServerTimeMs` estimates the
+  server clock (see "Server time" below); `RoomClock.ElapsedMs(serverNow)` says how far into the line both players are.
+- Seats: `RoomSeats.MaxPlayers` (2 for G09; P06 raises it to 8 together with the `seat` rule).
 - `FakeRoomSync` clients on the same `FakeRoomServer` see each other like two devices (tests: `HybridRoomsTests`).
 - Codes: `RoomCode.New()`, 5 letters from `BCDFGHJKLMNPQRSTVWXZ` (no vowels, so no words; no Y), shown and compared in upper case.
   Rooms expire after 2 hours; G04's scheduled `cleanupRooms` deletes them.
@@ -139,10 +142,64 @@ rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
     Its `clock`, `poses` and `game` are visible only to players in the room. Listen to these children separately: the room node
     as a whole is not readable.
   - The host creates (with a valid code) and deletes the room, and alone changes `storyId`, `language`, `state` and `clock`.
-    `host` and `createdAt` never change.
+    `createdAt` never changes. `host` changes only by handover (below).
   - Each player writes only their own `players`, `poses` and `game` entries, and `poses` and `game` only once seated. The host
     cannot overwrite other players' entries. Create the room first, then your `players` entry.
+  - `answers/{n}`: read only by players in the room. A player whose `handUp` is true adds a sentence in their own name
+    (`uid` = theirs, `n` 0–9999, text 1–1000 characters); a sentence already there is never rewritten or deleted, so a line
+    one device has started to speak cannot change. The question is never stored.
   - Every node accepts only its contract fields and types.
+
+**Handover.** When the host goes, the next player takes the room and the story carries on from the same `clock`
+(`lineIndex` + `startedAtServerMs`), so nothing restarts.
+
+- The host is *gone* when their `players` entry is missing, or `online` is false, or `lastSeen` is more than 10 s old
+  (`RoomPresence.TimeoutMs`). A host who leaves while another player is online hands the room over; the room closes only
+  when nobody else is online. A room whose host is lost with nobody to take it is deleted by `cleanupRooms` after 2 hours.
+- The new host is the online player, other than the old host, with the lowest seat (`RoomHandover.NextHost`; for two players, the
+  guest). Every client works this out the same way and the right one writes `host` = their own uid. The rules accept any
+  online player of the room, only for themselves and only while the host is gone; if two try, the first write wins and the
+  other is refused. Seats do not move: only `host` does.
+- The implementation does this on its own when it sees the host gone (a `RoomChanged` carries the new `host`, and `IsHost`
+  follows). The old host who comes back rejoins as a guest.
+- Presence on disconnect only sets `players/{uid}/online` to false. Never register an `onDisconnect` that removes the room or a
+  `players` entry: it would close the room under the player about to take it.
+- `lastSeen` (server time, never in the future) is for clients with no `onDisconnect`, such as REST on Quest and phones: they
+  refresh it every `RoomPresence.HeartbeatMs` (3 s) with `{".sv": "timestamp"}`. A client that writes it must keep it fresh.
+  The SDK clients may leave it out and rely on `onDisconnect`.
+
+**Answers.** The player whose hand is up asks; their device answers (G05) and writes the answer a sentence at a time as the
+sentences come, so the other player starts to hear it after the first one, not after the whole answer. `n` is a count through
+the room, `q` the question number and `i` the sentence's place in it. Each device speaks the text itself. Only sentences added
+after you joined reach you (`IRoomSync.AnswerReceived`), and the sender is not sent their own.
+
+- Picking `n`: one more than the highest `n` in the room, read on joining (older sentences are read for this, not raised). If the
+  write is refused because that `n` is taken, try the next. Listeners order by `n` as a number and allow gaps.
+- The asker lowers their hand only after their last sentence is written: the rules refuse a sentence once `handUp` is false.
+- Both players raising a hand at once: the clients take the lower seat's question, and the other device lowers its hand. The
+  rules do not decide this: they let any player whose hand is up write a sentence. That is enough for two cooperative clients;
+  P06 can move the turn into the host-written `clock` if it needs the server to enforce it.
+
+**Game race (G11).** `game/{uid}` is one player's result for the current round of the story's game:
+
+- `startedAt`: the round's agreed start in server time, the same in both entries. Whoever starts a round (the host's
+  **Play together**, either player's **Rematch**) writes their entry with `startedAt` = server now + 4 s; the other device joins
+  the round when it sees an entry with a newer `startedAt` (not older than 5 s past its start, so a replayed old entry is
+  ignored), including when its own countdown has already started, and writes its own. Two starts at once become the later of
+  the two. Both count 3-2-1 to that moment, then play locally (no game state is shared).
+- `score`: the game's points so far, from its own rules (`RaceScore`; higher is better), sent at most once a second while
+  playing. `finishedMs`: 0 while playing, then the player's own game time; `99999999` with score 0 means they left mid-game
+  (a forfeit). A live score already on the way must not replace a finish. Leaving the game with its Back button is a forfeit.
+  No network timing is in either.
+- The winner has the higher score; on equal points the shorter `finishedMs`; then a draw. A player who leaves the room or
+  forfeits loses to one who finishes. The best score goes to `users/{uid}/stories/{id}.bestGameScore` (section 3).
+- The rules are unchanged: each player writes only their own entry, with the three numbers.
+
+**Server time.** Both devices place a line by `startedAtServerMs`, so each needs the server clock. The SDKs (web) read
+`.info/serverTimeOffset`. REST (Quest, Android, iOS) has no `.info`, so `RestRoomSync` measures it: write
+`{".sv": "timestamp"}` to its own `players/{uid}/lastSeen` (the heartbeat it sends anyway), note the local time before (`t0`) and
+after (`t1`) the request, read the stored value `s`, and take `offset = s - (t0 + t1) / 2`. Keep the sample with the shortest round
+trip of the last few; with a round trip under about 200 ms the error is under 100 ms, inside the ~300 ms target.
 
 ## 5. Remote Config keys
 
@@ -153,14 +210,16 @@ rooms/{code}/game/{uid}      { startedAt, finishedMs, score }
 | `route_hypa_langs` | `yo,ha,ig,pcm,sw` | G05 |
 | `route_max_on_device_tokens` | `5000` | G05 |
 | `cloud_model` | `gemini-3.5-flash-lite` | G05 |
-| `live_model` | (Live API model name from the Firebase docs on Nov 22) | G10 |
+| `live_model` | `gemini-2.5-flash-native-audio-preview-12-2025` (a native-audio model on the Gemini Developer API; `gemini-3.1-flash-live-preview` is the newer preview) | G10 |
 | `live_langs` | `en,fr,es,sw` | G10 |
+| `live_voice` | `Gacrux` (a prebuilt woman's voice; if refused, `Aoede`; blank for the model's default, a man's) | G10 |
+| `talk_max_seconds` | `300` (one conversation with the old woman, for judges' cost) | G10 |
 | `proxy_daily_seconds_per_user` | `600` | G04 (server) |
 | `proxy_daily_requests_per_user` | `400` | G04 (server) |
 | `proxy_global_daily_seconds` | `20000` | G04 (server) |
 | `proxy_global_daily_requests` | `10000` | G04 (server) |
 
-Constants and defaults: `RemoteConfigKeys` in `Models.cs`. `live_model` has no default until G10 sets it.
+Constants and defaults: `RemoteConfigKeys` in `Models.cs`.
 
 ## 6. Hypa proxy API (G04 builds it as Cloud Functions, G05, G10 and G12 call it)
 

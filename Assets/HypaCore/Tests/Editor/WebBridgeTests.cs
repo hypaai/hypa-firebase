@@ -147,6 +147,13 @@ namespace HypaCore.Tests
             Assert.IsFalse(WebServices.UsesEmulators("http://localhost:5000/?firebase=live"));
             Assert.IsFalse(WebServices.UsesEmulators("https://hypa-firebase.web.app/"));
             Assert.IsFalse(WebServices.UsesEmulators(""), "the editor has no page URL");
+            Assert.IsTrue(WebServices.UsesEmulators("http://192.168.1.20:5002/"), "a phone on the same Wi-Fi");
+            Assert.IsTrue(WebServices.UsesEmulators("http://172.20.10.6:5002/circle/BCDFG"));
+            Assert.IsTrue(WebServices.UsesEmulators("http://10.0.0.5:5002/"));
+            Assert.IsTrue(WebServices.UsesEmulators("http://macbook.local:5002/"));
+            Assert.IsFalse(WebServices.UsesEmulators("http://192.168.1.20:5002/?firebase=live"));
+            Assert.IsFalse(WebServices.UsesEmulators("http://172.32.0.1:5002/"), "not a private address");
+            Assert.IsFalse(WebServices.UsesEmulators("http://8.8.8.8/"));
 
             var config = WebServices.EmulatorConfig();
             Assert.AreEqual(WebServices.EmulatorProject, (string)config["firebase"]["projectId"]);

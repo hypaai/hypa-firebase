@@ -1,0 +1,30 @@
+// Hypa voice-call microphone: Android's VOICE_COMMUNICATION input with the platform echo canceller, for talking with the old
+// woman (G10) while her voice plays from the speaker. Unity Android library plug-in, used by AndroidVoiceMicSource (C#).
+// No dependencies beyond the Android SDK.
+apply plugin: 'com.android.library'
+
+android {
+    namespace "ai.hypa.voice"
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 29
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src/main/java']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+    }
+}

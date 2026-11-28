@@ -27,9 +27,9 @@ namespace HypaStories
         Transform _card, _options, _keyboard;
         Vector2 _size;
         TextMeshPro _note, _keyboardValue;
-        KitButton _username, _displayName;
+        KitButton _displayName;
         TouchScreenKeyboard _nativeKeyboard;
-        int _field = -1;
+        bool _typing;
 
         Transform _studio, _figure;
         ProfileAvatar _avatar;
@@ -55,6 +55,13 @@ namespace HypaStories
             _hadProfile = _draft != null;
             _draft = _draft?.Copy() ?? new StoryProfile();
             _draft.Normalize();
+            if (!_hadProfile)
+            {
+                // A first profile starts finished (a random look and a friendly name), so a child can press Done straight away.
+                var random = new System.Random();
+                Roll(random);
+                (_draft.username, _draft.displayName) = StoryProfile.FriendlyName(random);
+            }
             _oldBackground = _camera.backgroundColor; _oldClear = _camera.clearFlags; _oldMask = _camera.cullingMask;
             _oldAmbient = RenderSettings.ambientLight; _oldAmbientMode = RenderSettings.ambientMode;
             _camera.cullingMask &= ~(1 << PortraitLayer);
@@ -186,12 +193,11 @@ namespace HypaStories
                 KitTheme.Clear, KitTheme.Clear, new Color(1f, 0.88f, 0.72f, 0.28f), 10, 0f);
             PhotoQuad(new Vector3(photo.x, photo.y, 0f), Photo);
             float fieldW = _portrait ? 0.62f : 0.54f, fieldY = photo.y - Photo * 0.5f - 0.035f - FieldHeight * 0.5f;
-            _username = Field(new Vector3(photo.x, fieldY, 0), fieldW, () => BeginInput(0));
-            _displayName = Field(new Vector3(photo.x, fieldY - FieldHeight - 0.014f, 0), fieldW, () => BeginInput(1));
-            _note = Kit.Text(_card, "", 0.0135f, new Vector3(photo.x, fieldY - FieldHeight * 1.5f - 0.014f - 0.028f, 0), new Vector2(fieldW, 0.03f), ProfileStyle.Muted, TextAlignmentOptions.Left);
+            _displayName = Field(new Vector3(photo.x, fieldY, 0), fieldW, BeginInput);
+            _note = Kit.Text(_card, "", 0.0135f, new Vector3(photo.x, fieldY - FieldHeight * 0.5f - 0.028f, 0), new Vector2(fieldW, 0.03f), ProfileStyle.Muted, TextAlignmentOptions.Left);
             Note(null);
 
-            if (_portrait) { _x0 = -_size.x * 0.5f + Pad; _width = _size.x - Pad * 2; _top = fieldY - FieldHeight * 2 - 0.12f; }
+            if (_portrait) { _x0 = -_size.x * 0.5f + Pad; _width = _size.x - Pad * 2; _top = fieldY - FieldHeight - 0.12f; }
             else { _x0 = photo.x + 0.27f + 0.08f; _width = right - Pad - _x0; _top = bodyTop; }
             Options();
             UpdateNames();
@@ -370,15 +376,19 @@ namespace HypaStories
             Refresh();
         }
 
-        void Randomize()
+        void Roll(System.Random r)
         {
-            var r = new System.Random();
             var p = _draft;
             p.skin = r.Next(ProfileCatalog.SkinTones.Length);
             p.hairStyle = r.Next(ProfileCatalog.HairStyles.Length);
             p.hairColor = r.Next(ProfileCatalog.HairColors.Length);
             p.outfit = r.Next(ProfileCatalog.Outfits.Length);
             p.frame = ProfileCatalog.Frames[r.Next(ProfileCatalog.Frames.Length)].frame;
+        }
+
+        void Randomize()
+        {
+            Roll(new System.Random());
             TakePhoto();
             Refresh();
         }
@@ -386,13 +396,6 @@ namespace HypaStories
         void Done()
         {
             EndInput();
-            var error = StoryProfile.UsernameError(_draft.username);
-            if (error != null)
-            {
-                Note(string.IsNullOrEmpty(_draft.username) ? "Choose a username to continue." : error, true);
-                BeginInput(0);
-                return;
-            }
             try { StoryProfileStore.Save(_draft); Close(true); }
             catch (Exception) { Note("Could not save your profile. Please try again.", true); }
         }
@@ -408,7 +411,7 @@ namespace HypaStories
             if (_note == null) return;
             _note.richText = false;
             _note.color = error ? ProfileStyle.Error : ProfileStyle.Muted;
-            _note.text = text ?? "3–20 letters, numbers or _ · saved on this device";
+            _note.text = text ?? "Saved on this device";
         }
 
         void Close(bool saved)
@@ -430,10 +433,10 @@ namespace HypaStories
             if (_photoMaterial != null) Destroy(_photoMaterial);
         }
 
-        void BeginInput(int field)
+        void BeginInput()
         {
-            if (_field == field) return;
-            EndInput(); _field = field;
+            if (_typing) return;
+            _typing = true;
             bool web = Application.platform == RuntimePlatform.WebGLPlayer;
             // Web uses physical typing when available, or the system keyboard on touch devices. A computer's browser also reports
             // keyboard support, but none appears and typing would end at once, so it types on the real keyboard.
@@ -442,12 +445,13 @@ namespace HypaStories
                 : Application.isMobilePlatform && !UnityEngine.XR.XRSettings.isDeviceActive);
             if (useSystemKeyboard)
                 _nativeKeyboard = TouchScreenKeyboard.Open(Value, TouchScreenKeyboardType.Default, false, false, false, false,
-                    field == 0 ? "Username" : "Display name", field == 0 ? 20 : 24);
+                    "Your name", NameLength);
             else if (!web) Keyboard();
             UpdateNames();
         }
 
-        string Value { get => _field == 0 ? _draft.username : _draft.displayName; set { if (_field == 0) _draft.username = value; else _draft.displayName = value; } }
+        const int NameLength = 24;
+        string Value { get => _draft.displayName; set => _draft.displayName = value; }
 
         void Keyboard()
         {
@@ -478,39 +482,30 @@ namespace HypaStories
 
         void Append(char ch)
         {
-            if (_field < 0 || char.IsControl(ch) || ch == '<' || ch == '>') return;
-            if (_field == 0 && !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '_')) return;
-            if (Value.Length < (_field == 0 ? 20 : 24)) Value += ch;
-            if (_field == 0) Note(null);
+            if (!_typing || char.IsControl(ch) || ch == '<' || ch == '>') return;
+            if (Value.Length < NameLength) Value += ch;
             UpdateNames();
         }
 
-        void Delete() { if (_field >= 0 && Value.Length > 0) Value = Value.Substring(0, Value.Length - 1); UpdateNames(); }
+        void Delete() { if (_typing && Value.Length > 0) Value = Value.Substring(0, Value.Length - 1); UpdateNames(); }
 
         void EndInput()
         {
             if (_nativeKeyboard != null) { _nativeKeyboard.active = false; _nativeKeyboard = null; }
             if (_keyboard != null) { _keyboard.gameObject.SetActive(false); Destroy(_keyboard.gameObject); _keyboard = null; }
-            _field = -1; UpdateNames();
+            _typing = false; UpdateNames();
         }
 
         void UpdateNames()
         {
             if (_draft == null) return;
-            if (_keyboardValue != null && _field >= 0) { _keyboardValue.richText = false; _keyboardValue.text = (_field == 0 ? "@" : "") + Value + "|"; }
-            if (_username != null)
-            {
-                bool empty = string.IsNullOrEmpty(_draft.username);
-                _username.SetLabel(_field == 0 ? "@" + _draft.username + "|" : empty ? "Username" : "@" + _draft.username);
-                _username.Label.richText = false; _username.Selected = _field == 0;
-                _username.Label.alpha = empty && _field != 0 ? 0.45f : 1f;
-            }
+            if (_keyboardValue != null && _typing) { _keyboardValue.richText = false; _keyboardValue.text = Value + "|"; }
             if (_displayName != null)
             {
                 bool empty = string.IsNullOrEmpty(_draft.displayName);
-                _displayName.SetLabel(_field == 1 ? _draft.displayName + "|" : empty ? "Display name (optional)" : _draft.displayName);
-                _displayName.Label.richText = false; _displayName.Selected = _field == 1;
-                _displayName.Label.alpha = empty && _field != 1 ? 0.45f : 1f;
+                _displayName.SetLabel(_typing ? _draft.displayName + "|" : empty ? "Your name" : _draft.displayName);
+                _displayName.Label.richText = false; _displayName.Selected = _typing;
+                _displayName.Label.alpha = empty && !_typing ? 0.45f : 1f;
             }
         }
 
@@ -521,8 +516,8 @@ namespace HypaStories
             if (xr != _room) { SetMode(xr); return; }
             if (!_room && (UnityEngine.Screen.width != _lastWidth || UnityEngine.Screen.height != _lastHeight)) Layout();
             if (_retake > 0) { _retake--; TakePhoto(); }
-            if (_field < 0 && Input.GetKeyDown(KeyCode.Escape)) Cancel();
-            if (_field < 0) return;
+            if (!_typing && Input.GetKeyDown(KeyCode.Escape)) Cancel();
+            if (!_typing) return;
             if (_nativeKeyboard != null)
             {
                 string input = _nativeKeyboard.text;

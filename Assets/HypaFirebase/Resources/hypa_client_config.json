@@ -6,7 +6,7 @@
     "authDomain": "",
     "projectId": "hypa-firebase",
     "appId": "",
-    "databaseURL": "",
+    "databaseURL": "https://hypa-firebase-default-rtdb.firebaseio.com",
     "storageBucket": "",
     "messagingSenderId": "",
     "recaptchaEnterpriseSiteKey": ""

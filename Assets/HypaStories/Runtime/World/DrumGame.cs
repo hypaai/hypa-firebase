@@ -104,6 +104,8 @@ namespace HypaStories
 
         public bool Active { get; private set; }
         public DrumPhase Phase => _rules?.Phase ?? DrumPhase.Intro;
+        /// <summary>The game's rules and state (for a race's score, G11). Null before the first <see cref="Begin"/>.</summary>
+        public DrumRules Rules => _rules;
 
         public void Init(CampWorld camp, StoryAssets a, StoryAudio audio, Texture2D glow, Transform uiRoot, Action restartStory, Action back, Action returnToStory, Action toggleRoom = null)
         {

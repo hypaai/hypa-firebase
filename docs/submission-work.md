@@ -60,6 +60,7 @@ A profile card for Stories with a realistic character the player shapes. Code in
 - Web profile fields use the physical or system keyboard. The in-game keyboard remains available on Quest.
 - Tests: `Assets/HypaStories/Tests/Editor/StoryProfileTests.cs`.
 - Not yet synced through Firebase.
+- Follow-up: a first profile opens finished, with a random look and a friendly name such as "Brave Lion", and one "Your name" field. The handle is generated from that name. Phone and headset screens were not checked.
 
 ## G03: Firebase web bridge (HYP-198)
 
@@ -123,3 +124,68 @@ On an iPhone with Apple Intelligence, answers come from Apple's on-device model;
 - A browser microphone at 16 kHz for `MicListener`.
 - On the web, the on-device model status is shown on Home, and the help card has a section on on-device AI.
 - Details: [web-bridge.md](web-bridge.md).
+
+## G10 (HYP-205): the old woman talks back
+
+An open voice conversation with the old woman in the hut. Code in `Assets/HypaStories/Runtime/Talk/`, the hut's side in `Runtime/World/HutVisit.Talk.cs`, the panel in `Runtime/Ui/TalkView.cs`.
+
+- **Start and end:** **Talk with her** (shown only inside the hut), or in the headset looking at her for 1 s. The mic stays open (a pulsing ring) until **End** or you leave the hut.
+- **One character, two engines** (`IVoiceConversation`), picked by `TalkRouter` from `live_langs`:
+  - `LiveTalk`: Gemini Live through Firebase AI Logic. New platform service `ILiveModel` (`HypaCore/Runtime/Firebase/Live.cs`, wire format in `LiveProtocol`). Native (Android, iOS, Quest, editor): `RestLiveModel`, a WebSocket from C# to the same endpoint the JS SDK uses (there is no Firebase Unity SDK in this project), her voice through `LivePlayback`. Web: `WebLiveModel` and `liveStart` in `firebase-bridge.js` (the page records and plays). Server-side voice activity detection and interruption; on native, the mic sends silence while she speaks until the player has been loud for 300 ms, so her own voice doesn't interrupt her. Reconnects with the resumption handle on `goAway` or a dropped socket, else with the last turns in her prompt.
+  - `HypaTalk`: Hypa turn by turn through `HypaProxyClient`. `TurnDetector` (MicListener's speech threshold plus a learned noise floor; 700 ms of quiet ends a turn), `/hypa/asr`, `/hypa/chat` (persona as system, then the last 8 turns), her reply split into sentences and spoken through `StoryVoice` as `AskFlow` does (first sentence fetched at once, the rest behind it). Barge-in after 300 ms of the player's voice stops her and drops the queued sentences. The room's own level (the hut's fire and wind through the speakers, a fan) is learned for 0.8 s before a turn can start and followed between turns; in a turn, anything under a quarter of the player's voice is quiet and a click doesn't count, so steady noise never holds a turn open. **Done** on the panel ends the turn at once (on native Live it sends 1.2 s of silence so the server ends it).
+  - Falls back to Hypa when Live is not set up or does not connect.
+- **Persona:** `Assets/HypaStories/Resources/Characters/elder/persona.json` (who she is, what she knows, how she talks, the stories she can send you to, her fixed lines in all eight languages). `PersonaPrompt` adds her four things from their own `story.json`. The non-European lines are machine-written and need a native speaker's check.
+- **Actions** (`TalkActions`; Live function calls, Hypa a JSON `action` in the reply, read by `TalkReply`): `show_item` lights the card and she points to it; `tell_item_story` plays the item's story and the conversation waits; `teach_word` saves the word through `UserDataSync` and she says it slowly; `suggest_story` shows **Walk to the fire**, which takes you to the campfire and starts that story (`StoryApp.GoToStory`).
+- **Echo:** Android records from `VOICE_COMMUNICATION` with the platform echo canceller (`HypaVoice.androidlib`, `HypaVoiceMic.java`); iOS switches the audio session to voice chat (`Plugins/iOS/HypaVoiceSession.mm`); the browser has echo cancellation on. On Quest the barge-in threshold is 4× her echo level instead of 2.5×. Her voice counts as hers for 600 ms after it stops (the room's echo, the gap between her sentences), so it never starts a turn. Where the microphone has no echo canceller (`MicStream.EchoCancelled` false: the editor, a desktop), nothing heard while she speaks counts and she can't be talked over, so she never answers her own words.
+- **Her voice:** a woman's. The persona's words never reach the speech request, and Hypa's Auto speaks English in OpenAI `alloy`, a man's voice, so `persona.json` names her voices (`voices`, as a story's), each with the model Hypa itself used for it (editor run, Nov 27): English OpenAI `gpt-4o-mini-tts` `sage` (then `coral`); French, Spanish, Kiswahili Google `gemini-2.5-pro-tts` `Achernar`; Yorùbá and Pidgin Hypa Orpheus `hypa-orpheus-3b-tts-vc-flt` `Eniola`, Hausa `Juliet`, Igbo `Amarachi`; then Auto. A name without its model fails: `Gacrux` is not on Hypa in any of these languages, and the Orpheus names match more than one model. Her remarks and her things' stories use them too. A voice Hypa refuses (`bad_request`, or `upstream` with reason `tool_error`, now `HypaErrorKind.ToolError`) is skipped for the rest of the run. Every line logs its voice and time (`tts <language> named|auto … ms`). Live uses `live_voice` (`Gacrux`) and, if that is refused, `Aoede`, never the model's default (Puck, a man's).
+- **Transcript bubbles** for both sides on the panel, and the route chip ("Cloud · Gemini Live", "Hypa · Yorùbá").
+- **Things handled:** offline, she says (from her voice's cache, fetched while online) that she needs the connection, and the items' stories still play; no microphone, the panel says she can't hear you (the mic is tried again every 1.5 s while it is being allowed); the cap (`talk_max_seconds`, 300 s) ends with her goodbye.
+- Remote Config: `live_model` now has a default, plus `live_voice` and `talk_max_seconds` (`docs/contracts.md`, section 5).
+- Every reply's timing is logged (`TalkTurnLog`: speech to text, reply, first audio, interrupted).
+- Tests: `Assets/HypaCore/Tests/Editor/LiveProtocolTests.cs`, `Assets/HypaStories/Tests/Editor/TalkTests.cs`.
+- **Not done:**
+  - No Unity build or device run yet. The ticket's checks (latency on Android and web, Yorùbá barge-in, Quest) still need real devices.
+  - In a Story Circle, only the player who started the conversation should talk with her. That is not wired up yet.
+  - Saved words go to `FakeUserDataStore`, since G08's Firestore store does not exist yet.
+  - The offline clip is cached in memory only, so it is there only if she was heard online this session.
+  - Her pointing gesture has not been seen in the headset.
+  - Pidgin `Eniola` on Orpheus is not yet heard (Hypa has her for Pidgin, on more than one model); if refused, Auto speaks Pidgin in `Prince`, a man's voice.
+  - Her voice is slow: 5-10 s a line on Nov 27 (Achernar up to 18 s), and a Hausa line timed out. Whether Hypa accepts `sage` for those languages, and each Orpheus voice by name, has not been checked with a real call.
+  - First editor run (Nov 27): Live was refused with "Firebase App Check token is invalid" (from the editor's debug token), so it fell back to Hypa. Not resolved.
+
+## G09 (HYP-204): Story Circle, contract and rules first
+
+Work in progress; the room itself is not built yet.
+
+- Handover: when the host goes (leaves, drops, or stops sending a heartbeat for 10 s) the next online player takes the room and the story carries on from the same clock. The ticket's scope said the room closes and its Done-when said the guest becomes host; handover is what was chosen. `docs/contracts.md` section 4 and `firebase/database.rules.json` now say so, and `RoomHandover` picks who takes it.
+- `rooms/{code}/answers/{n}`: an answer one sentence at a time, written by the player whose hand is up, so the other player hears it after the first sentence. The ticket left `{n}` open. `RoomAnswer`, `IRoomSync.SendAnswerAsync` and `AnswerReceived`.
+- `players/{uid}/lastSeen`: the heartbeat for clients with no `onDisconnect` (REST on Quest and phones). `RoomPresence`.
+- `FakeRoomSync` does handover and answers, so the room logic can be built and tested before any real service.
+- Tests: 9 more rules tests on the Realtime Database emulator (26 in all); EditMode tests in `HybridRoomsTests`.
+- Review fixes: `RoomSeats.MaxPlayers` (2); the contract now says how REST measures server time (no `.info/serverTimeOffset` there), how `n` is picked and retried, that the asker lowers their hand only after the last sentence, that presence never removes the room on disconnect, and that the lower seat wins a tie on the clients, not in the rules. `AGENTS.md` and `Assets/HypaMultiplayer/README.md` no longer say multiplayer is undecided.
+- Decided with the ticket's owner: one `RestRoomSync` for Quest, Android and iOS (the Firebase Unity SDK is not in the project, so the ticket's `NativeRoomSync` cannot be built), and `WebRoomSync` for the web.
+
+## G09 (HYP-204), part 2: the Story Circle itself
+
+How to run it on devices and check each Done-when item: `docs/story-circle.md`.
+
+- `CircleSession` (`Assets/HypaStories/Runtime/Circle/`): the host announces each line 0.5 s ahead in server time and both devices start it then; a late or returning guest starts at the current line; the host's pause pauses the guest. Raised hands: the lowest seat with a hand up has the turn, the storyteller turns to the asker, both stop, the asker's device answers and shares it sentence by sentence, the other device speaks it, then "Now, where was I…" and both carry on. When the room passes to the guest it carries the story on. Each line's start is logged in server time on both devices, to measure the ~300 ms target.
+- Small hooks: `StoryPlayer` (`LineGate`, `Following`, `FollowTo`, `StartFollowing`, `UserPaused`), `AskFlow` (`Sentence`, `Ended`), `Storyteller.AttendTarget`.
+- `RestRoomSync` (Quest, Android, iOS): seven event streams, a 3 s heartbeat for presence, the server clock measured from it, handover, answer numbering with retry. `RestRealtimeDatabase` writes now return what was stored.
+- `WebRoomSync` and `room*` in `firebase-bridge.js` (web): the JS SDK's Realtime Database with `onDisconnect` and `.info/serverTimeOffset`, the emulator on localhost. A web guest treats a phone or Quest host's stale `lastSeen` as gone (re-checked every 3 s, since the database does not change when the 10 s run out) and keeps the room snapshots that arrive during join, so a late guest starts on the current line. A guest finishes the story on its last line.
+- Lobby and code pad (`CircleView`), "Story Circle" on Home and at the campfire, share links `…/circle/ABCDE` (Hosting rewrite, `<base>` in the web page), the other player's figure (`CirclePeer`, `PoseTrack`), head and hands sent 10 times a second.
+- Tests: `CircleSessionTests`, `RestRoomSyncTests`, share links in `HybridRoomsTests`.
+- Not yet run on a device or against the real database: that needs the Realtime Database created and the rules deployed (`docs/story-circle.md`).
+
+## G11 (HYP-206): Multiplayer game race
+
+After a story with a game, the two players in a Story Circle race at it, each on their own device. Built on G09.
+
+- `GameRace` (`Assets/HypaStories/Runtime/Circle/`): a round over `rooms/{code}/game/{uid}` (`docs/contracts.md` section 4): the host taps **Play together**, both count 3-2-1 to the same server time, each plays the story's game locally, live scores at most once a second, the result when both are done. A player who leaves the room, goes back to the fire, or leaves the game with its Back button forfeits and loses to the one who finishes. Two Rematches at once share the later start. A live score already on the way cannot replace a finish. Either player can start a **Rematch**. Old rounds replayed by a reconnecting stream are not joined.
+- `RaceScore`: points from each game's own rules (Dodo: stones and lives; Eshu's hat: rounds less fights; the drum: dishes less misses); a tie on points goes to the faster game time, measured on the player's own device. No network timing.
+- `RaceView`: the count, the live bar ("Ada 12 · You 9") and the result card ("Ada wins: 41 s", **Rematch**, **Back to the fire**). In a circle, the host's **Play together** replaces the solo game button.
+- The best result goes to `stories/{id}.bestGameScore` through `UserDataSync` (G08). `HybridServices.UserData` holds the store: the Fake until G08's Firestore store exists, so the best score is kept on the device for now.
+- Games expose their rules read-only (`DodoGame.Rules`, `HatGame.Rules`, `DrumGame.Rules`).
+- Fix to G09: `RestRoomSync` read `game` updates wrongly when only one player's entry changed.
+- Tests: `GameRaceTests` (count, live scores, winner and ties, leaving, forfeit, rematch, old rounds, scores).
+- Not yet run on a device.

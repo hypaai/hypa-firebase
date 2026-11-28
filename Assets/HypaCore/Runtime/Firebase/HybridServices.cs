@@ -19,7 +19,11 @@ namespace HypaCore.Hybrid
         public IRoomSync Rooms { get; set; } = new FakeRoomSync();
         public IOnDeviceModel OnDevice { get; set; } = OnDeviceFactory?.Invoke() ?? new NoOnDeviceModel();
         public ICloudModel Cloud { get; set; } = new NoCloudModel();
+        /// <summary>The Gemini Live API (G10). <see cref="NoLiveModel"/> until the platform's services have started.</summary>
+        public ILiveModel Live { get; set; } = new NoLiveModel();
         public IRouteLog RouteLog { get; set; } = new FakeRouteLog();
+        /// <summary>Story results and saved words (G08, provisional). The Fake until a Firestore store is registered.</summary>
+        public IUserDataStore UserData { get; set; } = new FakeUserDataStore();
 
         /// <summary>
         /// Set by a platform that has an on-device model (<c>AndroidNano</c> on Android phones). Read each time services are created, so
@@ -71,7 +75,9 @@ namespace HypaCore.Hybrid
                 local.Rooms = real.Rooms;
                 local.OnDevice = real.OnDevice;
                 local.Cloud = real.Cloud;
+                local.Live = real.Live;
                 local.RouteLog = real.RouteLog;
+                if (!(real.UserData is FakeUserDataStore)) local.UserData = real.UserData; // keep what was saved locally until a real store exists
 
                 // The player may have saved to the Fakes while the server was being read. Send that too.
                 var late = await fakeProgress.LoadAsync();

@@ -11,7 +11,7 @@ namespace HypaCore.Hybrid.Web
     /// <summary>
     /// The Web implementation of the G01 services (WebGL builds), on the Firebase JS SDK through <see cref="WebBridge"/>.
     /// The web config comes from <c>firebaseWeb</c> in <c>hypa_client_config_local.json</c>, else <c>hypa_client_config.json</c> (<see cref="HypaConfig.ClientConfig"/>). While it
-    /// is blank the factory returns null and the app plays on the Fakes. Rooms stay on the Fake until G09 defines them.
+    /// is blank the factory returns null and the app plays on the Fakes. Rooms use <see cref="WebRoomSync"/> when the config has a <c>databaseURL</c>, else the Fake.
     /// On localhost the build uses the Firebase Emulator Suite instead (project <see cref="EmulatorProject"/>); add
     /// <c>?firebase=live</c> to the URL to use the real project there.
     /// </summary>
@@ -56,14 +56,17 @@ namespace HypaCore.Hybrid.Web
             // Firebase starts and signs in in the background. Calls made before it is ready wait in JS; the story never waits on it.
             _ = StartAsync(config, auth);
             var flags = new WebRemoteFlags();
+            var rooms = config["firebase"]?["databaseURL"] != null ? (IRoomSync)new WebRoomSync(auth) : new FakeRoomSync();
             return new HybridServices
             {
                 Auth = auth,
+                Rooms = rooms,
                 Progress = new WebProgressStore(),
                 Profiles = new WebProfileStore(),
                 Flags = flags,
                 OnDevice = new ChromeNanoModel(),
                 Cloud = new WebCloudModel(flags),
+                Live = new WebLiveModel(),
                 RouteLog = new WebRouteLog(),
             };
         }
@@ -82,18 +85,33 @@ namespace HypaCore.Hybrid.Web
             catch (WebBridgeException e) { Debug.LogWarning($"Hypa: Firebase did not start ({e.Code}). Playing on local data."); }
         }
 
-        /// <summary>True for a page on localhost or 127.0.0.1, unless its URL asks for <c>firebase=live</c>.</summary>
+        /// <summary>
+        /// True for a page on this computer (localhost, 127.0.0.1) or on the local network (a private IPv4 address or a .local
+        /// name: phones on the same Wi-Fi opening the emulators' build), unless its URL asks for <c>firebase=live</c>.
+        /// </summary>
         public static bool UsesEmulators(string pageUrl)
         {
             if (!Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri)) return false;
-            if (uri.Host != "localhost" && uri.Host != "127.0.0.1") return false;
+            if (!IsLocal(uri.Host)) return false;
             return uri.Query.IndexOf("firebase=live", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        static bool IsLocal(string host)
+        {
+            if (host == "localhost" || host == "127.0.0.1" || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!System.Net.IPAddress.TryParse(host, out var ip) || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
+            var b = ip.GetAddressBytes();
+            return b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168);
         }
 
         /// <summary>Init arguments for the emulators: placeholder app values (the emulators accept any) and no App Check.</summary>
         public static JObject EmulatorConfig() => new JObject
         {
-            ["firebase"] = new JObject { ["apiKey"] = "demo-key", ["projectId"] = EmulatorProject, ["appId"] = "demo-app" },
+            ["firebase"] = new JObject
+            {
+                ["apiKey"] = "demo-key", ["projectId"] = EmulatorProject, ["appId"] = "demo-app",
+                ["databaseURL"] = "https://" + EmulatorProject + "-default-rtdb.firebaseio.com", // the emulator's default instance
+            },
             ["emulators"] = true,
         };
 

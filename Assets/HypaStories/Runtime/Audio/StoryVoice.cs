@@ -41,6 +41,8 @@ namespace HypaStories
         public bool TtsAvailable => HypaConfig.Current.HasProxy;
         /// <summary>The story's voices for a language code, best first (see <see cref="StoryInfo.VoicesFor"/>). Null or empty = Auto.</summary>
         public Func<string, VoiceOption[]> Voices { get; set; }
+        /// <summary>Voices Hypa refused by name for a language ("yo|model voice"): not asked again this run.</summary>
+        readonly HashSet<string> _refused = new HashSet<string>();
 
         public void Init(Transform mouth)
         {
@@ -141,16 +143,28 @@ namespace HypaStories
             HypaSpeech speech = null;
             foreach (var voice in voices)
             {
-                try { speech = await Speak(text, label, voice.Voice, voice.Model); break; }
+                var id = language.Code + "|" + voice;
+                if (_refused.Contains(id)) continue;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    speech = await Speak(text, label, voice.Voice, voice.Model);
+                    // every line: which named voice spoke and how long it took (to drop the voices that never speak, or are slow)
+                    Debug.Log($"Hypa Stories: tts {label} named {voice} → {speech.Provider}/{speech.Model} {speech.Voice}: {watch.ElapsedMilliseconds} ms, {text.Length} chars");
+                    break;
+                }
                 catch (HypaException e) when (e.Kind != HypaErrorKind.MissingConfiguration && e.Kind != HypaErrorKind.Unauthorized)
                 {
-                    Warn($"voice {voice} failed for {label} ({e.Message}); trying the next voice.");
+                    if (VoiceLock.Refused(e)) _refused.Add(id);
+                    Debug.LogWarning($"Hypa Stories: tts {label} named {voice} FAILED after {watch.ElapsedMilliseconds} ms ({e.Message}); trying the next voice.");
                 }
             }
             if (speech == null)
             {
                 // Auto (pick = null) for the first line in the language, then the voice it picked.
+                var watch = System.Diagnostics.Stopwatch.StartNew();
                 speech = await _lock.SpeakAsync(language.Code, pick => Speak(text, label, pick?.Voice, pick?.Model));
+                Debug.Log($"Hypa Stories: tts {label} auto → {speech.Provider}/{speech.Model} {speech.Voice}: {watch.ElapsedMilliseconds} ms, {text.Length} chars");
                 var locked = _lock.PickFor(language.Code);
                 if (locked != null && _locked.Add(language.Code + "|" + locked)) Debug.Log($"Hypa Stories: {label} voice locked to {locked} for this story.");
             }
@@ -329,7 +343,7 @@ namespace HypaStories
         }
 
         /// <summary>The service turned the request down (that model or voice can't be used for this language).</summary>
-        static bool Refused(HypaException e) => e.Kind == HypaErrorKind.BadRequest || e.Kind == HypaErrorKind.ToolError;
+        internal static bool Refused(HypaException e) => e.Kind == HypaErrorKind.BadRequest || e.Kind == HypaErrorKind.ToolError;
 
         /// <summary>A passing failure worth one more try.</summary>
         static bool Transient(HypaException e) => e.Kind == HypaErrorKind.Timeout || e.Kind == HypaErrorKind.Offline
