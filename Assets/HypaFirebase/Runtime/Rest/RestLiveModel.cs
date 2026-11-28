@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net.WebSockets;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,10 +27,13 @@ namespace HypaFirebase.Rest
         public async Task<ILiveSession> ConnectAsync(LiveSetup setup, CancellationToken ct)
         {
             try { return await ConnectAsync(setup, true, ct).ConfigureAwait(false); }
-            catch (HypaFirebaseException)
+            catch (HypaFirebaseException first)
             {
-                // the browser can't send these headers, so the server never needs them: try once as the browser does
-                return await ConnectAsync(setup, false, ct).ConfigureAwait(false);
+                // the browser can't send these headers, so the server never needs them: try once as the browser does.
+                // If that fails too, report the first error: without the tokens, an enforced App Check always refuses
+                // ("Firebase App Check token is invalid"), which would hide the real cause (credits, model, quota).
+                try { return await ConnectAsync(setup, false, ct).ConfigureAwait(false); }
+                catch (HypaFirebaseException) { ExceptionDispatchInfo.Capture(first).Throw(); throw; }
             }
         }
 
