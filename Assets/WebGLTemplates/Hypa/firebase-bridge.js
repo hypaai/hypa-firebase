@@ -17,7 +17,9 @@ import {
 import {
   getDatabase, connectDatabaseEmulator, ref, get, set, remove, onValue, onDisconnect, serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
-import { getAI, getGenerativeModel, GoogleAIBackend, InferenceMode, InferenceSource } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js";
+import {
+  getAI, getGenerativeModel, getLiveGenerativeModel, GoogleAIBackend, InferenceMode, InferenceSource, ResponseModality,
+} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-ai.js";
 
 /** Thrown to C# as { code, message }. */
 class BridgeError extends Error {
@@ -256,6 +258,204 @@ async function nanoDownload(args, { emit }) {
   return nanoStatus();
 }
 
+// ---------- Live API (G10): talking with the old woman ----------
+// One session at a time. The page records the microphone (echo cancellation on, so she does not hear herself) and plays her
+// voice, so audio never crosses into C#; transcripts, tool calls, interruptions and levels go back as liveStart's chunks.
+// No voice activity settings: the SDK's defaults. The session ends when C# aborts the call (End, leaving the hut).
+
+const LIVE_WORKLET =
+  "class Live16k extends AudioWorkletProcessor {" +
+  " constructor() { super(); this.step = sampleRate / 16000; this.acc = 0; this.sum = 0; this.n = 0; this.sq = 0; this.buf = new Int16Array(1600); this.len = 0; }" +
+  " process(inputs) { var ch = inputs[0] && inputs[0][0]; if (!ch) return true;" +
+  "  for (var i = 0; i < ch.length; i++) { this.sum += ch[i]; this.n++; this.acc += 1;" +
+  "   if (this.acc >= this.step) { this.acc -= this.step; var v = this.sum / this.n; this.sum = 0; this.n = 0; this.sq += v * v;" +
+  "    this.buf[this.len++] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));" +
+  "    if (this.len === this.buf.length) { this.port.postMessage({ pcm: this.buf.slice(0), rms: Math.sqrt(this.sq / this.len) }); this.len = 0; this.sq = 0; } } }" +
+  "  return true; } }" +
+  " registerProcessor('hypa-live-16k', Live16k);";
+const LIVE_SPEECH_RMS = 0.02; // the same speech threshold as MicListener, for the first-audio timing only
+let live = null;
+
+function base64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+class LiveRun {
+  constructor(session, emit) {
+    this.session = session; this.emit = emit;
+    this.stopped = false; this.held = false;
+    this.sources = []; this.next = 0; this.lastSpeech = 0; this.spoke = false; this.mic = 0; this.sent = { v: -1, mic: -1 };
+  }
+
+  async start() {
+    this.ctx = new AudioContext();
+    if (this.ctx.state === "suspended") await this.ctx.resume().catch(() => {});
+    this.out = this.ctx.createGain();
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 512;
+    this.out.connect(this.analyser);
+    this.analyser.connect(this.ctx.destination);
+    this.levels = setInterval(() => this.level(), 66);
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    } catch (e) {
+      this.emit({ t: "mic", state: "denied" }); // the conversation carries on in text
+      return;
+    }
+    if (this.stopped) { this.stream.getTracks().forEach((t) => t.stop()); return; }
+    const url = URL.createObjectURL(new Blob([LIVE_WORKLET], { type: "application/javascript" }));
+    await this.ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    if (this.stopped) return;
+    this.node = new AudioWorkletNode(this.ctx, "hypa-live-16k");
+    this.node.port.onmessage = (e) => this.heard(e.data);
+    this.ctx.createMediaStreamSource(this.stream).connect(this.node);
+    this.emit({ t: "mic", state: "on" });
+  }
+
+  heard({ pcm, rms }) {
+    this.mic = Math.min(1, rms * 6);
+    if (rms > LIVE_SPEECH_RMS) this.lastSpeech = performance.now();
+    if (this.held || this.stopped) return;
+    this.session.sendAudioRealtime({ mimeType: "audio/pcm;rate=16000", data: base64(pcm.buffer) }).catch(() => {});
+  }
+
+  play(data) {
+    const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    const pcm = new Int16Array(bytes.buffer, 0, bytes.length >> 1);
+    const buffer = this.ctx.createBuffer(1, pcm.length, 24000);
+    const ch = buffer.getChannelData(0);
+    for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 32768;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.out);
+    src.onended = () => { this.sources = this.sources.filter((x) => x !== src); };
+    this.next = Math.max(this.ctx.currentTime, this.next);
+    src.start(this.next);
+    this.next += buffer.duration;
+    this.sources.push(src);
+  }
+
+  interrupt() {
+    this.sources.forEach((s) => { try { s.stop(0); } catch (e) { /* already ended */ } });
+    this.sources = [];
+    if (this.ctx) this.next = this.ctx.currentTime;
+  }
+
+  level() {
+    if (!this.analyser) return;
+    const buf = new Float32Array(this.analyser.fftSize);
+    this.analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const v = Math.round(Math.min(1, Math.sqrt(sum / buf.length) * 5) * 50) / 50, mic = Math.round(this.mic * 50) / 50;
+    if (v === this.sent.v && mic === this.sent.mic) return;
+    this.sent = { v, mic };
+    this.emit({ t: "level", v, mic });
+  }
+
+  async loop() {
+    for await (const m of this.session.receive()) {
+      if (this.stopped) break;
+      if (m.type === "serverContent") {
+        if (m.interrupted) { this.interrupt(); this.spoke = false; this.emit({ t: "interrupted" }); }
+        if (m.inputTranscription && m.inputTranscription.text) this.emit({ t: "in", text: m.inputTranscription.text });
+        for (const part of (m.modelTurn && m.modelTurn.parts) || []) {
+          const inline = part.inlineData;
+          if (!inline || !inline.mimeType || !inline.mimeType.startsWith("audio/") || this.held) continue;
+          if (!this.spoke) {
+            this.spoke = true;
+            const since = performance.now() - this.lastSpeech;
+            this.emit({ t: "first", ms: this.lastSpeech > 0 && since < 15000 ? Math.round(since) : 0 });
+          }
+          this.play(inline.data);
+        }
+        if (m.outputTranscription && m.outputTranscription.text) this.emit({ t: "out", text: m.outputTranscription.text });
+        if (m.turnComplete) { this.spoke = false; this.emit({ t: "turn" }); }
+      } else if (m.type === "toolCall") {
+        this.emit({ t: "tool", calls: (m.functionCalls || []).map((c) => ({ id: c.id, name: c.name, args: c.args || {} })) });
+      } else if (m.type === "toolCallCancellation") {
+        this.emit({ t: "toolCancel", ids: m.ids || [] });
+      } else if (m.type === "goingAwayNotice") {
+        this.emit({ t: "goAway", timeLeft: m.timeLeft || 0 });
+      } else if (m.type === "sessionResumptionUpdate") {
+        if (m.newHandle && m.resumable !== false) this.emit({ t: "handle", handle: m.newHandle });
+      }
+    }
+  }
+
+  stop() {
+    if (this.stopped) return;
+    this.stopped = true;
+    clearInterval(this.levels);
+    this.interrupt();
+    if (this.node) { this.node.port.onmessage = null; this.node.disconnect(); }
+    if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
+    if (this.ctx && this.ctx.state !== "closed") this.ctx.close().catch(() => {});
+    this.session.close().catch(() => {});
+    if (live === this) live = null;
+  }
+}
+
+async function liveConnect({ model, system, voice, handle, tools }) {
+  const generationConfig = {
+    responseModalities: [ResponseModality.AUDIO],
+    inputAudioTranscription: {}, outputAudioTranscription: {},
+    contextWindowCompression: { slidingWindow: {} },
+  };
+  if (voice) generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } };
+  const params = { model, generationConfig };
+  if (system) params.systemInstruction = system;
+  if (tools && tools.length) params.tools = [{ functionDeclarations: tools }];
+  return getLiveGenerativeModel(ai, params).connect(handle ? { handle } : {});
+}
+
+const LIVE_FALLBACK_VOICE = "Aoede";
+
+async function liveStart(args, { emit, signal }) {
+  await ready;
+  if (live) live.stop();
+  let session;
+  try {
+    session = await liveConnect(args);
+  } catch (e) {
+    // the model's default voice is a man's (Puck): fall back to another woman's voice, never to the default
+    if (!args.voice || args.voice === LIVE_FALLBACK_VOICE) throw e;
+    console.warn("Hypa: Live session refused with voice " + args.voice + "; trying " + LIVE_FALLBACK_VOICE + ".");
+    session = await liveConnect({ ...args, voice: LIVE_FALLBACK_VOICE });
+  }
+  const run = (live = new LiveRun(session, emit));
+  signal.addEventListener("abort", () => run.stop(), { once: true });
+  if (signal.aborted) { run.stop(); return null; }
+  emit({ t: "ready" });
+  try {
+    await run.start();
+  } catch (e) {
+    console.warn("Hypa: the microphone could not start for the Live session (" + (e && e.name) + ").");
+    emit({ t: "mic", state: "denied" });
+  }
+  try { await run.loop(); } finally { run.stop(); }
+  return null;
+}
+
+async function liveSend({ text }) {
+  if (live) await live.session.sendTextRealtime(text);
+  return null;
+}
+
+async function liveTool({ id, name, result }) {
+  if (live) await live.session.sendFunctionResponses([{ id, name, response: { result } }]);
+  return null;
+}
+
+async function liveHold({ on }) {
+  if (live) { live.held = !!on; if (on) live.interrupt(); }
+  return null;
+}
+
 // ---------- Story Circle rooms (G09, docs/contracts.md section 4) ----------
 // The room node is not readable as a whole, so each child is listened to on its own. Presence: onDisconnect sets
 // players/{uid}/online to false (never removes anything, so handover still works) and is set again on every reconnect.
@@ -419,6 +619,7 @@ async function roomTakeOver() {
 const methods = {
   init, signIn, link, idToken: async () => (await user()).getIdToken(), appCheckToken,
   loadProgress, saveProgress, loadProfile, saveProfile, fetchFlags, generate, stream, generateTurn, logRoute, nanoStatus, nanoDownload,
+  liveStart, liveSend, liveTool, liveHold,
   roomCreate, roomJoin, roomLeave, roomSetState, roomSetClock, roomUpdateMe, roomPose, roomAnswer, roomGame, roomTakeOver,
 };
 

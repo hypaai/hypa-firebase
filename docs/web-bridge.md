@@ -71,6 +71,10 @@ Chrome's own Prompt API page lists a later version for web pages than Firebase's
 
 `WebMicrophone` (Assets/Plugins/WebGL/HypaMicrophone.jslib) replaces Unity's `Microphone`, which does not work in a browser. It uses `getUserMedia` with echo cancellation, noise suppression and auto gain on, and an AudioWorklet that averages the device rate down to 16 kHz mono. `MicListener` reads it every frame, as it reads a microphone clip on other platforms. A refused microphone ends the listen with "Allow the microphone in your browser". Recording needs HTTPS (or localhost).
 
+## Live API (G10)
+
+`WebLiveModel` starts `liveStart` in `firebase-bridge.js`: the JS SDK's `getLiveGenerativeModel` with audio replies, transcripts of both sides, a sliding context window and resumption handles. The page records the microphone itself (its own `getUserMedia`, echo cancellation on, 16 kHz PCM sent every 100 ms) and plays her 24 kHz voice through Web Audio, so audio never crosses into C#. What comes back to C# are `liveStart`'s chunks: `ready`, `level` (her voice and the microphone, for the lip sync and the ring), `mic` (`denied`: she can't hear the player), `first` (ms from the end of the player's speech to her first audio), `in` / `out` (transcript pieces), `interrupted`, `turn`, `tool` (function calls), `toolCancel`, `goAway` and `handle`. `liveSend` (a text cue: her greeting, a story finished, goodbye), `liveTool` (a function's result) and `liveHold` (mute both ways while an item's story plays) act on the open session; aborting `liveStart` closes it. No voice activity settings on the web: the SDK's defaults. If the session is refused with the configured voice, it is tried once with `Aoede` (the model's default voice is a man's).
+
 ## Not done here
 
 - No origin-trial token: basic prompting with Gemini Nano does not need one.

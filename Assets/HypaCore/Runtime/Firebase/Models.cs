@@ -112,12 +112,18 @@ namespace HypaCore.Hybrid
         public const string CloudModel = "cloud_model";
         public const string LiveModel = "live_model";
         public const string LiveLangs = "live_langs";
+        public const string LiveVoice = "live_voice";
+        public const string TalkMaxSeconds = "talk_max_seconds";
         public const string ProxyDailySecondsPerUser = "proxy_daily_seconds_per_user";
         public const string ProxyDailyRequestsPerUser = "proxy_daily_requests_per_user";
         public const string ProxyGlobalDailySeconds = "proxy_global_daily_seconds";
         public const string ProxyGlobalDailyRequests = "proxy_global_daily_requests";
 
-        /// <summary>The default for a key. <c>live_model</c> has none until G10 picks the model name from the Firebase docs.</summary>
+        /// <summary>
+        /// The default for a key. <c>live_model</c>: a native-audio Live model the Gemini Developer API serves through Firebase AI Logic
+        /// (Firebase docs, Nov 26 2026; <c>gemini-3.1-flash-live-preview</c> is the newer preview). <c>live_voice</c>: a prebuilt voice
+        /// ("Gacrux", mature). <c>talk_max_seconds</c>: the cap on one conversation with the old woman (judges' cost).
+        /// </summary>
         public static string Default(string key)
         {
             switch (key)
@@ -127,7 +133,10 @@ namespace HypaCore.Hybrid
                 case RouteHypaLangs: return "yo,ha,ig,pcm,sw";
                 case RouteMaxOnDeviceTokens: return "5000";
                 case CloudModel: return "gemini-3.5-flash-lite";
+                case LiveModel: return "gemini-2.5-flash-native-audio-preview-12-2025";
                 case LiveLangs: return "en,fr,es,sw";
+                case LiveVoice: return "Gacrux";
+                case TalkMaxSeconds: return "300";
                 case ProxyDailySecondsPerUser: return "600";
                 case ProxyDailyRequestsPerUser: return "400";
                 case ProxyGlobalDailySeconds: return "20000";

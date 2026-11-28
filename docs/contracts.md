@@ -14,6 +14,7 @@ Firebase SDK's own `Firebase` namespace). Every feature in the hackathon build r
 | Two-player rooms | Realtime Database | SDK | JS SDK | REST API + server-sent events |
 | Flags | Remote Config | SDK | JS SDK | Remote Config fetch API |
 | Cloud Gemini | Firebase AI Logic | SDK | JS SDK | Through a Cloud Function |
+| Talking with the old woman (Gemini Live) | Firebase AI Logic Live API | WebSocket from C# (`RestLiveModel`) | JS SDK `getLiveGenerativeModel` | WebSocket from C# (`RestLiveModel`) |
 | Hypa (Yorùbá, Hausa, Igbo, Pidgin, Swahili) | Cloud Functions + Secret Manager (the Hypa key) | proxy | proxy | proxy |
 | Room cleanup, quotas | Cloud Functions (scheduled) + Firestore | | | |
 | The web build | Hosting | | | |
@@ -26,7 +27,7 @@ outside development: debug tokens skip the check.
 ## 1. Platform services
 
 `IHypaAuth`, `IProgressStore`, `IProfileStore`, `IRemoteFlags`, `IRoomSync`, `IOnDeviceModel`, `ICloudModel`, `IRouteLog`
-(`Interfaces.cs`).
+(`Interfaces.cs`), and `ILiveModel` / `ILiveSession` for the Live API (G10, `Live.cs`; `NoLiveModel` until a platform sets one).
 
 - Three real implementations: **Native** (Firebase Unity SDK; Android, iOS, and Quest if the spike passes; G02), **Rest**
   (Firebase REST APIs; Quest if the SDK fails there; G02, in `Assets/HypaFirebase/Runtime/Rest`) and **Web** (`.jslib` + Firebase JS SDK; G03). **Fake** (in-memory) for the editor and tests
@@ -209,14 +210,16 @@ trip of the last few; with a round trip under about 200 ms the error is under 10
 | `route_hypa_langs` | `yo,ha,ig,pcm,sw` | G05 |
 | `route_max_on_device_tokens` | `5000` | G05 |
 | `cloud_model` | `gemini-3.5-flash-lite` | G05 |
-| `live_model` | (Live API model name from the Firebase docs on Nov 22) | G10 |
+| `live_model` | `gemini-2.5-flash-native-audio-preview-12-2025` (a native-audio model on the Gemini Developer API; `gemini-3.1-flash-live-preview` is the newer preview) | G10 |
 | `live_langs` | `en,fr,es,sw` | G10 |
+| `live_voice` | `Gacrux` (a prebuilt woman's voice; if refused, `Aoede`; blank for the model's default, a man's) | G10 |
+| `talk_max_seconds` | `300` (one conversation with the old woman, for judges' cost) | G10 |
 | `proxy_daily_seconds_per_user` | `600` | G04 (server) |
 | `proxy_daily_requests_per_user` | `400` | G04 (server) |
 | `proxy_global_daily_seconds` | `20000` | G04 (server) |
 | `proxy_global_daily_requests` | `10000` | G04 (server) |
 
-Constants and defaults: `RemoteConfigKeys` in `Models.cs`. `live_model` has no default until G10 sets it.
+Constants and defaults: `RemoteConfigKeys` in `Models.cs`.
 
 ## 6. Hypa proxy API (G04 builds it as Cloud Functions, G05, G10 and G12 call it)
 
