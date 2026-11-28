@@ -151,7 +151,7 @@ An open voice conversation with the old woman in the hut. Code in `Assets/HypaSt
   - Her pointing gesture has not been seen in the headset.
   - Pidgin `Eniola` on Orpheus is not yet heard (Hypa has her for Pidgin, on more than one model); if refused, Auto speaks Pidgin in `Prince`, a man's voice.
   - Her voice is slow: 5-10 s a line on Nov 27 (Achernar up to 18 s), and a Hausa line timed out. Whether Hypa accepts `sage` for those languages, and each Orpheus voice by name, has not been checked with a real call.
-  - First editor run (Nov 27): Live was refused with "Firebase App Check token is invalid" (from the editor's debug token), so it fell back to Hypa. Not resolved.
+- Editor check (Nov 28): Live connects in the editor through `RestLiveModel` with a registered App Check debug token (setup in 0.9 s, her voice 2.3 s after a text question). The Nov 27 "Firebase App Check token is invalid" came from the project's Gemini API credits running out: the first connect was refused for that, and the retry without tokens hid it. `RestLiveModel` now reports the first error when the retry fails too.
 
 ## G09 (HYP-204): Story Circle, contract and rules first
 
