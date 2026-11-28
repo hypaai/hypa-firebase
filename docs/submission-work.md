@@ -124,3 +124,27 @@ On an iPhone with Apple Intelligence, answers come from Apple's on-device model;
 - A browser microphone at 16 kHz for `MicListener`.
 - On the web, the on-device model status is shown on Home, and the help card has a section on on-device AI.
 - Details: [web-bridge.md](web-bridge.md).
+
+## G09 (HYP-204): Story Circle, contract and rules first
+
+Work in progress; the room itself is not built yet.
+
+- Handover: when the host goes (leaves, drops, or stops sending a heartbeat for 10 s) the next online player takes the room and the story carries on from the same clock. The ticket's scope said the room closes and its Done-when said the guest becomes host; handover is what was chosen. `docs/contracts.md` section 4 and `firebase/database.rules.json` now say so, and `RoomHandover` picks who takes it.
+- `rooms/{code}/answers/{n}`: an answer one sentence at a time, written by the player whose hand is up, so the other player hears it after the first sentence. The ticket left `{n}` open. `RoomAnswer`, `IRoomSync.SendAnswerAsync` and `AnswerReceived`.
+- `players/{uid}/lastSeen`: the heartbeat for clients with no `onDisconnect` (REST on Quest and phones). `RoomPresence`.
+- `FakeRoomSync` does handover and answers, so the room logic can be built and tested before any real service.
+- Tests: 9 more rules tests on the Realtime Database emulator (26 in all); EditMode tests in `HybridRoomsTests`.
+- Review fixes: `RoomSeats.MaxPlayers` (2); the contract now says how REST measures server time (no `.info/serverTimeOffset` there), how `n` is picked and retried, that the asker lowers their hand only after the last sentence, that presence never removes the room on disconnect, and that the lower seat wins a tie on the clients, not in the rules. `AGENTS.md` and `Assets/HypaMultiplayer/README.md` no longer say multiplayer is undecided.
+- Decided with the ticket's owner: one `RestRoomSync` for Quest, Android and iOS (the Firebase Unity SDK is not in the project, so the ticket's `NativeRoomSync` cannot be built), and `WebRoomSync` for the web.
+
+## G09 (HYP-204), part 2: the Story Circle itself
+
+How to run it on devices and check each Done-when item: `docs/story-circle.md`.
+
+- `CircleSession` (`Assets/HypaStories/Runtime/Circle/`): the host announces each line 0.5 s ahead in server time and both devices start it then; a late or returning guest starts at the current line; the host's pause pauses the guest. Raised hands: the lowest seat with a hand up has the turn, the storyteller turns to the asker, both stop, the asker's device answers and shares it sentence by sentence, the other device speaks it, then "Now, where was I…" and both carry on. When the room passes to the guest it carries the story on. Each line's start is logged in server time on both devices, to measure the ~300 ms target.
+- Small hooks: `StoryPlayer` (`LineGate`, `Following`, `FollowTo`, `StartFollowing`, `UserPaused`), `AskFlow` (`Sentence`, `Ended`), `Storyteller.AttendTarget`.
+- `RestRoomSync` (Quest, Android, iOS): seven event streams, a 3 s heartbeat for presence, the server clock measured from it, handover, answer numbering with retry. `RestRealtimeDatabase` writes now return what was stored.
+- `WebRoomSync` and `room*` in `firebase-bridge.js` (web): the JS SDK's Realtime Database with `onDisconnect` and `.info/serverTimeOffset`, the emulator on localhost. A web guest treats a phone or Quest host's stale `lastSeen` as gone (re-checked every 3 s, since the database does not change when the 10 s run out) and keeps the room snapshots that arrive during join, so a late guest starts on the current line. A guest finishes the story on its last line.
+- Lobby and code pad (`CircleView`), "Story Circle" on Home and at the campfire, share links `…/circle/ABCDE` (Hosting rewrite, `<base>` in the web page), the other player's figure (`CirclePeer`, `PoseTrack`), head and hands sent 10 times a second.
+- Tests: `CircleSessionTests`, `RestRoomSyncTests`, share links in `HybridRoomsTests`.
+- Not yet run on a device or against the real database: that needs the Realtime Database created and the rules deployed (`docs/story-circle.md`).

@@ -45,11 +45,11 @@ namespace HypaFirebase.Rest
                 return await SendAsync(req, ct).ConfigureAwait(false);
         }
 
-        /// <summary>Replaces what is at a path.</summary>
-        public Task SetAsync(string path, string json, CancellationToken ct) => WriteAsync(HttpMethod.Put, path, json, ct);
+        /// <summary>Replaces what is at a path. Returns what was stored, server values (<c>{".sv": "timestamp"}</c>) filled in.</summary>
+        public Task<string> SetAsync(string path, string json, CancellationToken ct) => WriteAsync(HttpMethod.Put, path, json, ct);
 
         /// <summary>Changes only the fields in the JSON.</summary>
-        public Task UpdateAsync(string path, string json, CancellationToken ct) => WriteAsync(new HttpMethod("PATCH"), path, json, ct);
+        public Task<string> UpdateAsync(string path, string json, CancellationToken ct) => WriteAsync(new HttpMethod("PATCH"), path, json, ct);
 
         public async Task DeleteAsync(string path, CancellationToken ct)
         {
@@ -81,12 +81,12 @@ namespace HypaFirebase.Rest
             }
         }
 
-        async Task WriteAsync(HttpMethod method, string path, string json, CancellationToken ct)
+        async Task<string> WriteAsync(HttpMethod method, string path, string json, CancellationToken ct)
         {
             using (var req = await NewRequestAsync(method, path, ct).ConfigureAwait(false))
             {
                 req.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                await SendAsync(req, ct).ConfigureAwait(false);
+                return await SendAsync(req, ct).ConfigureAwait(false);
             }
         }
 

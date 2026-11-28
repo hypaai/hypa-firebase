@@ -47,22 +47,30 @@ namespace HypaCore.Hybrid
     /// <summary>
     /// A shared story for two players (Realtime Database <c>rooms/{code}</c>, docs/contracts.md, section 4; G09 implements it).
     /// The host creates the room and owns its state and story clock; each player owns their own seat, pose and game entries.
-    /// Events are raised on the main thread. One room at a time.
+    /// When the host goes (leaves, or is offline for <see cref="RoomPresence.TimeoutMs"/>), the next player takes the room
+    /// (<see cref="RoomHandover.NextHost"/>) and the story carries on from the same clock. Events are raised on the main thread.
+    /// One room at a time.
     /// </summary>
     public interface IRoomSync
     {
         /// <summary>The room this client is in, or null.</summary>
         string Code { get; }
-        /// <summary>True when this client created the current room.</summary>
+        /// <summary>True when this client is the room's host: it created the room, or took it over when the host went.</summary>
         bool IsHost { get; }
-        /// <summary>The server's clock in Unix ms, estimated from this device's clock (Realtime Database <c>.info/serverTimeOffset</c>).</summary>
+        /// <summary>
+        /// The server's clock in Unix ms, estimated from this device's clock. The SDKs read <c>.info/serverTimeOffset</c>; REST has no
+        /// such node, so the REST implementation measures it (docs/contracts.md, section 4, "Server time").
+        /// </summary>
         long ServerTimeMs { get; }
 
         /// <summary>Creates a room with a new <see cref="RoomCode"/>, seats you in seat 0, and returns the code.</summary>
         Task<string> CreateAsync(string storyId, string language, RoomPlayer me);
         /// <summary>Joins a room in the free seat. Throws <see cref="RoomException"/> (NotFound, Full, Expired).</summary>
         Task<RoomInfo> JoinAsync(string code, RoomPlayer me);
-        /// <summary>Leaves the room. When the host leaves, the room is closed for everyone.</summary>
+        /// <summary>
+        /// Leaves the room. When the host leaves and another player is online, that player takes the room; it closes only when nobody
+        /// is left. Raises <see cref="Closed"/> for the player who left.
+        /// </summary>
         Task LeaveAsync();
 
         /// <summary>Host only: "lobby", "story" or "game" (<see cref="RoomStates"/>).</summary>
@@ -73,6 +81,14 @@ namespace HypaCore.Hybrid
         Task UpdateMeAsync(RoomPlayer me);
         /// <summary>Sends your head and hands. Fire and forget; the implementation sends at most 10 per second and drops the rest.</summary>
         void SendPose(PoseFrame pose);
+        /// <summary>
+        /// Adds one sentence of the answer to your question (<c>answers/{n}</c>). Your hand must be up (<see cref="RoomPlayer.handUp"/>),
+        /// or it throws <see cref="RoomException"/> <see cref="RoomError.NotYourTurn"/>. The implementation sets <see cref="RoomAnswer.uid"/>
+        /// and picks <c>n</c>: one more than the highest it has seen in the room, including sentences from before it joined, and the
+        /// next one up if the server refuses it because that <c>n</c> is taken. Await the last sentence before lowering your hand: the
+        /// rules refuse a sentence from a player whose hand is down.
+        /// </summary>
+        Task SendAnswerAsync(RoomAnswer sentence);
         /// <summary>Records your game result.</summary>
         Task SubmitGameAsync(GameResult result);
 
@@ -82,8 +98,13 @@ namespace HypaCore.Hybrid
         event Action<IReadOnlyDictionary<string, RoomPlayer>> PlayersChanged;
         /// <summary>Another player's pose (uid, pose). Yours are not echoed back.</summary>
         event Action<string, PoseFrame> PoseReceived;
+        /// <summary>
+        /// A sentence of another player's answer, in order of <c>n</c> (which may skip numbers). Yours are not echoed back. Only sentences added after you joined are
+        /// raised, so rejoining never replays an old answer.
+        /// </summary>
+        event Action<RoomAnswer> AnswerReceived;
         event Action<string, GameResult> GameResultReceived;
-        /// <summary>The room is gone: the host left, it expired, or you left.</summary>
+        /// <summary>You are out of the room: you left, it expired, or it closed because nobody was left. A host change is <see cref="RoomChanged"/>.</summary>
         event Action Closed;
     }
 
