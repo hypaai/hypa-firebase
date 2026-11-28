@@ -76,6 +76,7 @@ A profile card for Stories with a realistic character the player shapes. Code in
 - TTS now returns a signed URL by default and requests inline audio in WebGL. ASR checks the decoded duration for compressed and uncompressed recordings. Hypa balance errors include a retry delay.
 - WebGL TTS, ASR, and story chat resume on Unity's main thread after the proxy responds, so response parsing can continue on a build without managed worker threads.
 - Added the Quest App Check HTTPS exchange and tests with simulated Meta responses. Quest client integration and the physical headset check remain pending.
+- `.github/workflows/deploy-web.yml`: every push to main builds WebGL and deploys it to Hosting on `hypa-firebase` (live channel). The web Firebase config comes from the `HYPA_CLIENT_CONFIG_LOCAL` secret and is checked to be for `hypa-firebase`. Functions, rules and Remote Config are still deployed by hand.
 
 ## G08 (HYP-203): progress sync, logic only
 

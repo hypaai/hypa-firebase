@@ -1,0 +1,50 @@
+# Builds the WebGL app and deploys it to Firebase Hosting (https://hypa-firebase.web.app) on every push to main.
+# Hosting only: Functions, rules and Remote Config are still deployed by hand (docs/hypa-proxy.md).
+#
+# Secrets (repository settings → Secrets and variables → Actions):
+#   UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD   already used by unity.yml
+#   HYPA_CLIENT_CONFIG_LOCAL                     contents of Assets/HypaFirebase/Resources/hypa_client_config_local.json
+#                                                (public web config; kept out of Git because the secret scan rejects it)
+#   FIREBASE_SERVICE_ACCOUNT_HYPA_FIREBASE       JSON key of a hypa-firebase service account with the
+#                                                "Firebase Hosting Admin" role. Never one from another project.
+name: Deploy web
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Write the web Firebase config
+        env:
+          CONFIG: ${{ secrets.HYPA_CLIENT_CONFIG_LOCAL }}
+        run: |
+          if [ -z "$CONFIG" ]; then echo "::error::HYPA_CLIENT_CONFIG_LOCAL is not set"; exit 1; fi
+          printf '%s' "$CONFIG" > Assets/HypaFirebase/Resources/hypa_client_config_local.json
+          jq -e '.projectId == "hypa-firebase" and .firebaseWeb.projectId == "hypa-firebase"' \
+            Assets/HypaFirebase/Resources/hypa_client_config_local.json > /dev/null \
+            || { echo "::error::the web config is not for hypa-firebase"; exit 1; }
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: WebGL
+          buildMethod: HypaCore.EditorTools.HypaBuild.FromCommandLine
+          customParameters: -hypaTarget web
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HYPA_FIREBASE }}
+          projectId: hypa-firebase
+          channelId: live
