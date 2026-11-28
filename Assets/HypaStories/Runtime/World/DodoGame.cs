@@ -93,6 +93,8 @@ namespace HypaStories
 
         public bool Active { get; private set; }
         public DodoPhase Phase => _rules?.Phase ?? DodoPhase.Intro;
+        /// <summary>The game's rules and state (for a race's score, G11). Null before the first <see cref="Begin"/>.</summary>
+        public DodoRules Rules => _rules;
 
         public void Init(CampWorld camp, StoryAssets a, StoryAudio audio, Texture2D glow, Transform uiRoot,
             Func<string, string> line, Action<string> say, Action restartStory, Action back, Action returnToStory, Action toggleRoom = null)

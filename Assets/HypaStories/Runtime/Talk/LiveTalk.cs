@@ -96,12 +96,14 @@ namespace HypaStories
             Set(TalkState.Connecting);
             _startedAt = _clock();
             try { _session = await _model.ConnectAsync(Setup(null, false), ct); }
-            catch (Exception e) when (!(e is OperationCanceledException) && !string.IsNullOrEmpty(_voice) && _voice != FallbackVoice)
+            catch (Exception e) when (!(e is OperationCanceledException) && !_ended && !_ending && !string.IsNullOrEmpty(_voice) && _voice != FallbackVoice)
             {
                 Debug.LogWarning($"Hypa Stories: Live refused the session with voice {_voice} ({e.Message}); trying {FallbackVoice}.");
                 _voice = FallbackVoice; // and for any reconnect
                 _session = await _model.ConnectAsync(Setup(null, false), ct);
             }
+            // End (or leaving the hut) during the connect must not open the microphone once the socket arrives.
+            if (_ended || _ending) { _session?.Dispose(); _session = null; return; }
             if (!_session.OwnsAudio) OpenMic(true);
             Set(TalkState.Listening);
             // she speaks first, in the player's language

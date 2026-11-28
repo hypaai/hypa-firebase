@@ -93,6 +93,10 @@ namespace HypaStories
 
         public readonly List<QaLogEntry> Log = new List<QaLogEntry>();
         public event Action<QaLogEntry> Logged;
+        /// <summary>Each sentence of an answer as it arrives (index, text, last), for the Story Circle to share.</summary>
+        public event Action<int, string, bool> Sentence;
+        /// <summary>A question is over: answered, failed or cancelled (the state is back to idle).</summary>
+        public event Action Ended;
         public AskState State { get; private set; }
         /// <summary>The questions offered for the current question (see <see cref="INarration.Suggestions"/>).</summary>
         public string[] Suggestions { get; private set; } = new string[0];
@@ -267,6 +271,7 @@ namespace HypaStories
                         answered = true; timer.Cancel();
                         Set(AskState.Answering);
                     }
+                    Sentence?.Invoke(i, text, last);
                     _ = Say(s, text, i == 0 ? t => entry.Playback = t - r.TEnd : (Action<double>)null, true,
                         i == 0 ? t => entry.FirstAudio = t - r.TEnd : (Action<double>)null);
                 }, s.Cts.Token);
@@ -298,6 +303,7 @@ namespace HypaStories
             if (s.Cancelled) return;
             Cleanup();
             _narration.Resume(s.Line);
+            Ended?.Invoke();
             if (entry == null) return;
             Log.Add(entry);
             Logged?.Invoke(entry);
@@ -323,6 +329,7 @@ namespace HypaStories
             s.Typed?.TrySetResult(new ListenResult());
             Cleanup();
             _queue = Task.CompletedTask;
+            Ended?.Invoke();
         }
 
         /// <summary>"Stop talking" while the storyteller is mid-line: skips the current line.</summary>

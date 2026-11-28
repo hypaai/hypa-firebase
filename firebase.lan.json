@@ -1,0 +1,165 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        ".secret.local",
+        "secret.local.example",
+        ".env.local",
+        "test",
+        "coverage",
+        "vitest.config.mts"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" ci",
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firebase/firestore.rules",
+    "indexes": "firebase/firestore.indexes.json"
+  },
+  "database": {
+    "rules": "firebase/database.rules.json"
+  },
+  "remoteconfig": {
+    "template": "firebase/remoteconfig.template.json"
+  },
+  "hosting": {
+    "public": "Builds/Web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "**/*.br",
+        "headers": [
+          {
+            "key": "Content-Encoding",
+            "value": "br"
+          }
+        ]
+      },
+      {
+        "source": "**/*.wasm.br",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/wasm"
+          }
+        ]
+      },
+      {
+        "source": "**/*.js.br",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/javascript"
+          }
+        ]
+      },
+      {
+        "source": "**/*.data.br",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          }
+        ]
+      },
+      {
+        "source": "**/*.gz",
+        "headers": [
+          {
+            "key": "Content-Encoding",
+            "value": "gzip"
+          }
+        ]
+      },
+      {
+        "source": "**/*.wasm.gz",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/wasm"
+          }
+        ]
+      },
+      {
+        "source": "**/*.js.gz",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/javascript"
+          }
+        ]
+      },
+      {
+        "source": "**/*.data.gz",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "/hypa/**",
+        "function": {
+          "functionId": "hypa",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/circle/**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099,
+      "host": "0.0.0.0"
+    },
+    "firestore": {
+      "port": 8080,
+      "host": "0.0.0.0"
+    },
+    "database": {
+      "port": 9000,
+      "host": "0.0.0.0"
+    },
+    "hosting": {
+      "port": 5002,
+      "host": "0.0.0.0"
+    },
+    "ui": {
+      "enabled": true,
+      "host": "0.0.0.0"
+    },
+    "singleProjectMode": true,
+    "functions": {
+      "port": 5001,
+      "host": "0.0.0.0"
+    }
+  }
+}

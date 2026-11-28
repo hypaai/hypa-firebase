@@ -28,6 +28,8 @@ namespace HypaCore
     public static class AppRouter
     {
         public const string LensSavedWords = "lens.saved";
+        /// <summary>Open Stories at the Story Circle lobby (G09). A share link in the page's URL is joined from there.</summary>
+        public const string StoryCircle = "stories.circle";
         static string _pending;
         public static void Request(string view) => _pending = view;
         public static bool Consume(string view)
@@ -96,6 +98,8 @@ namespace HypaCore
         System.Collections.IEnumerator StartNextFrame()
         {
             yield return null;
+            // A Story Circle share link (…/circle/ABCDE) goes straight to the lobby, which joins it.
+            if (HypaCore.Hybrid.RoomCode.FromLink(Application.absoluteURL) != null) { AppRouter.Request(AppRouter.StoryCircle); Open(HypaScenes.Story); yield break; }
             if (openLastModeOnStart) Open(HypaSettings.LastMode);
             else ShowMenu(true); // the Home card is the first thing the user sees
         }
@@ -226,6 +230,13 @@ namespace HypaCore
             Ui.Button("Lens (beta)", _menu, new Vector3(0, 0.005f, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => OpenOrResume(HypaScenes.Lens));
 #endif
             Ui.Button("How it works", _menu, new Vector3(0, -0.065f, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => ShowHelp(true));
+            // Story Circle (G09): two players at one fire. On flat builds it takes Lens's place; on Quest it sits below.
+#if HYPA_FLAT
+            const float circleY = 0.005f;
+#else
+            const float circleY = -0.135f;
+#endif
+            Ui.Button("Story Circle", _menu, new Vector3(0, circleY, 0), new Vector2(0.26f, 0.06f), Ui.Muted, () => { AppRouter.Request(AppRouter.StoryCircle); Open(HypaScenes.Story); });
 #if UNITY_WEBGL
             BuildOnDeviceRow();
 #elif UNITY_ANDROID && HYPA_FLAT

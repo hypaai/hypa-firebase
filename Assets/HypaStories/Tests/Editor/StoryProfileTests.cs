@@ -18,6 +18,18 @@ namespace HypaStories.Tests
         public void Username_AcceptsValidHandles(string name)
             => Assert.IsNull(StoryProfile.UsernameError(name));
 
+        [Test] public void FriendlyName_IsAlwaysAValidHandleWithAReadableName()
+        {
+            var random = new System.Random(7);
+            for (int i = 0; i < 500; i++)
+            {
+                var (username, displayName) = StoryProfile.FriendlyName(random);
+                Assert.IsNull(StoryProfile.UsernameError(username), username);
+                Assert.LessOrEqual(displayName.Length, 24);
+                Assert.AreEqual(displayName.Replace(" ", "").ToLowerInvariant(), username.Substring(0, username.Length - 2));
+            }
+        }
+
         [Test] public void Normalize_PreservesIdentityAndBoundsAppearance()
         {
             var p = new StoryProfile { localId = "existing-id", username = "  Timi_01 ", displayName = " ", skin = 999, hairStyle = -1, outfit = 100, jaw = 4f, lips = -2f, weight = float.NaN };
