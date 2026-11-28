@@ -443,9 +443,7 @@ namespace HypaFirebase.Rest
             foreach (var pair in all)
             {
                 if (!(pair.Value is JObject p)) continue;
-                var lastSeen = (long?)p["lastSeen"];
-                var online = (bool?)p["online"] ?? false;
-                if (online && lastSeen.HasValue && serverNowMs != long.MaxValue && serverNowMs - lastSeen.Value > RoomPresence.TimeoutMs) online = false;
+                var online = RoomPresence.IsOnline((bool?)p["online"] ?? false, (long?)p["lastSeen"], serverNowMs);
                 result[pair.Key] = new RoomPlayer
                 {
                     name = (string)p["name"], platform = (string)p["platform"], seat = (int?)p["seat"] ?? 0, online = online, handUp = (bool?)p["handUp"] ?? false,

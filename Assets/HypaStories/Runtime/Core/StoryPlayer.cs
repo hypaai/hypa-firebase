@@ -157,7 +157,12 @@ namespace HypaStories
                     var next = i + 1 < Caps.Length ? Caps[i + 1].At : Caps[i].Until + 1f;
                     await _voice.PlayAsync(line, _ => _hold = next - 0.01f, ct);
                     if (token != _ttsToken) return;
-                    if (Following) return; // the host's clock says when the next line starts
+                    if (Following)
+                    {
+                        // The host's clock names the next line. The last line has no next one, so the guest finishes here.
+                        if (i + 1 >= Caps.Length) { _hold = float.PositiveInfinity; T = Duration; }
+                        return;
+                    }
                     await HypaAsync.Delay(300, ct);
                 }
                 if (token != _ttsToken) return;
