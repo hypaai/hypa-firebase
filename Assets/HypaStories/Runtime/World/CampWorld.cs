@@ -98,10 +98,14 @@ namespace HypaStories
             Plain(sky.GetComponent<Renderer>(), _sky);
             _scenery.Add(sky);
 
-            // forest floor
-            var ground = Child("Ground", StoryMeshes.Quad(140f, 140f), a.ground != null ? a.ground : Tinted(new Color(0.12f, 0.1f, 0.08f)));
+            // forest floor. One quad: a vertex light only samples its four corners, which sit outside the fire, so the
+            // flicker would never show. A finer patch reaching past the light is where it lands.
+            var groundMat = a.ground != null ? a.ground : Tinted(new Color(0.12f, 0.1f, 0.08f));
+            const float groundSize = 140f;
+            var ground = Child("Ground", StoryMeshes.Quad(groundSize, groundSize), groundMat);
             ground.localPosition = new Vector3(0, 0, 10f);
             ground.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Child("Firelit Ground", StoryMeshes.FirelitGround(groundSize, ground.localPosition.z), groundMat, ground);
 
             // light pools on the ground: warm under the fire, cool where the moon falls
             _pool = Glow(glow, new Color(1f, 0.48f, 0.13f), 0.09f);

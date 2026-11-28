@@ -10,7 +10,10 @@ using UnityEngine;
 
 namespace HypaStories
 {
-    /// <summary>Asks the Firebase proxy once per question and speaks its answer in the listener's language.</summary>
+    /// <summary>
+    /// Asks the Firebase proxy once per question and speaks its answer in the listener's language: the storyteller persona, up to
+    /// 3 earlier questions with what was heard of their answers, the story so far and the question.
+    /// </summary>
     public sealed class ChatStoryQa : IStoryQa
     {
         /// <summary>Reasoning models think before answering, and max_tokens covers that too.</summary>
@@ -70,11 +73,14 @@ namespace HypaStories
                 "If the question is not about the story, answer briefly and kindly, then lead back to the story. " +
                 "Stay in your storyteller's voice, suitable for all ages.";
             var user = $"The story so far:\n{req.StorySoFar}\n\nThe listener asks: {req.Question}";
-            return new JArray
+            var messages = new JArray { new JObject { ["role"] = "system", ["content"] = system } };
+            foreach (var turn in req.History)
             {
-                new JObject { ["role"] = "system", ["content"] = system },
-                new JObject { ["role"] = "user", ["content"] = user },
-            };
+                messages.Add(new JObject { ["role"] = "user", ["content"] = turn.Question });
+                messages.Add(new JObject { ["role"] = "assistant", ["content"] = turn.Answer });
+            }
+            messages.Add(new JObject { ["role"] = "user", ["content"] = user });
+            return messages;
         }
 
         // a sentence ends at . ! ? … (and any closing quote) before a capital or an opening mark: "“Why?” he asks." stays whole

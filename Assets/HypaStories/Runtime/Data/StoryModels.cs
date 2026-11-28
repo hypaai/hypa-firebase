@@ -98,6 +98,12 @@ namespace HypaStories
         public string[] Words = new string[0];
         /// <summary>The same words in each translation's own wording (language code → words), from each language file's "words".</summary>
         public readonly Dictionary<string, string[]> WordsTr = new Dictionary<string, string[]>();
+        public readonly Dictionary<string, string> GameLabels = new Dictionary<string, string>();
+        public readonly Dictionary<string, Dictionary<string, string>> GameLabelsTr = new Dictionary<string, Dictionary<string, string>>();
+
+        public string GameText(string key, string lang)
+            => lang != "en" && GameLabelsTr.TryGetValue(lang ?? "", out var labels) && labels.TryGetValue(key, out var translated)
+                ? translated : GameLabels.TryGetValue(key, out var text) ? text : key;
 
         /// <summary>The story's words in the language it was told in; empty when that language file has none. Pure.</summary>
         public string[] WordsFor(string lang)

@@ -1,0 +1,271 @@
+{
+  "theme": 0,
+  "accent": "#87D9D1",
+  "eyebrow": "Edo / Bini, Nigeria folk tale",
+  "title": "Joromi and the\nSpirit Wrestlers",
+  "description": "A champion enters the spirit world and discovers that courage and pride are not the same.",
+  "voices": [],
+  "words": [
+    "courage",
+    "patience",
+    "strength"
+  ],
+  "source": {
+    "url": "https://www.academia.edu/32340860/JCollins_VICTOR_UWAIFO_HIGHLIFE_PIONEER_LEGEND_Unpublished_photo_captions_are_included_but_no_photos_provided",
+    "tradition": "Edo / Bini, Benin City, Nigeria",
+    "adaptation": "Original Hypa retelling following the escape variant documented by John Collins from Victor Uwaifo. Boxing opponents and patterns are a separate game adaptation; see SOURCES.md."
+  },
+  "game": {
+    "offer": "Face the spirits",
+    "intro": "Stay in one spot. Use gentle punches. Guard the glowing side, duck the high sweep, then punch the faces.",
+    "flat": "Stay in one spot. Hold the left or right side of the screen to guard (or A and D), hold low to duck the high sweep (or S), then tap the glowing face to punch (or Space).",
+    "adaptation": "A boxing game inspired by the wrestling tale.",
+    "start": "Begin",
+    "back": "Back to the story",
+    "replay": "Play again",
+    "level": "Spirit {0} / {1}",
+    "health": "Guard {0} / {1}",
+    "mist": "Mist Spirit",
+    "ember": "Ember Spirit",
+    "wind": "Wind Spirit",
+    "seven": "Seven-headed Spirit",
+    "approach": "Watch the spirit approach.",
+    "left": "Guard your left side",
+    "right": "Guard your right side",
+    "duck": "Duck the high sweep",
+    "counter": "Your turn: punch a face",
+    "recover": "Hands back. Watch the next pattern.",
+    "tracking": "Show both hands to continue.",
+    "clear": "Spirit complete",
+    "won": "Practice complete. Knowing when to stop is strength.",
+    "lost": "Take a breath. Try this spirit again.",
+    "progress": "Targets {0} / {1}"
+  },
+  "lines": [
+    {
+      "id": "champion",
+      "text": "Long ago, in the land of the Edo people, a young wrestler named Joromi became famous for his strength.",
+      "pauseAfter": 0,
+      "ask": [
+        "Who is Joromi?"
+      ]
+    },
+    {
+      "id": "champion-2",
+      "text": "When he entered the village square, everyone wanted to watch."
+    },
+    {
+      "id": "skill",
+      "text": "He was quick on his feet. He could feel an opponent shift his weight and know which way the next struggle would turn.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "skill-2",
+      "text": "One wrestler after another fell before him."
+    },
+    {
+      "id": "pride",
+      "text": "At first, Joromi thanked the people who cheered. But with every victory his pride grew.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "pride-2",
+      "text": "Soon he began to believe that there was no one, anywhere, who could defeat him.",
+      "ask": [
+        "Why does Joromi become proud?"
+      ]
+    },
+    {
+      "id": "sister",
+      "text": "His sister knew his courage. She also knew how little he liked a warning.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "sister-2",
+      "text": "When she spoke of limits, he heard only a challenge waiting to be answered."
+    },
+    {
+      "id": "palm",
+      "text": "Near their home stood a palm tree that he had been warned not to climb.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "palm-2",
+      "text": "To Joromi, even that warning began to sound like an insult to his strength."
+    },
+    {
+      "id": "climb",
+      "text": "One day he grasped the trunk and climbed. His sister called after him.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "climb-2",
+      "text": "He kept going, higher than the roofs, higher than the familiar sounds of the village.",
+      "ask": [
+        "Why does his sister warn him?"
+      ]
+    },
+    {
+      "id": "beyond",
+      "text": "Then the tree carried him beyond the world he knew.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "beyond-2",
+      "text": "Below him lay the land of people. Before him opened another place, where spirits gathered to wrestle.",
+      "spirit": 0.35
+    },
+    {
+      "id": "challenge",
+      "text": "Joromi looked at their arena. He had beaten the champions of the human world.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "challenge-2",
+      "text": "Why should he turn back now? He stepped forward and offered his challenge."
+    },
+    {
+      "id": "fly",
+      "text": "His sister would not abandon him.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "fly-2",
+      "text": "In this telling, she changed into a small fly and followed him, carrying her voice where her human feet could not go.",
+      "ask": [
+        "How does his sister help him?"
+      ]
+    },
+    {
+      "id": "stranger",
+      "text": "The spirits watched the stranger.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "stranger-2",
+      "text": "Here was a man of flesh and breath, standing in a place that was not his own, asking to prove himself against them."
+    },
+    {
+      "id": "two-heads",
+      "text": "A spirit with two heads came forward. Joromi met it in the arena.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "two-heads-2",
+      "text": "They strained against one another, neither willing to yield, while the watchers crowded close."
+    },
+    {
+      "id": "patience",
+      "text": "The struggle lasted far longer than any contest Joromi had known at home.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "patience-2",
+      "text": "Strength alone was not enough. He had to watch, wait, and find the moment to act.",
+      "ask": [
+        "Why is patience useful in a fight?"
+      ]
+    },
+    {
+      "id": "voice",
+      "text": "His sister's voice reached him through the noise. She called his name and reminded him how far he had come.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "voice-2",
+      "text": "But each victory also carried him farther from safety."
+    },
+    {
+      "id": "victory",
+      "text": "At last Joromi overcame that opponent. The arena stirred.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "victory-2",
+      "text": "He had proved that a human could stand against a spirit. Yet he still did not think of returning home."
+    },
+    {
+      "id": "seven-heads",
+      "text": "Another challenge followed. Now the danger before him was greater.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "seven-heads-2",
+      "text": "A terrible spirit with seven heads stood ready to fight, and the air around it seemed to burn.",
+      "spirit": 0.65
+    },
+    {
+      "id": "tired",
+      "text": "For the first time, Joromi felt how tired his body had become. His arms were heavy.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "tired-2",
+      "text": "His breathing was short. Courage had brought him here; pride had kept him here.",
+      "ask": [
+        "What changes when Joromi becomes tired?"
+      ]
+    },
+    {
+      "id": "struggle",
+      "text": "Still he fought. The spirit pressed him hard, giving him little time to recover.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "struggle-2",
+      "text": "His sister stayed close, her small voice refusing to disappear in the confusion."
+    },
+    {
+      "id": "opening",
+      "text": "Joromi struggled free and found a chance to escape.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "opening-2",
+      "text": "This was no ordinary village contest, with friends waiting to lift him to their shoulders when it was over."
+    },
+    {
+      "id": "escape",
+      "text": "He turned toward the way home. Down he raced from the spirit world, leaving its champions behind.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "escape-2",
+      "text": "The familiar earth beneath his feet was more precious than another victory.",
+      "ask": [
+        "Why does Joromi decide to escape?"
+      ]
+    },
+    {
+      "id": "home",
+      "text": "His sister returned with him. He had entered that strange arena certain that strength could answer every question.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "home-2",
+      "text": "He came back knowing that there were questions strength could not answer.",
+      "spirit": 0
+    },
+    {
+      "id": "remember",
+      "text": "That is the Joromi remembered in this telling: brave enough to face a frightening opponent,",
+      "pauseAfter": 0
+    },
+    {
+      "id": "remember-2",
+      "text": "but brought close to disaster by the wish to defeat everyone."
+    },
+    {
+      "id": "lesson",
+      "text": "And when the elder finishes, he leaves a question beside the fire.",
+      "pauseAfter": 0
+    },
+    {
+      "id": "lesson-2",
+      "text": "Is the strongest person always the one who keeps fighting, or can strength also mean knowing when to stop?",
+      "ask": [
+        "Can knowing when to stop be a kind of strength?"
+      ]
+    }
+  ]
+}

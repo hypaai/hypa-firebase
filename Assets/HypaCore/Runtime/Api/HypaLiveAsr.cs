@@ -10,7 +10,7 @@ namespace HypaCore
 {
     /// <summary>
     /// Live (streaming) speech to text over Hypa's developer WebSocket, the same one Hypa Lab's Live Transcribe uses
-    /// (hypa-v2/apps/hypa-api ws gateway, wss://&lt;api host&gt;/?provider=meta&amp;model=muse-voice-transcribe-1.0).
+    /// (Hypa API ws gateway, wss://&lt;api host&gt;/?provider=meta&amp;model=muse-voice-transcribe-1.0).
     /// Authenticates with the API key as the "key-&lt;apiKey&gt;" subprotocol. Send 16 kHz mono WAV chunks as binary frames; it answers
     /// with {"text": "...everything heard so far...", "final": false} as you speak, then final=true after {"type":"stop"}.
     /// Network work runs off the Unity main thread; results are read with <see cref="TryDequeue"/> (main thread, per frame).

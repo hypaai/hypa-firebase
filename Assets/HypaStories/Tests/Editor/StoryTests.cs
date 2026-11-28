@@ -357,6 +357,20 @@ namespace HypaStories.Tests
             StringAssert.EndsWith("qui est Auta ?", (string)m[1]["content"]);
         }
 
+        [Test] public void Chat_EarlierQuestionsComeBeforeTheStoryAndTheNewOne()
+        {
+            var m = ChatStoryQa.Messages(new QaRequest
+            {
+                Question = "why?", StorySoFar = "Long ago…", Language = StoryLanguages.Find("en"),
+                History = { new QaTurn { Question = "who is Dodo?", Answer = "A creature the town fears." } },
+            }, "Seven Hot Stones");
+            CollectionAssert.AreEqual(new[] { "system", "user", "assistant", "user" }, m.Select(x => (string)x["role"]).ToArray());
+            Assert.AreEqual("who is Dodo?", (string)m[1]["content"]);
+            Assert.AreEqual("A creature the town fears.", (string)m[2]["content"]);
+            StringAssert.Contains("Long ago…", (string)m[3]["content"]);
+            StringAssert.EndsWith("why?", (string)m[3]["content"]);
+        }
+
         [Test] public void Chat_SplitsTheReplyIntoSpokenSentences()
         {
             CollectionAssert.AreEqual(new[] { "Well, Auta is brave.", "“Why?” he asks!", "¿Y tú?" },
@@ -554,10 +568,19 @@ namespace HypaStories.Tests
         sealed class FakeSpeech : IStorySpeech
         {
             public readonly List<string> Spoken = new List<string>();
+            /// <summary>This line keeps playing until StopAll (the storyteller mid-answer).</summary>
+            public string HoldOn;
+            public int Skips;
+            TaskCompletionSource<bool> _held;
             public Task<SpeechLine> PrepareAsync(string text, StoryLanguage language, CancellationToken ct) => Task.FromResult(new SpeechLine { Text = text });
-            public Task PlayAsync(SpeechLine line, Action<double> onStart, CancellationToken ct) { Spoken.Add(line.Text); onStart?.Invoke(100); return Task.CompletedTask; }
-            public void SkipCurrent() { }
-            public void StopAll() { }
+            public Task PlayAsync(SpeechLine line, Action<double> onStart, CancellationToken ct)
+            {
+                Spoken.Add(line.Text); onStart?.Invoke(100);
+                if (line.Text != HoldOn) return Task.CompletedTask;
+                return (_held = new TaskCompletionSource<bool>()).Task;
+            }
+            public void SkipCurrent() => Skips++;
+            public void StopAll() => _held?.TrySetResult(true);
         }
 
         sealed class FakeSession : IListenSession
@@ -586,13 +609,15 @@ namespace HypaStories.Tests
             public string Mode => "fake";
             public bool Offline;
             public QaRequest Last;
-            public Task AnswerAsync(QaRequest req, Action<string, int, bool> onSentence, CancellationToken ct)
+            /// <summary>Set: the service is still working on it (the storyteller is thinking) until this completes.</summary>
+            public TaskCompletionSource<bool> Wait;
+            public async Task AnswerAsync(QaRequest req, Action<string, int, bool> onSentence, CancellationToken ct)
             {
                 Last = req;
+                if (Wait != null) await Wait.Task;
                 if (Offline) throw new InvalidOperationException("offline");
                 var a = StubStoryQa.AnswerFor(req.Question, req.LineIndex, req.Language.Code, req.StoryId);
                 for (var i = 0; i < a.Length; i++) onSentence(a[i], i, i == a.Length - 1);
-                return Task.CompletedTask;
             }
         }
 
@@ -601,8 +626,8 @@ namespace HypaStories.Tests
             public bool Interrupted;
             public int ResumedAt = -1;
             public bool CanAsk => true;
-            public int LineIndex => 12;
-            public string StoryId => "seven-hot-stones";
+            public int LineIndex { get; set; } = 12;
+            public string StoryId { get; set; } = "seven-hot-stones";
             public string StorySoFar => "Long ago…";
             public string[] Suggestions => new[] { "What is Dodo?" };
             public void Interrupt() => Interrupted = true;
@@ -708,6 +733,101 @@ namespace HypaStories.Tests
             Assert.IsTrue(t.IsCompleted);
             Assert.AreEqual("Dodo is a creature the whole town fears.", _speech.Spoken[1]);
             Assert.IsTrue(_ask.Log.Single().Typed);
+        }
+
+        [Test] public void Ask_RaisingAHandMidAnswer_AsksAgainAtTheSameLine()
+        {
+            _speech.HoldOn = "Dodo calls out, asking who in the town can fight it.";
+            _mic.Heard.Enqueue("Why did nobody answer?");
+            var first = _ask.BeginAsync();
+            Assert.AreEqual(AskState.Answering, _ask.State);
+            Assert.IsTrue(_ask.CanBegin, "a hand raised while the storyteller answers counts");
+            _speech.HoldOn = null;
+            _mic.Heard.Enqueue("What is Dodo?");
+            Assert.IsTrue(_ask.BeginAsync().IsCompleted);
+            Assert.IsTrue(first.IsCompleted);
+            CollectionAssert.DoesNotContain(_speech.Spoken, "Everyone is too frightened to answer.", "the cut-off answer does not carry on");
+            CollectionAssert.Contains(_speech.Spoken, "Dodo is a creature the whole town fears.");
+            Assert.AreEqual(12, _story.ResumedAt);
+            Assert.AreEqual(AskState.Idle, _ask.State);
+            CollectionAssert.AreEqual(new[] { true, false }, _asking, "one question time, start to finish");
+            Assert.AreEqual("What is Dodo?", _ask.Log.Single().Question);
+        }
+
+        [Test] public void Ask_NextQuestion_SendsTheEarlierOneWithItsAnswer()
+        {
+            _mic.Heard.Enqueue("Why did nobody answer?");
+            _mic.Heard.Enqueue("What is Dodo?");
+            _ask.BeginAsync();
+            _ask.BeginAsync();
+            var turn = _qa.Last.History.Single();
+            Assert.AreEqual("Why did nobody answer?", turn.Question);
+            Assert.AreEqual("Dodo calls out, asking who in the town can fight it. Everyone is too frightened to answer.", turn.Answer);
+        }
+
+        [Test] public void Ask_CutOffAnswer_KeepsOnlyWhatWasHeard()
+        {
+            _speech.HoldOn = "Dodo calls out, asking who in the town can fight it.";
+            _mic.Heard.Enqueue("Why did nobody answer?");
+            _ask.BeginAsync();
+            _speech.HoldOn = null;
+            _mic.Heard.Enqueue("What is Dodo?");
+            _ask.BeginAsync();
+            Assert.AreEqual("Dodo calls out, asking who in the town can fight it.", _qa.Last.History.Single().Answer);
+        }
+
+        [Test] public void Ask_AgainBeforeAnyAnswer_DropsTheUnansweredQuestion()
+        {
+            _qa.Wait = new TaskCompletionSource<bool>();
+            _mic.Heard.Enqueue("who is auta");
+            _ask.BeginAsync();
+            Assert.AreEqual(AskState.Thinking, _ask.State);
+            _qa.Wait = null;
+            _mic.Heard.Enqueue("What is Dodo?");
+            _ask.BeginAsync();
+            Assert.AreEqual("What is Dodo?", _qa.Last.Question);
+            Assert.IsEmpty(_qa.Last.History);
+        }
+
+        [Test] public void Ask_History_KeepsTheLastThree_AndANewStoryOrRestartForgetsIt()
+        {
+            foreach (var q in new[] { "a", "b", "c", "d", "e" }) _mic.Heard.Enqueue(q);
+            for (var i = 0; i < 4; i++) _ask.BeginAsync();
+            CollectionAssert.AreEqual(new[] { "a", "b", "c" }, _qa.Last.History.Select(t => t.Question).ToArray());
+            _ask.BeginAsync();
+            CollectionAssert.AreEqual(new[] { "b", "c", "d" }, _qa.Last.History.Select(t => t.Question).ToArray());
+
+            _story.LineIndex = 3; // restarted: the questions were asked at line 12
+            _mic.Heard.Enqueue("f");
+            _ask.BeginAsync();
+            Assert.IsEmpty(_qa.Last.History);
+
+            _story.StoryId = "marlow-street";
+            _mic.Heard.Enqueue("g");
+            _ask.BeginAsync();
+            Assert.IsEmpty(_qa.Last.History);
+        }
+
+        [Test] public void Ask_SkipWhileThinking_KeepsTheFiller()
+        {
+            _qa.Wait = new TaskCompletionSource<bool>();
+            _mic.Heard.Enqueue("who is auta");
+            var t = _ask.BeginAsync();
+            Assert.AreEqual(AskState.Thinking, _ask.State);
+            Assert.AreEqual("Hmm, good question…", _speech.Spoken[0]);
+            _ask.Skip(); // a late pinch on Done lands on Skip
+            Assert.AreEqual(0, _speech.Skips);
+            _qa.Wait.SetResult(true);
+            Assert.IsTrue(t.IsCompleted);
+        }
+
+        [Test] public void Ask_NotWhileListening_OrWithTheStoryStopped()
+        {
+            var t = _ask.BeginAsync();
+            Assert.AreEqual(AskState.Listening, _ask.State);
+            Assert.IsFalse(_ask.CanBegin);
+            _ask.Cancel();
+            Assert.IsTrue(t.IsCompleted);
         }
 
         [Test] public void Ask_Cancel_StopsWithoutResuming()

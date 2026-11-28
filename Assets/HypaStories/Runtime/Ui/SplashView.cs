@@ -61,7 +61,18 @@ namespace HypaStories
             Prompt.Refresh();
         }
 
-        public void SetAlpha(float a) { Brand.Set(a); Prompt.Set(a); }
+        /// <summary>True while you are away from the fire (the hut, the village): the Gather round row stays hidden there.</summary>
+        public bool PromptAway;
+
+        /// <summary>
+        /// Fades the brand and the Gather round row. A fade turns a group back on, so while you are away the row is put away
+        /// again at once: otherwise Narrate story at the village flashed Gather round over itself as the splash faded.
+        /// </summary>
+        public void SetAlpha(float a)
+        {
+            Brand.Set(a); Prompt.Set(a);
+            if (PromptAway) Prompt.gameObject.SetActive(false);
+        }
 
         public void Update(Transform viewer)
         {

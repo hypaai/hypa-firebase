@@ -65,6 +65,7 @@ namespace HypaStories
             OpacityId = Shader.PropertyToID("_Opacity");
 
         internal void Init(MeshRenderer r) { _r = r; _m = new MaterialPropertyBlock(); }
+        internal bool Seen() => _r != null && _r.enabled && _alpha * _group > 0.05f;
 
         public float Alpha { get => _alpha; set { _alpha = value; Apply(); } }
         public void SetGroupAlpha(float a) { _group = a; Apply(); }
@@ -355,6 +356,7 @@ namespace HypaStories
             r.receiveShadows = false;
             var p = go.AddComponent<KitPanel>();
             p.Init(r);
+            go.AddComponent<PointerZone>().Shown = p.Seen; // the hand's ray shows over the whole panel, not only its buttons
             p.Top = top; p.Bottom = bottom; p.Border = border; p.Radius = radius; p.Shadow = shadow;
             p.Resize(size);
             return p;

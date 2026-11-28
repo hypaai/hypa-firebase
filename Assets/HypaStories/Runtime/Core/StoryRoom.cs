@@ -47,7 +47,13 @@ namespace HypaStories
         /// <summary>Turns the headset's depth occlusion on or off, so a real table, sofa or body hides the fire and the storyteller in front of them. Null = none.</summary>
         public static Action<bool> Depth;
 
-        /// <summary>True when the headset can show the real room (the passthrough is running).</summary>
+        /// <summary>True when the headset can show the real room (see-through is supported and has not failed). Turns nothing on.</summary>
         public static Func<bool> Passthrough;
+
+        /// <summary>
+        /// Turns the see-through view on or off. Null = not available. The forest leaves it off. The room, and a door
+        /// that still looks back into the room, turn it on.
+        /// </summary>
+        public static Action<bool> SetPassthrough;
     }
 }

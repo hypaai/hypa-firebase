@@ -142,7 +142,6 @@ namespace HypaStories
                 toggleSound, q => _ask.SubmitText(q));
             _panel.Follow.Height = -0.55f; // lower than by the fire: she sits just beyond it, and her face stays in view over its top edge
             _ask = new AskFlow(_story, _voice, mic, qa, _panel, () => _story.Language, asking => { if (asking) CancelRemarks(); });
-            _ask.Logged += e => Debug.Log("Hypa Stories hut " + e);
             // its own translate, in this panel: the same recording as Ask (proven on the headset), not the live stream
             if (qa is HybridStoryQa hybrid)
             {
@@ -525,8 +524,8 @@ namespace HypaStories
 
             // raise a hand to ask her about the thing, as by the fire
             var raised = RaiseHand.Probe != null && RaiseHand.Probe();
-            if (_raise.Update(raised, dt) && _current >= 0 && _story.Live && !_tryOpen && _ask.State == AskState.Idle) _ = _ask.BeginAsync();
-            if (Application.isEditor && _current >= 0 && Input.GetKeyDown(KeyCode.H) && !_tryOpen && _ask.State == AskState.Idle) _ = _ask.BeginAsync();
+            if (_raise.Update(raised, dt) && _current >= 0 && _story.Live && !_tryOpen && _ask.CanBegin) _ = _ask.BeginAsync();
+            if (Application.isEditor && _current >= 0 && Input.GetKeyDown(KeyCode.H) && !_tryOpen && _ask.CanBegin) _ = _ask.BeginAsync();
 
             TalkUpdate(cam, dt, dist);
             HutInterior.Tick(_fire, cam, _t);

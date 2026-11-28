@@ -9,7 +9,7 @@ namespace HypaStories.Quest
 
     /// <summary>
     /// Ticket 3K, the headset's half of "Campfire in your room" (the scan is in Mruk/QuestRoomScan): whether the real room can show
-    /// through (<see cref="PassthroughKeep"/> keeps it running under the app), and the Depth API, so a real table, sofa or body in
+    /// through (<see cref="PassthroughKeep"/> starts it when the camp enters the room), and the Depth API, so a real table, sofa or body in
     /// front of the fire or the storyteller hides them. Quest 3 and later only; elsewhere <see cref="StoryRoom.Depth"/> does nothing.
     /// </summary>
     public static class QuestRoom
@@ -19,7 +19,8 @@ namespace HypaStories.Quest
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void Register()
         {
-            StoryRoom.Passthrough = () => PassthroughKeep.Active;
+            StoryRoom.Passthrough = () => PassthroughKeep.CanRun;
+            StoryRoom.SetPassthrough = on => PassthroughKeep.SetActive(on);
             StoryRoom.Depth = SetDepth;
         }
 

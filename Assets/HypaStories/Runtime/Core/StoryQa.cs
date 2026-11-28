@@ -13,6 +13,15 @@ namespace HypaStories
         public string Question, StoryId, StorySoFar;
         public StoryLanguage Language;
         public int LineIndex;
+        /// <summary>Earlier questions in this telling, oldest first, each with the part of its answer the listener heard.</summary>
+        public List<QaTurn> History = new List<QaTurn>();
+    }
+
+    /// <summary>A question asked earlier, the answer as far as it was spoken, and the line it was asked at.</summary>
+    public sealed class QaTurn
+    {
+        public string Question, Answer;
+        public int Line;
     }
 
     /// <summary>

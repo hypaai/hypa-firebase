@@ -290,7 +290,7 @@ namespace HypaStories
             }
         }
 
-        /// <summary>Leave the fight and go back to the end of the story.</summary>
+        /// <summary>Leave the fight and go back to the story, where it was.</summary>
         void ReturnToStory()
         {
             End();
