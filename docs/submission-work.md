@@ -204,3 +204,4 @@ hybrid router, Story Circle, the old woman), keeping both. New here:
   only for a player on their own, so two players' questions never overlap.
 - `AskFlow.Logged` stays (the Quest app removed it for its store build; this project's logs use it).
 - Tests: Unity EditMode 659/659 pass locally (6000.6.8f1). Not yet played on a device.
+- `deploy-web.yml` fetches the storyteller and the camp's recorded sounds (licensed, kept out of Git) from a private hypa-firebase bucket, `gs://hypa-firebase-restricted-media`, before it builds; only the deploy service account can read it.
