@@ -205,14 +205,16 @@ namespace HypaStories.Tests
                 Assert.IsNotNull(StoryLibrary.Find(id), id + " is a story");
             foreach (var id in p.StoriesByTheFire)
                 Assert.IsTrue(StoryLibrary.Campfire.Any(s => s.Id == id), id + " is told at the fire");
-            Assert.IsNotEmpty(p.VoicesFor("en"), "a woman's voice in English: Auto picks a man's");
+            foreach (var lang in StoryLanguages.All)
+                Assert.IsNotEmpty(p.VoicesFor(lang.Code), $"a woman's voice named for {lang.Code}: Auto picks a man's for some");
         }
 
-        [Test] public void Persona_Voices_AreByLanguage_AndAutoElsewhere()
+        [Test] public void Persona_Voices_ALanguagesOwnFirst_ThenTheOnesForEveryLanguage()
         {
-            var p = ElderPersona.Parse("{\"voices\": [{\"model\": \"openai/gpt-4o-mini-tts\", \"voice\": {\"en\": \"sage\"}}, {\"model\": \"openai/gpt-4o-mini-tts\", \"voice\": {\"en\": \"coral\"}}]}");
-            CollectionAssert.AreEqual(new[] { "openai/gpt-4o-mini-tts sage", "openai/gpt-4o-mini-tts coral" }, p.VoicesFor("en").Select(v => v.ToString()));
-            Assert.IsEmpty(p.VoicesFor("yo"), "Hypa's Auto for Yorùbá");
+            var p = ElderPersona.Parse("{\"voices\": [{\"model\": \"hypaai/orpheus\", \"voice\": {\"yo\": \"Eniola\"}}, {\"model\": \"openai/gpt-4o-mini-tts\", \"voice\": \"sage\"}]}");
+            CollectionAssert.AreEqual(new[] { "hypaai/orpheus Eniola", "openai/gpt-4o-mini-tts sage" }, p.VoicesFor("yo").Select(v => v.ToString()));
+            CollectionAssert.AreEqual(new[] { "openai/gpt-4o-mini-tts sage" }, p.VoicesFor("pcm").Select(v => v.ToString()), "no voice of its own: the shared one");
+            Assert.IsEmpty(ElderPersona.Parse("{}").VoicesFor("yo"), "none named: Hypa's Auto");
         }
 
         /// <summary>Her real persona and things (Resources), for the prompt tests.</summary>

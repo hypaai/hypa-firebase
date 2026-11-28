@@ -170,6 +170,8 @@ namespace HypaCore.Tests
             Assert.AreEqual(HypaErrorKind.BadRequest, new HypaProxyException(ProxyApi.ErrorTooLarge, "x", 413).ToHypaException().Kind);
             Assert.AreEqual(HypaErrorKind.Offline, new HypaProxyException(ProxyApi.ErrorUpstream, "x", 0).ToHypaException().Kind);
             Assert.AreEqual(HypaErrorKind.Server, new HypaProxyException(ProxyApi.ErrorUpstream, "x", 502).ToHypaException().Kind);
+            Assert.AreEqual(HypaErrorKind.ToolError, new HypaProxyException(ProxyApi.ErrorUpstream, "x", 502,
+                new ProxyErrorBody { code = "upstream", reason = "tool_error" }).ToHypaException().Kind, "Hypa refused, e.g. a voice its model lacks");
 
             var (client, stub, _) = Make();
             stub.Status = HttpStatusCode.TooManyRequests;

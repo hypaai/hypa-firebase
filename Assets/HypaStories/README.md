@@ -207,8 +207,9 @@ a voice conversation: just talk, interrupt her, and she answers. The mic stays o
   `story.json`. Add a fact about her there, not in code.
 - **Her actions:** `show_item` (lights the card, she points), `tell_item_story` (plays it; the conversation waits),
   `teach_word` (saved to your words; she says it slowly), `suggest_story` (**Walk to the fire** starts that story by the fire).
-- **Her voice** is a woman's: `voices` in her persona (English OpenAI `sage`; Hypa's Auto picks `alloy`, a man's). Live uses
-  `live_voice`, else `Aoede`.
+- **Her voice** is a woman's: `voices` in her persona names one per language with its model (OpenAI `sage` for English,
+  Gemini `Achernar` for French, Spanish and Kiswahili, Orpheus `Eniola` / `Juliet` / `Amarachi` for Yorùbá and Pidgin / Hausa /
+  Igbo). Hypa's Auto, the last resort, picks a man's voice for English and Pidgin. Live uses `live_voice`, else `Aoede`.
 - Editor: talk through the Mac's microphone. There is no echo canceller there, so she can't be talked over: wait until she has
   finished (600 ms after her voice stops, she is listening again). **Done** ends your turn if she is still waiting.
 - Tests: `TalkTests`, and `LiveProtocolTests` in HypaCore.
