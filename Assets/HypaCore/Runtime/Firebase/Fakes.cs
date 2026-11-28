@@ -246,11 +246,31 @@ namespace HypaCore.Hybrid
             return Task.CompletedTask;
         }
 
+        /// <summary>While set, <see cref="SubmitGameAsync"/> keeps results until <see cref="ReleaseGameResults"/>.</summary>
+        public bool HoldGameResults;
+        readonly List<GameResult> _heldGame = new List<GameResult>();
+
         public Task SubmitGameAsync(GameResult result)
         {
             var room = Mine();
-            foreach (var c in room.Clients.ToArray()) c.GameResultReceived?.Invoke(_uid, result);
+            if (HoldGameResults) { _heldGame.Add(result); return Task.CompletedTask; }
+            BroadcastGame(room, result);
             return Task.CompletedTask;
+        }
+
+        /// <summary>Delivers results held by <see cref="HoldGameResults"/>, then turns holding off.</summary>
+        public void ReleaseGameResults()
+        {
+            HoldGameResults = false;
+            if (Code == null || !_server.Rooms.TryGetValue(Code, out var room)) { _heldGame.Clear(); return; }
+            var held = _heldGame.ToArray();
+            _heldGame.Clear();
+            foreach (var result in held) BroadcastGame(room, result);
+        }
+
+        void BroadcastGame(FakeRoomServer.Room room, GameResult result)
+        {
+            foreach (var c in room.Clients.ToArray()) c.GameResultReceived?.Invoke(_uid, result);
         }
 
         internal void RaisePlayers(FakeRoomServer.Room room)

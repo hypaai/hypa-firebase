@@ -80,6 +80,8 @@ namespace HypaStories
         int _myScore, _sentScore = -1;
         long _myFinishedMs, _lastSent = long.MinValue;
         bool _myDone;
+        bool _sending, _sendAgain;
+        GameResult _pending;
 
         public RaceState State { get; private set; } = RaceState.Idle;
         /// <summary>The current round's start, server time (Unix ms).</summary>
@@ -205,10 +207,14 @@ namespace HypaStories
         void OnEntry(string uid, GameResult r)
         {
             if (uid == _uid || r == null) return;
-            if (r.startedAt > _round && r.finishedMs == 0 && (State == RaceState.Idle || State == RaceState.Result)
-                && r.startedAt >= _room.ServerTimeMs - JoinLateMs)
-                BeginRound(r.startedAt); // the other player started a round: join it
+            // Idle, the result card, or a countdown already running. Two Rematches at once each pick their own start; both
+            // move to the later one, so they count down together. A game already in progress is left alone.
+            if (r.startedAt > _round && r.finishedMs == 0 && r.startedAt >= _room.ServerTimeMs - JoinLateMs
+                && (State == RaceState.Idle || State == RaceState.Result || State == RaceState.Countdown))
+                BeginRound(r.startedAt);
             if (r.startedAt != _round) return; // an older round
+            // A live score (finishedMs 0) that lands after the finish must not wipe it.
+            if (_entries.TryGetValue(uid, out var had) && had.finishedMs > 0 && r.finishedMs == 0) return;
             _entries[uid] = r;
             StandingsChanged?.Invoke();
             Evaluate();
@@ -258,8 +264,35 @@ namespace HypaStories
         void Send(int score, long finishedMs)
         {
             if (_room.Code == null) return;
+            if (finishedMs == 0 && _myDone) return; // the finish is already written; a late live score must not replace it
+            _pending = new GameResult { startedAt = _round, finishedMs = finishedMs, score = score };
             _sentScore = finishedMs > 0 ? -1 : score;
-            Observe(_room.SubmitGameAsync(new GameResult { startedAt = _round, finishedMs = finishedMs, score = score }));
+            _sendAgain = true;
+            if (!_sending) Observe(SendQueueAsync());
+        }
+
+        /// <summary>
+        /// One write at a time, and the last one wins. A live score already on the way can land after <see cref="Finish"/> and wipe
+        /// <c>finishedMs</c>; when it does, the queued finish is written again.
+        /// </summary>
+        async System.Threading.Tasks.Task SendQueueAsync()
+        {
+            _sending = true;
+            try
+            {
+                while (_sendAgain)
+                {
+                    _sendAgain = false;
+                    var next = _pending;
+                    try { await _room.SubmitGameAsync(next); }
+                    catch (Exception e) { UnityEngine.Debug.LogWarning("Story Circle race: couldn't send a result (" + e.GetType().Name + ")."); }
+                }
+            }
+            finally
+            {
+                _sending = false;
+                if (_sendAgain) Observe(SendQueueAsync());
+            }
         }
 
         void Set(RaceState s)

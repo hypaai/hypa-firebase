@@ -1035,6 +1035,8 @@ namespace HypaStories
                     _raceView.SetCount(n > 0 ? n.ToString() : null);
                     break;
                 case RaceState.Playing:
+                    // Back, Stories, or Escape ends the game without a result. That is a forfeit, the same as Back to the fire.
+                    if (!Playing) { _race.Leave(); break; }
                     var (score, over) = RaceProgress();
                     if (over) _race.Finish(score, (long)((Time.realtimeSinceStartup - _raceT0) * 1000f));
                     else _race.Report(score);

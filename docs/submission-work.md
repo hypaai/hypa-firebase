@@ -151,9 +151,9 @@ How to run it on devices and check each Done-when item: `docs/story-circle.md`.
 
 ## G11 (HYP-206): Multiplayer game race
 
-After a story with a game, the two players in a Story Circle race at it, each on their own device. Built on G09 (the branch is stacked on it).
+After a story with a game, the two players in a Story Circle race at it, each on their own device. Built on G09.
 
-- `GameRace` (`Assets/HypaStories/Runtime/Circle/`): a round over `rooms/{code}/game/{uid}` (`docs/contracts.md` section 4): the host taps **Play together**, both count 3-2-1 to the same server time, each plays the story's game locally, live scores at most once a second, the result when both are done. A player who leaves the room, or goes back to the fire mid-game (a forfeit), loses to the one who finishes. Either player can start a **Rematch**. Old rounds replayed by a reconnecting stream are not joined.
+- `GameRace` (`Assets/HypaStories/Runtime/Circle/`): a round over `rooms/{code}/game/{uid}` (`docs/contracts.md` section 4): the host taps **Play together**, both count 3-2-1 to the same server time, each plays the story's game locally, live scores at most once a second, the result when both are done. A player who leaves the room, goes back to the fire, or leaves the game with its Back button forfeits and loses to the one who finishes. Two Rematches at once share the later start. A live score already on the way cannot replace a finish. Either player can start a **Rematch**. Old rounds replayed by a reconnecting stream are not joined.
 - `RaceScore`: points from each game's own rules (Dodo: stones and lives; Eshu's hat: rounds less fights; the drum: dishes less misses); a tie on points goes to the faster game time, measured on the player's own device. No network timing.
 - `RaceView`: the count, the live bar ("Ada 12 · You 9") and the result card ("Ada wins: 41 s", **Rematch**, **Back to the fire**). In a circle, the host's **Play together** replaces the solo game button.
 - The best result goes to `stories/{id}.bestGameScore` through `UserDataSync` (G08). `HybridServices.UserData` holds the store: the Fake until G08's Firestore store exists, so the best score is kept on the device for now.

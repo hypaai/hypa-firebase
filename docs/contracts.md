@@ -184,10 +184,12 @@ after you joined reach you (`IRoomSync.AnswerReceived`), and the sender is not s
 - `startedAt`: the round's agreed start in server time, the same in both entries. Whoever starts a round (the host's
   **Play together**, either player's **Rematch**) writes their entry with `startedAt` = server now + 4 s; the other device joins
   the round when it sees an entry with a newer `startedAt` (not older than 5 s past its start, so a replayed old entry is
-  ignored) and writes its own. Both count 3-2-1 to that moment, then play locally (no game state is shared).
+  ignored), including when its own countdown has already started, and writes its own. Two starts at once become the later of
+  the two. Both count 3-2-1 to that moment, then play locally (no game state is shared).
 - `score`: the game's points so far, from its own rules (`RaceScore`; higher is better), sent at most once a second while
   playing. `finishedMs`: 0 while playing, then the player's own game time; `99999999` with score 0 means they left mid-game
-  (a forfeit). No network timing is in either.
+  (a forfeit). A live score already on the way must not replace a finish. Leaving the game with its Back button is a forfeit.
+  No network timing is in either.
 - The winner has the higher score; on equal points the shorter `finishedMs`; then a draw. A player who leaves the room or
   forfeits loses to one who finishes. The best score goes to `users/{uid}/stories/{id}.bestGameScore` (section 3).
 - The rules are unchanged: each player writes only their own entry, with the three numbers.

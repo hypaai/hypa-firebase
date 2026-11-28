@@ -118,6 +118,36 @@ namespace HypaStories.Tests
             Assert.IsTrue(_alice.Result.YouWon);
         }
 
+        [Test] public void TwoRematchesAtOnce_ShareTheLaterStart()
+        {
+            StartAndGo();
+            _alice.Finish(10, 20_000);
+            _bob.Finish(20, 25_000);
+            _now += 5000;
+            _aliceRoom.HoldGameResults = true;
+            _bobRoom.HoldGameResults = true;
+            _alice.Start();
+            _now += 40;
+            _bob.Start();
+            Assert.AreNotEqual(_alice.StartAtServerMs, _bob.StartAtServerMs, "each picked a start before hearing the other");
+            _aliceRoom.ReleaseGameResults();
+            _bobRoom.ReleaseGameResults();
+            Assert.AreEqual(_bob.StartAtServerMs, _alice.StartAtServerMs);
+            Assert.AreEqual(RaceState.Countdown, _alice.State);
+            Assert.AreEqual(RaceState.Countdown, _bob.State);
+        }
+
+        [Test] public void ALateLiveScore_DoesNotWipeTheFinish()
+        {
+            StartAndGo();
+            _alice.Finish(40, 12_000);
+            Assert.IsTrue(_bob.Standings()[1].Finished);
+            Run(_aliceRoom.SubmitGameAsync(new GameResult { startedAt = _alice.StartAtServerMs, finishedMs = 0, score = 9 }));
+            Assert.AreEqual(40, _bob.Standings()[1].Score);
+            Assert.AreEqual(12_000, _bob.Standings()[1].FinishedMs);
+            Assert.IsTrue(_bob.Standings()[1].Finished);
+        }
+
         [Test] public void EitherPlayer_CanStartARematch()
         {
             StartAndGo();
